@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="hu">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Maffia: Birodalomépítő</title>
+    <link rel="stylesheet" href="./style.css" />
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.90.0/dist/phaser.min.js"></script>
+  </head>
+  <body>
+    <div id="bootOverlay" class="boot-overlay">
+      <section class="boot-card">
+        <p class="eyebrow">Böngészős stratégia</p>
+        <h1>Maffia: Birodalomépítő</h1>
+        <p class="lead">
+          Regisztrálj, majd egy isometrikus város fogad. Kattints a házakra, vedd át a
+          kerületeket, és építsd fel a saját alvilági birodalmad.
+        </p>
+
+        <form id="registerForm" class="register-form">
+          <label>
+            <span>Gengszternév</span>
+            <input
+              id="playerName"
+              type="text"
+              maxlength="18"
+              placeholder="Például: Fekete Zsolt"
+              autocomplete="nickname"
+            />
+          </label>
+          <button class="primary" type="submit">Belépés a városba</button>
+        </form>
+      </section>
+    </div>
+
+    <div id="gameRoot" class="game-root"></div>
+    <div id="mapAtmosphere" class="map-atmosphere" aria-hidden="true"></div>
+    <div id="choiceWheel" class="choice-wheel hidden" aria-hidden="true">
+      <div class="choice-wheel__backdrop" id="choiceWheelBackdrop"></div>
+      <div class="choice-wheel__panel" id="choiceWheelPanel">
+        <div class="choice-wheel__title" id="choiceWheelTitle">Ház</div>
+        <div class="choice-wheel__subtitle" id="choiceWheelSubtitle"></div>
+        <div class="choice-wheel__core">
+          <div class="choice-wheel__core-label" id="choiceWheelCoreLabel">Maffia</div>
+        </div>
+        <button class="choice-wheel__button choice-wheel__button--robbery" id="choiceWheelAction1" type="button">Kirablás</button>
+        <button class="choice-wheel__button choice-wheel__button--protection" id="choiceWheelAction2" type="button">Védelmi pénz</button>
+        <button class="choice-wheel__button choice-wheel__button--close" id="choiceWheelAction3" type="button">Fő bázis</button>
+        <button class="choice-wheel__button choice-wheel__button--base" id="choiceWheelAction4" type="button">Bezárás</button>
+      </div>
+    </div>
+
+    <section id="characterPanel" class="character-panel hidden" aria-hidden="true">
+      <div id="characterPanelBackdrop" class="character-panel__backdrop"></div>
+      <div class="character-sheet" role="dialog" aria-modal="true" aria-labelledby="characterPanelTitle">
+        <header class="character-sheet__header">
+          <button id="characterPanelClose" class="character-sheet__close" type="button" aria-label="Karakterlap bezarasa">&lt;</button>
+          <div>
+            <div class="character-sheet__eyebrow">Szemelyes karton</div>
+            <h2 id="characterPanelTitle">Alak</h2>
+          </div>
+          <div class="character-sheet__cash"><span>$</span><strong id="characterMoney">120</strong></div>
+        </header>
+
+        <div class="character-sheet__body">
+          <aside class="character-equipment character-equipment--left">
+            <div class="character-equipment__slot character-equipment__slot--suit">
+              <div class="character-equipment__art" aria-hidden="true"></div>
+              <div class="character-equipment__copy">
+                <span>Oltony</span>
+                <strong>Csikos gyapju</strong>
+                <small>Vedelem +3</small>
+              </div>
+            </div>
+            <div class="character-equipment__slot character-equipment__slot--vest">
+              <div class="character-equipment__art" aria-hidden="true"></div>
+              <div class="character-equipment__copy">
+                <span>Melleny</span>
+                <strong>Sotet melleny</strong>
+                <small>Tekintely +2</small>
+              </div>
+            </div>
+            <div class="character-equipment__slot character-equipment__slot--shirt">
+              <div class="character-equipment__art" aria-hidden="true"></div>
+              <div class="character-equipment__copy">
+                <span>Ing</span>
+                <strong>Feher ing</strong>
+                <small>Hirnev +1</small>
+              </div>
+            </div>
+            <div class="character-equipment__slot character-equipment__slot--trousers">
+              <div class="character-equipment__art" aria-hidden="true"></div>
+              <div class="character-equipment__copy">
+                <span>Nadrag</span>
+                <strong>Fekete szovet</strong>
+                <small>Mozgas +2</small>
+              </div>
+            </div>
+          </aside>
+
+          <main class="character-figure">
+            <div class="character-figure__name" id="characterName">Ismeretlen</div>
+            <div class="character-figure__portrait">
+              <img class="character-figure__art" src="./assets/character/gangster-character.png" alt="1930-as evekbeli maffiozo">
+            </div>
+            <div class="character-figure__rank" id="characterRank">Kezdo gengszter</div>
+          </main>
+
+          <aside class="character-equipment character-equipment--right">
+            <div class="character-equipment__slot character-equipment__slot--hat">
+              <div class="character-equipment__art" aria-hidden="true"></div>
+              <div class="character-equipment__copy">
+                <span>Kalap</span>
+                <strong>Fekete fedora</strong>
+                <small>Tekintely +4</small>
+              </div>
+            </div>
+            <div class="character-equipment__slot character-equipment__slot--weapon">
+              <div class="character-equipment__art" aria-hidden="true"></div>
+              <div class="character-equipment__copy">
+                <span>Fegyver</span>
+                <strong>Colt M1911</strong>
+                <small>Tamadas +8</small>
+              </div>
+            </div>
+            <div class="character-equipment__slot character-equipment__slot--shoes">
+              <div class="character-equipment__art" aria-hidden="true"></div>
+              <div class="character-equipment__copy">
+                <span>Cipo</span>
+                <strong>Bor felcipo</strong>
+                <small>Mozgas +1</small>
+              </div>
+            </div>
+            <div class="character-equipment__slot character-equipment__slot--watch">
+              <div class="character-equipment__art" aria-hidden="true"></div>
+              <div class="character-equipment__copy">
+                <span>Kiegeszito</span>
+                <strong>Zsebora</strong>
+                <small>Hirnev +2</small>
+              </div>
+            </div>
+          </aside>
+        </div>
+
+        <div class="character-stats">
+          <div class="character-stat"><span>Szint</span><strong id="characterLevel">1</strong></div>
+          <div class="character-stat"><span>Eletero</span><strong id="characterHealth">100 / 100</strong></div>
+          <div class="character-stat"><span>Tamadas</span><strong id="characterAttack">18</strong></div>
+          <div class="character-stat"><span>Vedelem</span><strong id="characterDefense">12</strong></div>
+          <div class="character-stat"><span>Hirnev</span><strong id="characterFame">0</strong></div>
+          <div class="character-stat"><span>Banda</span><strong id="characterCrew">1</strong></div>
+          <div class="character-stat"><span>Korozes</span><strong id="characterHeat">12%</strong></div>
+          <div class="character-stat"><span>Varos szint</span><strong id="characterCityLevel">1</strong></div>
+        </div>
+      </div>
+    </section>
+
+    <div id="hudRoot" class="hud-root hidden">
+      <header class="hud-topbar">
+        <div class="hud-resources">
+          <div class="hud-pill hud-pill--money"><span>Pénz</span><strong id="hudMoney">120 $</strong></div>
+          <div class="hud-pill hud-pill--fame"><span>Hírnév</span><strong id="hudFame">0</strong></div>
+          <div class="hud-pill hud-pill--influence"><span>Befolyás</span><strong id="hudInfluence">0%</strong></div>
+          <div class="hud-pill hud-pill--heat"><span>Körözés</span><strong id="hudHeat">12%</strong></div>
+        </div>
+      </header>
+
+      <aside class="hud-avatar-card hud-panel">
+        <div class="hud-avatar-shell">
+          <div class="hud-avatar" id="hudAvatar">M</div>
+          <div class="hud-avatar-meta">
+            <div class="hud-player" id="hudPlayer">Ismeretlen</div>
+            <div class="hud-rank" id="hudRank">Kezdo gengszter</div>
+          </div>
+        </div>
+        <div class="hud-gear-grid" aria-label="Avatar felszereles">
+          <button class="hud-gear-slot" type="button" aria-label="Képesség slot">
+            <span>K</span>
+            <small>Képeség</small>
+          </button>
+          <button class="hud-gear-slot" type="button" aria-label="Ruhat slot">
+            <span>R</span>
+            <small>Ruhat</small>
+          </button>
+          <button class="hud-gear-slot" type="button" aria-label="Fegyver slot">
+            <span>F</span>
+            <small>Fegyver</small>
+          </button>
+        </div>
+        <div class="hud-note" id="hudMessage">Regisztrálj, és indul a városi felemelkedés.</div>
+      </aside>
+
+      <section class="hud-quest-tabs hud-panel" aria-label="Küldetés fülek">
+        <button id="hudQuestTab1" class="hud-quest-tab" type="button">Fő küldetés</button>
+        <button id="hudQuestTab2" class="hud-quest-tab" type="button">Mellék küldetés</button>
+      </section>
+
+      <div class="hud-log-card hud-panel">
+        <div class="hud-mini-title">Klán chat</div>
+        <div id="hudLog" class="hud-log"></div>
+      </div>
+
+      <nav class="hud-bottom-bar hud-panel">
+        <button class="hud-action hud-action-slot" id="hudAction1" type="button" aria-label="Utcai rablas">
+          <span></span>
+        </button>
+        <button class="hud-action hud-action-slot" id="hudAction2" type="button" aria-label="Bolt kifosztasa">
+          <span></span>
+        </button>
+        <button class="hud-action hud-action-slot" id="hudAction3" type="button" aria-label="Toborzas">
+          <span></span>
+        </button>
+        <button class="hud-action hud-action-slot" id="hudAction4" type="button" aria-label="Kerulet atvetele">
+          <span></span>
+        </button>
+        <button class="hud-action hud-action-slot" id="hudAction5" type="button" aria-label="Varos fejlesztese">
+          <span></span>
+        </button>
+        <button class="hud-action hud-action-slot" id="hudAction6" type="button" aria-label="Lapulas">
+          <span></span>
+        </button>
+        <button class="hud-action hud-action-slot hud-action-primary" id="hudReset" type="button" aria-label="Uj jatek">
+          <span></span>
+        </button>
+      </nav>
+    </div>
+
+    <script src="./assets-inline.js"></script>
+    <script src="./game.js"></script>
+  </body>
+</html>
