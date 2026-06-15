@@ -87,6 +87,54 @@ const rankTable = [
   { fame: 240, name: "Maffia fonok" },
 ];
 
+const equipmentSlotOrder = ["hat", "shirt", "pants", "weapon", "shoes", "watch"];
+const equipmentSlotDefs = {
+  hat: { label: "Kalap", bonus: "Stilus" },
+  shirt: { label: "Ing", bonus: "Fellepes" },
+  pants: { label: "Nadrag", bonus: "Rutinos" },
+  weapon: { label: "Fegyver", bonus: "Tamadas" },
+  shoes: { label: "Cipo", bonus: "Lepes" },
+  watch: { label: "Ora", bonus: "Presztizs" },
+};
+const equipmentCatalog = {
+  hat: [
+    { id: "hat-fedora-black", name: "Fekete fedora", power: 1 },
+    { id: "hat-silk-band", name: "Selyemszalagos kalap", power: 2 },
+    { id: "hat-grey-homburg", name: "Szurke homburg", power: 3 },
+    { id: "hat-don-fedora", name: "Don fedora", power: 4 },
+  ],
+  shirt: [
+    { id: "shirt-white", name: "Feher ing", power: 1 },
+    { id: "shirt-striped", name: "Csikos ing", power: 2 },
+    { id: "shirt-silk", name: "Selyeming", power: 3 },
+    { id: "shirt-tailored", name: "Szabott ing", power: 4 },
+  ],
+  pants: [
+    { id: "pants-black", name: "Fekete szovet", power: 1 },
+    { id: "pants-wool", name: "Gyapju nadrag", power: 2 },
+    { id: "pants-pressed", name: "Eltett nadrag", power: 3 },
+    { id: "pants-don", name: "Fonoki nadrag", power: 4 },
+  ],
+  weapon: [
+    { id: "weapon-colt", name: "Colt M1911", power: 7 },
+    { id: "weapon-sawed", name: "Rovid csovu puska", power: 8 },
+    { id: "weapon-thompson", name: "Tommy gepisztoly", power: 9 },
+    { id: "weapon-custom", name: "Egyedi automata", power: 10 },
+  ],
+  shoes: [
+    { id: "shoes-leather", name: "Bor felcipo", power: 1 },
+    { id: "shoes-silent", name: "Csendes cipo", power: 2 },
+    { id: "shoes-lacquer", name: "Lakkcipő", power: 3 },
+    { id: "shoes-import", name: "Import borcipo", power: 4 },
+  ],
+  watch: [
+    { id: "watch-pocket", name: "Zsebora", power: 1 },
+    { id: "watch-silver", name: "Ezust ora", power: 2 },
+    { id: "watch-gold", name: "Arany ora", power: 3 },
+    { id: "watch-family", name: "Csaladi kronometer", power: 4 },
+  ],
+};
+
 function mapPolygon(points) {
   return points.map(([x, y]) => [x / 1534, y / 1025]);
 }
@@ -203,6 +251,7 @@ const state = {
   energy: 100,
   gearPower: 12,
   equipment: getDefaultEquipment(),
+  itemInventory: getDefaultItemInventory(),
   crewMembers: makeCrewMembers(),
   activeCrewMemberId: "luca",
   mainBaseSpotId: null,
@@ -231,6 +280,7 @@ let pendingSaveTimer = null;
 let saveRequestInFlight = null;
 let latestQueuedSave = null;
 let questCardQuestId = null;
+let activeEquipmentSlot = null;
 let mapPan = { x: 0, y: 0 };
 let mapDragState = {
   active: false,
@@ -341,6 +391,10 @@ const robberyResultContinue = document.getElementById("robberyResultContinue");
 const characterPanel = document.getElementById("characterPanel");
 const characterPanelBackdrop = document.getElementById("characterPanelBackdrop");
 const characterPanelClose = document.getElementById("characterPanelClose");
+const equipmentPicker = document.getElementById("equipmentPicker");
+const equipmentPickerTitle = document.getElementById("equipmentPickerTitle");
+const equipmentPickerList = document.getElementById("equipmentPickerList");
+const equipmentPickerClose = document.getElementById("equipmentPickerClose");
 const characterName = document.getElementById("characterName");
 const characterRank = document.getElementById("characterRank");
 const characterMoney = document.getElementById("characterMoney");
@@ -435,42 +489,94 @@ function getCurrentRankEntry(fame) {
 }
 
 function getDefaultEquipment() {
+  return Object.fromEntries(
+    equipmentSlotOrder.map((slot) => [slot, { ...equipmentCatalog[slot][0] }]),
+  );
+}
+
+function getDefaultItemInventory() {
+  return Object.fromEntries(
+    equipmentSlotOrder.map((slot) => [slot, equipmentCatalog[slot].slice(0, 2).map((item) => ({ ...item }))]),
+  );
+}
+
+function findEquipmentCatalogItem(slot, rawItem) {
+  const list = equipmentCatalog[slot] || [];
+  if (!list.length) return null;
+  if (typeof rawItem?.id === "string") {
+    const byId = list.find((item) => item.id === rawItem.id);
+    if (byId) return byId;
+  }
+  if (typeof rawItem?.name === "string") {
+    const normalizedName = rawItem.name.trim().toLowerCase();
+    const byName = list.find((item) => item.name.trim().toLowerCase() === normalizedName);
+    if (byName) return byName;
+  }
+  return null;
+}
+
+function normalizeEquipmentItem(slot, rawItem, fallback = null) {
+  const template = findEquipmentCatalogItem(slot, rawItem) || fallback || equipmentCatalog[slot]?.[0];
+  if (!template) return null;
   return {
-    suit: { name: "Csikos oltony", power: 3 },
-    vest: { name: "Sotet melleny", power: 2 },
-    shirt: { name: "Feher ing", power: 1 },
-    trousers: { name: "Fekete nadrag", power: 2 },
-    hat: { name: "Fekete fedora", power: 4 },
-    weapon: { name: "Colt M1911", power: 8 },
-    shoes: { name: "Bor felcipo", power: 1 },
-    watch: { name: "Zsebora", power: 2 },
+    id: typeof rawItem?.id === "string" ? rawItem.id : template.id,
+    name: typeof rawItem?.name === "string" ? rawItem.name : template.name,
+    power: Number.isFinite(rawItem?.power) ? Math.max(0, rawItem.power) : template.power,
   };
+}
+
+function normalizeItemInventory(source, equipment = null) {
+  const defaults = getDefaultItemInventory();
+  const output = {};
+  equipmentSlotOrder.forEach((slot) => {
+    const savedItems = Array.isArray(source?.[slot]) ? source[slot] : [];
+    const merged = new Map(defaults[slot].map((item) => [item.id, { ...item }]));
+    savedItems.forEach((rawItem) => {
+      const item = normalizeEquipmentItem(slot, rawItem);
+      if (item) merged.set(item.id, item);
+    });
+    const equippedItem = equipment?.[slot];
+    if (equippedItem) {
+      const normalizedEquipped = normalizeEquipmentItem(slot, equippedItem);
+      if (normalizedEquipped) merged.set(normalizedEquipped.id, normalizedEquipped);
+    }
+    output[slot] = [...merged.values()];
+  });
+  return output;
+}
+
+function getEquipmentBonusText(slot, power) {
+  const bonus = equipmentSlotDefs[slot]?.bonus || "Ero";
+  return `${bonus} +${power}`;
+}
+
+function recalculateGearPower() {
+  state.gearPower = equipmentSlotOrder.reduce((sum, slot) => sum + (Number(state.equipment?.[slot]?.power) || 0), 0);
+}
+
+function unlockEquipmentItem(slot, rawItem) {
+  if (!slot || !state.itemInventory?.[slot]) return null;
+  const item = normalizeEquipmentItem(slot, rawItem);
+  if (!item) return null;
+  if (!state.itemInventory[slot].some((entry) => entry.id === item.id)) {
+    state.itemInventory[slot].push(item);
+  }
+  return item;
 }
 
 function normalizeEquipment(source) {
   const defaults = getDefaultEquipment();
   const output = {};
   Object.entries(defaults).forEach(([slot, item]) => {
-    const saved = source && typeof source === "object" ? source[slot] : null;
-    output[slot] = {
-      name: typeof saved?.name === "string" ? saved.name : item.name,
-      power: Number.isFinite(saved?.power) ? Math.max(0, saved.power) : item.power,
-    };
+    let saved = source && typeof source === "object" ? source[slot] : null;
+    if (!saved && slot === "pants") saved = source?.trousers || null;
+    output[slot] = normalizeEquipmentItem(slot, saved, item);
   });
   return output;
 }
 
 function syncEquipmentSheet() {
-  const entries = [
-    ["suit", ".character-equipment__slot--suit"],
-    ["vest", ".character-equipment__slot--vest"],
-    ["shirt", ".character-equipment__slot--shirt"],
-    ["trousers", ".character-equipment__slot--trousers"],
-    ["hat", ".character-equipment__slot--hat"],
-    ["weapon", ".character-equipment__slot--weapon"],
-    ["shoes", ".character-equipment__slot--shoes"],
-    ["watch", ".character-equipment__slot--watch"],
-  ];
+  const entries = equipmentSlotOrder.map((slot) => [slot, `.character-equipment__slot--${slot}`]);
 
   entries.forEach(([slot, selector]) => {
     const root = document.querySelector(selector);
@@ -479,7 +585,8 @@ function syncEquipmentSheet() {
     const strong = root.querySelector("strong");
     const small = root.querySelector("small");
     if (strong) strong.textContent = item.name;
-    if (small) small.textContent = `Er\u0151 +${item.power}`;
+    if (small) small.textContent = getEquipmentBonusText(slot, item.power);
+    root.classList.toggle("is-active", activeEquipmentSlot === slot);
   });
 }
 
@@ -797,6 +904,11 @@ function normalizeQuest(quest) {
   if (!spot) return null;
   const reward = quest.reward && typeof quest.reward === "object" ? quest.reward : {};
   const goal = quest.goal && typeof quest.goal === "object" ? quest.goal : {};
+  const normalizedRewardSlot = reward.slot === "trousers"
+    ? "pants"
+    : (reward.slot === "suit" || reward.slot === "vest")
+      ? "shirt"
+      : (typeof reward.slot === "string" ? reward.slot : "weapon");
   const allowedStatuses = new Set(["offered", "accepted", "completed"]);
   const target = clamp(Number.isFinite(goal.target) ? Math.round(goal.target) : 1, 1, 12);
   const progress = clamp(Number.isFinite(goal.progress) ? Math.round(goal.progress) : 0, 0, target);
@@ -811,9 +923,10 @@ function normalizeQuest(quest) {
     description: typeof quest.description === "string" ? quest.description : "",
     objective: typeof quest.objective === "string" ? quest.objective : "",
     reward: {
-      slot: typeof reward.slot === "string" ? reward.slot : "weapon",
+      slot: normalizedRewardSlot,
       name: typeof reward.name === "string" ? reward.name : "Ismeretlen felszereles",
       power: Number.isFinite(reward.power) ? Math.max(0, reward.power) : 0,
+      id: typeof reward.id === "string" ? reward.id : undefined,
     },
     moneyReward: Number.isFinite(quest.moneyReward) ? Math.max(0, Math.round(quest.moneyReward)) : 80,
     xpReward: Number.isFinite(quest.xpReward) ? Math.max(0, Math.round(quest.xpReward)) : 18,
@@ -834,6 +947,16 @@ function normalizeQuestList(quests) {
 
 function buildQuestReward(questType, difficulty) {
   const tier = clamp(Math.floor(difficulty / 18) + 1, 1, 5);
+  const modernRewardPools = {
+    robbery: ["weapon", "hat", "watch", "shoes"],
+    protection: ["shirt", "pants", "watch", "weapon"],
+  };
+  const modernPool = modernRewardPools[questType] || modernRewardPools.robbery;
+  const modernSlot = modernPool[randomInt(0, modernPool.length - 1)];
+  const modernList = equipmentCatalog[modernSlot] || [];
+  const modernItemIndex = clamp(tier - 1 + randomInt(0, 1), 1, modernList.length - 1);
+  const modernItem = modernList[modernItemIndex] || modernList[modernList.length - 1] || equipmentCatalog.weapon[0];
+  return { ...modernItem, slot: modernSlot };
   const power = 2 + tier * 2 + randomInt(0, 3);
   const rewardPools = {
     robbery: [
@@ -1014,6 +1137,21 @@ function grantQuestReward(quest) {
     sceneRef?.setMessage("Ez a kuldetes még nem kész az átadásra.");
     return false;
   }
+
+  const modernReward = quest.reward || { id: "weapon-colt", power: 0, name: "Felszereles", slot: "weapon" };
+  const modernUnlockedItem = unlockEquipmentItem(modernReward.slot, modernReward);
+  state.money += quest.moneyReward;
+  applyFame(quest.xpReward);
+  applyHeat(4);
+  state.activeQuests = normalizeQuestList(state.activeQuests).filter((entry) => entry.id !== quest.id);
+  state.selectedQuestSlot = clamp(state.selectedQuestSlot, 0, Math.max(0, state.activeQuests.length - 1));
+  sceneRef?.pushLog(`Kuldetes atadva: ${quest.title} - +${quest.xpReward} XP, +${quest.moneyReward} $, ${modernReward.name}.`);
+  sceneRef?.setMessage(`Atadas sikeres: ${quest.title}. +${quest.xpReward} XP, uj targy: ${modernUnlockedItem?.name || modernReward.name}.`);
+  syncEquipmentSheet();
+  saveGame();
+  sceneRef?.refreshHUD();
+  sceneRef?.refreshMap();
+  return true;
 
   const reward = quest.reward || { power: 0, name: "Felszereles", slot: "weapon" };
   state.gearPower += reward.power;
@@ -1947,6 +2085,70 @@ function getActiveCrewMember() {
   return state.crewMembers.find((member) => member.id === state.activeCrewMemberId) || state.crewMembers[0] || null;
 }
 
+function getCrewReadiness(member) {
+  if (!member || !member.baseHealth) return 0;
+  return clamp(member.health / member.baseHealth, 0, 1);
+}
+
+function getBandPowerProfile() {
+  const members = Array.isArray(state.crewMembers) ? state.crewMembers : [];
+  const activeMember = getActiveCrewMember();
+  const crewAttackTotal = members.reduce((sum, member) => sum + getCrewMemberAttack(member), 0);
+  const crewDefenseTotal = members.reduce((sum, member) => sum + getCrewMemberDefense(member), 0);
+  const crewReadinessAverage = members.length
+    ? members.reduce((sum, member) => sum + getCrewReadiness(member), 0) / members.length
+    : 1;
+  const activeAttack = getCrewMemberAttack(activeMember);
+  const activeDefense = getCrewMemberDefense(activeMember);
+  const rankLevel = getRankLevel(state.fame);
+  const baseProfilePower = (
+    state.gearPower
+    + rankLevel * 8
+    + state.cityLevel * 5
+    + state.fame * 0.1
+    + state.crew * 4
+  );
+  const assault = Math.round(
+    baseProfilePower
+      + activeAttack
+      + crewAttackTotal * 0.72
+      + crewDefenseTotal * 0.18
+      + crewReadinessAverage * 14,
+  );
+  const pressure = Math.round(
+    baseProfilePower
+      + activeAttack * 0.55
+      + activeDefense * 0.6
+      + crewAttackTotal * 0.42
+      + crewDefenseTotal * 0.48
+      + crewReadinessAverage * 18,
+  );
+  const resilience = Math.round(
+    baseProfilePower
+      + activeDefense
+      + crewDefenseTotal * 0.72
+      + crewAttackTotal * 0.16
+      + crewReadinessAverage * 22,
+  );
+  return {
+    assault,
+    pressure,
+    resilience,
+    readiness: crewReadinessAverage,
+  };
+}
+
+function getActionPower(actionType = "robbery") {
+  const profile = getBandPowerProfile();
+  if (actionType === "protection") {
+    return Math.round(profile.pressure * 0.68 + profile.resilience * 0.32);
+  }
+  if (actionType === "map") {
+    return Math.round(profile.assault * 0.6 + profile.pressure * 0.25 + profile.resilience * 0.15);
+  }
+  return profile.assault;
+}
+
 function renderCrewPanel() {
   if (!crewCards) return;
   if (!Array.isArray(state.crewMembers) || state.crewMembers.length === 0) {
@@ -1954,7 +2156,7 @@ function renderCrewPanel() {
   }
   const members = Array.isArray(state.crewMembers) ? state.crewMembers : makeCrewMembers();
   const totalPower = members.reduce((sum, member) => sum + getCrewMemberAttack(member), 0);
-  const renderKey = `${state.money}|${state.activeCrewMemberId}|${members.map((member) => `${member.id}:${member.level}:${member.health}`).join("|")}`;
+  const renderKey = `${state.money}|${state.activeCrewMemberId}|${members.map((member) => `${member.id}:${member.level}:${member.defenseLevel}:${member.health}`).join("|")}`;
   if (renderKey === crewPanelRenderKey) return;
   crewPanelRenderKey = renderKey;
   if (crewPowerTotal) crewPowerTotal.textContent = `${totalPower} ero`;
@@ -1978,20 +2180,26 @@ function renderCrewPanel() {
             <div class="crew-card__role">${member.role}</div>
           </div>
           <div class="crew-card__stats">
-            <div class="crew-card__stat crew-card__stat--wide">
-              <small>Ero</small>
-              <strong>${attack}</strong>
-              <button class="crew-card__mini-action" data-crew-action="upgrade" type="button"${state.money < cost || member.level >= 20 ? " disabled" : ""}>${member.level >= 20 ? "Max" : `Fejlesztes ${cost}$`}</button>
+            <div class="crew-card__stat">
+              <div class="crew-card__stat-copy">
+                <small>Ero</small>
+                <strong>${attack}</strong>
+              </div>
+              <button class="crew-card__mini-action" data-crew-action="upgrade" type="button"${state.money < cost || member.level >= 20 ? " disabled" : ""}>${member.level >= 20 ? "Max" : `${cost}$`}</button>
             </div>
-            <div class="crew-card__stat crew-card__stat--wide">
-              <small>HP</small>
-              <strong>${member.health}/${member.baseHealth}</strong>
-              <button class="crew-card__mini-action" data-crew-action="heal" type="button"${state.money < healCost || healCost <= 0 ? " disabled" : ""}>${healCost > 0 ? `Feltoltes ${healCost}$` : "Max elet"}</button>
+            <div class="crew-card__stat">
+              <div class="crew-card__stat-copy">
+                <small>HP</small>
+                <strong>${member.health}/${member.baseHealth}</strong>
+              </div>
+              <button class="crew-card__mini-action" data-crew-action="heal" type="button"${state.money < healCost || healCost <= 0 ? " disabled" : ""}>${healCost > 0 ? `${healCost}$` : "Max"}</button>
             </div>
-            <div class="crew-card__stat crew-card__stat--wide">
-              <small>Vedelem</small>
-              <strong>${defense}</strong>
-              <button class="crew-card__mini-action" data-crew-action="defense" type="button"${state.money < defenseCost || member.defenseLevel >= 20 ? " disabled" : ""}>${member.defenseLevel >= 20 ? "Max" : `Fejlesztes ${defenseCost}$`}</button>
+            <div class="crew-card__stat">
+              <div class="crew-card__stat-copy">
+                <small>Pajzs</small>
+                <strong>${defense}</strong>
+              </div>
+              <button class="crew-card__mini-action" data-crew-action="defense" type="button"${state.money < defenseCost || member.defenseLevel >= 20 ? " disabled" : ""}>${member.defenseLevel >= 20 ? "Max" : `${defenseCost}$`}</button>
             </div>
           </div>
         </div>
@@ -2015,7 +2223,6 @@ function upgradeCrewMember(memberId) {
 
   state.money -= cost;
   member.level += 1;
-  member.health = member.baseHealth;
   state.activeCrewMemberId = member.id;
   sceneRef?.pushLog(`${member.name} fejlodott. Most ${member.level}. szintu.`);
   sceneRef?.setMessage(`${member.name} ereje ${getCrewMemberAttack(member)} lett.`);
@@ -2391,6 +2598,47 @@ function closeRobberyGame() {
   sceneRef?.refreshMap();
 }
 
+function hideEquipmentPicker() {
+  activeEquipmentSlot = null;
+  equipmentPicker?.classList.add("hidden");
+  equipmentPicker?.setAttribute("aria-hidden", "true");
+  syncEquipmentSheet();
+}
+
+function equipInventoryItem(slot, itemId) {
+  const item = state.itemInventory?.[slot]?.find((entry) => entry.id === itemId);
+  if (!item) return;
+  state.equipment[slot] = { ...item };
+  recalculateGearPower();
+  sceneRef?.setMessage(`${item.name} felveve a(z) ${equipmentSlotDefs[slot]?.label?.toLowerCase() || "felszereles"} helyere.`);
+  refreshCharacterPanel();
+  saveGame();
+}
+
+function showEquipmentPicker(slot) {
+  const slotDef = equipmentSlotDefs[slot];
+  const items = state.itemInventory?.[slot];
+  if (!slotDef || !Array.isArray(items) || !items.length || !equipmentPicker || !equipmentPickerList) return;
+  activeEquipmentSlot = slot;
+  if (equipmentPickerTitle) equipmentPickerTitle.textContent = slotDef.label;
+  equipmentPickerList.innerHTML = items.map((item) => {
+    const equipped = state.equipment?.[slot]?.id === item.id;
+    return `
+      <button class="equipment-picker__item${equipped ? " is-equipped" : ""}" type="button" data-equip-slot="${slot}" data-item-id="${item.id}">
+        <span class="equipment-picker__art equipment-picker__art--${slot}" aria-hidden="true"></span>
+        <span class="equipment-picker__copy">
+          <strong>${item.name}</strong>
+          <small>${getEquipmentBonusText(slot, item.power)}</small>
+        </span>
+        <em>${equipped ? "Felveve" : "Felveszem"}</em>
+      </button>
+    `;
+  }).join("");
+  equipmentPicker.classList.remove("hidden");
+  equipmentPicker.setAttribute("aria-hidden", "false");
+  syncEquipmentSheet();
+}
+
 function refreshCharacterPanel() {
   const level = getRankLevel(state.fame);
   const currentRank = getCurrentRankEntry(state.fame);
@@ -2415,19 +2663,7 @@ function refreshCharacterPanel() {
       : "Maximum szint elerve";
   }
   if (characterXpFill) characterXpFill.style.width = `${nextRankFame > state.fame ? xpProgress : 100}%`;
-  if (characterXpList) {
-    characterXpList.innerHTML = rankTable.map((entry, index) => {
-      const reached = state.fame >= entry.fame;
-      const isCurrent = entry.fame === currentThreshold;
-      return `
-        <div class="character-xp__item${reached ? " is-reached" : ""}${isCurrent ? " is-current" : ""}">
-          <span>${index + 1}. szint</span>
-          <strong>${entry.name}</strong>
-          <em>${entry.fame} XP</em>
-        </div>
-      `;
-    }).join("");
-  }
+  if (activeEquipmentSlot) showEquipmentPicker(activeEquipmentSlot);
   syncEquipmentSheet();
 }
 
@@ -2440,6 +2676,7 @@ function showCharacterPanel() {
 }
 
 function hideCharacterPanel() {
+  hideEquipmentPicker();
   characterPanel?.classList.add("hidden");
   characterPanel?.setAttribute("aria-hidden", "true");
 }
@@ -2705,6 +2942,7 @@ function createSaveSnapshot() {
     energy: state.energy,
     gearPower: state.gearPower,
     equipment: state.equipment,
+    itemInventory: state.itemInventory,
     crewMembers: state.crewMembers,
     activeCrewMemberId: state.activeCrewMemberId,
     mainBaseSpotId: state.mainBaseSpotId,
@@ -2741,6 +2979,8 @@ function hydrateState(saved) {
   state.energy = Number.isFinite(state.energy) ? clamp(state.energy, 0, 100) : 100;
   state.gearPower = Number.isFinite(state.gearPower) ? Math.max(0, state.gearPower) : 12;
   state.equipment = normalizeEquipment(state.equipment);
+  state.itemInventory = normalizeItemInventory(state.itemInventory, state.equipment);
+  recalculateGearPower();
   state.crewMembers = normalizeCrewMembers(state.crewMembers);
   state.activeCrewMemberId = state.crewMembers.some((member) => member.id === state.activeCrewMemberId)
     ? state.activeCrewMemberId
@@ -2889,16 +3129,7 @@ function applyActionDamage(min = 3, max = 15) {
 }
 
 function getPlayerPower() {
-  const level = getRankLevel(state.fame);
-  const activeCrewPower = getCrewMemberAttack(getActiveCrewMember());
-  return Math.round(
-    state.gearPower
-      + level * 8
-      + state.crew * 5
-      + activeCrewPower
-      + state.cityLevel * 5
-      + state.fame * 0.1,
-  );
+  return getActionPower("robbery");
 }
 
 function getBuildingDifficulty(spot) {
@@ -2914,8 +3145,8 @@ function getBuildingDifficulty(spot) {
   return Math.round(baseSecurity * 0.45 + randomFactor * 42 + modeBias);
 }
 
-function getDifficultyInfo(difficulty) {
-  const difference = difficulty - getPlayerPower();
+function getDifficultyInfo(difficulty, actionType = "robbery") {
+  const difference = difficulty - getActionPower(actionType);
   if (difference <= 5) {
     return { label: "Konnyu", color: 0x62c878, successChance: clamp(0.86 - difference * 0.012, 0.78, 0.96) };
   }
@@ -3036,14 +3267,35 @@ function collectProtectionMoney(targetDistrict, buildingName = "Haz", targetSpot
   if (!spendEnergy(8)) return false;
 
   const target = targetDistrict || getSelectedDistrict();
-  const gain = Math.floor(Math.random() * 21) + 10;
+  const difficulty = targetSpot ? getBuildingDifficulty(targetSpot) : Math.round((target?.security ?? 50) * 0.82);
+  const difficultyInfo = getDifficultyInfo(difficulty, "protection");
+  const bandProfile = getBandPowerProfile();
+  const gainBase = 14 + Math.round(difficulty * 0.16) + state.cityLevel * 4 + randomInt(0, 14);
+  const lowReadinessPenalty = bandProfile.readiness < 0.6 ? Math.round((0.6 - bandProfile.readiness) * 16) : 0;
+
+  if (Math.random() > difficultyInfo.successChance) {
+    const healthLoss = applyActionDamage(
+      difficultyInfo.label === "Veszelyes" ? 8 : 4,
+      difficultyInfo.label === "Veszelyes" ? 18 : 11,
+    );
+    applyHeat(difficultyInfo.label === "Veszelyes" ? 10 : difficultyInfo.label === "Kockazatos" ? 7 : 5);
+    sceneRef?.pushLog(`${buildingName}: a vedelmi penz beszedese nem sikerult. -${healthLoss} eletero.`);
+    sceneRef?.setMessage(`${buildingName} nem fizetett. Tobb ero, jobb pajzs es jobb felszereles kell.`);
+    saveGame();
+    return false;
+  }
+
+  const gain = Math.max(
+    10,
+    Math.round(gainBase * (0.84 + difficultyInfo.successChance * 0.42) - lowReadinessPenalty),
+  );
 
   state.money += gain;
-  applyFame(3);
-  applyHeat(5);
+  applyFame(difficultyInfo.label === "Veszelyes" ? 5 : difficultyInfo.label === "Kockazatos" ? 4 : 3);
+  applyHeat(difficultyInfo.label === "Veszelyes" ? 8 : difficultyInfo.label === "Kockazatos" ? 6 : 4);
 
   if (target) {
-    target.loyalty = clamp(target.loyalty + 8, 0, 100);
+    target.loyalty = clamp(target.loyalty + (difficultyInfo.label === "Veszelyes" ? 10 : 8), 0, 100);
     if (!target.controlled && target.loyalty >= 65) {
       target.controlled = true;
       sceneRef?.pushLog(`${target.name} most mar a bandadhoz tartozik.`);
@@ -3051,7 +3303,7 @@ function collectProtectionMoney(targetDistrict, buildingName = "Haz", targetSpot
   }
 
   sceneRef?.pushLog(`${buildingName}: +${gain} $ vedelmi penz.`);
-  sceneRef?.setMessage(`${buildingName} kifizette a vedelmi penzt.`);
+  sceneRef?.setMessage(`${buildingName} kifizette a vedelmi penzt. Nehezseg: ${difficultyInfo.label}.`);
   if (targetSpot) {
     state.protectionCooldowns[targetSpot.id] = Date.now() + PROTECTION_COOLDOWN_MS;
     completeQuest("protection", targetSpot);
@@ -3203,6 +3455,8 @@ function startNewGame(name) {
   state.energy = 100;
   state.gearPower = 12;
   state.equipment = getDefaultEquipment();
+  state.itemInventory = getDefaultItemInventory();
+  recalculateGearPower();
   state.crewMembers = makeCrewMembers();
   state.activeCrewMemberId = "luca";
   state.mainBaseSpotId = null;
@@ -3257,6 +3511,8 @@ function resetGame() {
   state.energy = 100;
   state.gearPower = 12;
   state.equipment = getDefaultEquipment();
+  state.itemInventory = getDefaultItemInventory();
+  recalculateGearPower();
   state.crewMembers = makeCrewMembers();
   state.activeCrewMemberId = "luca";
   state.mainBaseSpotId = null;
@@ -4476,6 +4732,32 @@ function bindHudActions() {
   hudQuestClose?.addEventListener("click", hideQuestCard);
   characterPanelClose?.addEventListener("click", hideCharacterPanel);
   characterPanelBackdrop?.addEventListener("click", hideCharacterPanel);
+  equipmentPickerClose?.addEventListener("click", hideEquipmentPicker);
+  characterPanel?.addEventListener("click", (event) => {
+    const pickerButton = event.target.closest("[data-equip-slot][data-item-id]");
+    if (pickerButton) {
+      equipInventoryItem(pickerButton.dataset.equipSlot, pickerButton.dataset.itemId);
+      return;
+    }
+    const slot = event.target.closest(".character-equipment__slot[data-slot]");
+    if (slot) {
+      const slotId = slot.dataset.slot;
+      if (activeEquipmentSlot === slotId) hideEquipmentPicker();
+      else showEquipmentPicker(slotId);
+      return;
+    }
+    if (!event.target.closest(".equipment-picker")) hideEquipmentPicker();
+  });
+  characterPanel?.addEventListener("keydown", (event) => {
+    const slot = event.target.closest(".character-equipment__slot[data-slot]");
+    if (!slot) return;
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      const slotId = slot.dataset.slot;
+      if (activeEquipmentSlot === slotId) hideEquipmentPicker();
+      else showEquipmentPicker(slotId);
+    }
+  });
   crewCards?.addEventListener("click", (event) => {
     const button = event.target.closest("[data-crew-action]");
     const card = event.target.closest("[data-member-id]");

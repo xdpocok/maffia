@@ -1462,7 +1462,7 @@ button {
   min-height: 0;
   padding: 12px 14px 10px;
   display: grid;
-  grid-template-columns: 158px minmax(320px, 1fr) 158px;
+  grid-template-columns: 146px minmax(280px, 1fr) 146px;
   gap: 12px;
   align-items: stretch;
   background:
@@ -1472,7 +1472,7 @@ button {
 
 .character-equipment {
   display: grid;
-  grid-template-rows: repeat(4, minmax(0, 1fr));
+  grid-template-rows: repeat(3, minmax(0, 1fr));
   align-content: center;
   gap: 7px;
   z-index: 2;
@@ -1484,6 +1484,7 @@ button {
   padding: 0;
   display: grid;
   grid-template-rows: 1fr auto;
+  cursor: pointer;
   overflow: hidden;
   border: 1px solid rgba(214, 173, 102, 0.46);
   border-radius: 3px;
@@ -1502,6 +1503,14 @@ button {
   filter: brightness(1.14);
 }
 
+.character-equipment__slot.is-active {
+  border-color: rgba(236, 192, 105, 0.82);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 244, 220, 0.08),
+    0 0 0 1px rgba(214, 173, 102, 0.18),
+    0 10px 18px rgba(0, 0, 0, 0.34);
+}
+
 .character-equipment__art {
   min-height: 54px;
   background-repeat: no-repeat;
@@ -1509,11 +1518,9 @@ button {
   background-size: cover;
 }
 
-.character-equipment__slot--suit .character-equipment__art { background-image: url("./assets/character/equipment/suit.png"); }
-.character-equipment__slot--vest .character-equipment__art { background-image: url("./assets/character/equipment/vest.png"); }
-.character-equipment__slot--shirt .character-equipment__art { background-image: url("./assets/character/equipment/shirt.png"); }
-.character-equipment__slot--trousers .character-equipment__art { background-image: url("./assets/character/equipment/trousers.png"); }
 .character-equipment__slot--hat .character-equipment__art { background-image: url("./assets/character/equipment/hat.png"); }
+.character-equipment__slot--shirt .character-equipment__art { background-image: url("./assets/character/equipment/shirt.png"); }
+.character-equipment__slot--pants .character-equipment__art { background-image: url("./assets/character/equipment/trousers.png"); }
 .character-equipment__slot--weapon .character-equipment__art { background-image: url("./assets/character/equipment/weapon.png"); }
 .character-equipment__slot--shoes .character-equipment__art { background-image: url("./assets/character/equipment/shoes.png"); }
 .character-equipment__slot--watch .character-equipment__art { background-image: url("./assets/character/equipment/watch.png"); }
@@ -1581,6 +1588,10 @@ button {
   width: 100%;
   height: 100%;
   min-height: 0;
+  padding: 58px 18px 62px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
   overflow: hidden;
 }
 
@@ -1595,11 +1606,12 @@ button {
 }
 
 .character-figure__art {
-  width: 100%;
-  height: 100%;
+  width: auto;
+  max-width: 100%;
+  max-height: 100%;
   display: block;
-  object-fit: cover;
-  object-position: center 46%;
+  object-fit: contain;
+  object-position: center center;
   filter: sepia(0.12) contrast(1.06) brightness(0.9);
 }
 
@@ -1616,6 +1628,126 @@ button {
   color: rgba(234, 216, 179, 0.68);
   font-size: 0.82rem;
   letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.equipment-picker {
+  position: absolute;
+  right: 14px;
+  bottom: 16px;
+  z-index: 5;
+  width: min(286px, calc(100% - 28px));
+  max-height: 320px;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+  border: 1px solid rgba(214, 173, 102, 0.42);
+  border-radius: 12px;
+  background:
+    linear-gradient(180deg, rgba(21, 15, 11, 0.98), rgba(8, 6, 5, 0.98)),
+    radial-gradient(circle at top, rgba(214, 173, 102, 0.08), transparent 38%);
+  box-shadow:
+    0 20px 45px rgba(0, 0, 0, 0.54),
+    inset 0 1px 0 rgba(255, 241, 211, 0.06);
+}
+
+.equipment-picker.hidden {
+  display: none;
+}
+
+.equipment-picker__header {
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-bottom: 1px solid rgba(214, 173, 102, 0.22);
+}
+
+.equipment-picker__eyebrow {
+  color: rgba(234, 216, 179, 0.48);
+  font-size: 0.58rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.equipment-picker__header strong {
+  display: block;
+  margin-top: 3px;
+  color: #f0dcb0;
+  font-size: 0.94rem;
+}
+
+.equipment-picker__close {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid rgba(214, 173, 102, 0.24);
+  background: rgba(255, 237, 204, 0.06);
+  color: #ddb66d;
+  font-size: 1rem;
+}
+
+.equipment-picker__list {
+  min-height: 0;
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+  overflow: auto;
+}
+
+.equipment-picker__item {
+  padding: 8px;
+  display: grid;
+  grid-template-columns: 52px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid rgba(214, 173, 102, 0.14);
+  border-radius: 10px;
+  background: rgba(255, 243, 214, 0.04);
+  color: #ecd7ac;
+  text-align: left;
+}
+
+.equipment-picker__item.is-equipped {
+  border-color: rgba(236, 192, 105, 0.62);
+  background: rgba(202, 148, 61, 0.12);
+}
+
+.equipment-picker__art {
+  width: 52px;
+  height: 52px;
+  border-radius: 8px;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+  border: 1px solid rgba(214, 173, 102, 0.16);
+}
+
+.equipment-picker__art--hat { background-image: url("./assets/character/equipment/hat.png"); }
+.equipment-picker__art--shirt { background-image: url("./assets/character/equipment/shirt.png"); }
+.equipment-picker__art--pants { background-image: url("./assets/character/equipment/trousers.png"); }
+.equipment-picker__art--weapon { background-image: url("./assets/character/equipment/weapon.png"); }
+.equipment-picker__art--shoes { background-image: url("./assets/character/equipment/shoes.png"); }
+.equipment-picker__art--watch { background-image: url("./assets/character/equipment/watch.png"); }
+
+.equipment-picker__copy strong {
+  display: block;
+  font-size: 0.78rem;
+  color: #f3e5c3;
+}
+
+.equipment-picker__copy small {
+  display: block;
+  margin-top: 2px;
+  color: #cfae71;
+  font-size: 0.64rem;
+}
+
+.equipment-picker__item em {
+  color: #f0d59f;
+  font-style: normal;
+  font-size: 0.62rem;
   text-transform: uppercase;
 }
 
@@ -1654,7 +1786,7 @@ button {
 .character-xp {
   padding: 0 14px 14px;
   display: grid;
-  gap: 9px;
+  gap: 7px;
   border-top: 1px solid rgba(214, 173, 102, 0.12);
   background: rgba(8, 6, 5, 0.72);
 }
@@ -1695,47 +1827,6 @@ button {
   transition: width 220ms ease;
 }
 
-.character-xp__list {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 6px;
-}
-
-.character-xp__item {
-  padding: 7px 8px;
-  display: grid;
-  gap: 2px;
-  border: 1px solid rgba(214, 173, 102, 0.14);
-  border-radius: 4px;
-  background: rgba(255, 244, 220, 0.03);
-}
-
-.character-xp__item span {
-  color: #a98d5f;
-  font-size: 0.58rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.character-xp__item strong {
-  color: #ead6ad;
-  font-size: 0.72rem;
-}
-
-.character-xp__item em {
-  color: #7fa04c;
-  font-size: 0.6rem;
-  font-style: normal;
-}
-
-.character-xp__item.is-reached {
-  border-color: rgba(214, 173, 102, 0.38);
-  background: linear-gradient(180deg, rgba(105, 79, 39, 0.24), rgba(255, 244, 220, 0.04));
-}
-
-.character-xp__item.is-current {
-  box-shadow: inset 0 0 0 1px rgba(234, 207, 145, 0.24), 0 0 14px rgba(189, 140, 56, 0.12);
-}
 
 .hud-avatar-card {
   pointer-events: auto;
@@ -1820,10 +1911,6 @@ button {
   .character-xp__summary {
     align-items: flex-start;
     flex-direction: column;
-  }
-
-  .character-xp__list {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -2439,18 +2526,18 @@ button {
 
 .crew-cards {
   display: grid;
-  gap: 9px;
+  gap: 7px;
 }
 
 .crew-card {
   position: relative;
-  min-height: 126px;
+  min-height: 104px;
   display: grid;
-  grid-template-columns: 88px 1fr;
-  gap: 10px;
+  grid-template-columns: 74px 1fr;
+  gap: 8px;
   overflow: hidden;
-  padding: 8px;
-  border-radius: 12px;
+  padding: 7px;
+  border-radius: 10px;
   border: 1px solid rgba(173, 129, 74, 0.42);
   background:
     linear-gradient(90deg, rgba(20, 14, 10, 0.98) 0%, rgba(20, 14, 10, 0.98) 38%, rgba(56, 40, 29, 0.98) 38%, rgba(45, 31, 23, 0.98) 100%),
@@ -2470,9 +2557,9 @@ button {
 
 .crew-card__portrait {
   position: relative;
-  min-height: 110px;
+  min-height: 90px;
   overflow: hidden;
-  border-radius: 10px;
+  border-radius: 8px;
   border: 1px solid rgba(170, 128, 72, 0.4);
   background: #17100c;
   box-shadow: inset 0 0 18px rgba(0, 0, 0, 0.45);
@@ -2499,14 +2586,14 @@ button {
 
 .crew-card__level {
   position: absolute;
-  left: 7px;
-  right: 7px;
-  bottom: 7px;
-  padding: 4px 6px;
+  left: 5px;
+  right: 5px;
+  bottom: 5px;
+  padding: 3px 5px;
   border-radius: 7px;
   background: rgba(16, 10, 7, 0.88);
   color: #f1d58e;
-  font-size: 0.68rem;
+  font-size: 0.58rem;
   font-weight: 700;
   text-align: center;
   border: 1px solid rgba(214, 173, 102, 0.3);
@@ -2522,68 +2609,77 @@ button {
 }
 
 .crew-card__header {
-  margin-bottom: 6px;
+  margin-bottom: 4px;
 }
 
 .crew-card__name {
   color: #f6e7c5;
   font-family: Georgia, "Times New Roman", serif;
-  font-size: 0.96rem;
+  font-size: 0.84rem;
   line-height: 1.05;
   text-shadow: 0 2px 0 rgba(0, 0, 0, 0.28);
 }
 
 .crew-card__role {
-  margin-top: 3px;
+  margin-top: 2px;
   color: #d4b073;
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: 0.61rem;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.crew-card__stats {
-  display: grid;
-  gap: 5px;
-}
-
-.crew-card__stat {
-  padding: 6px 7px 6px;
-  border-radius: 8px;
-  background: rgba(255, 242, 216, 0.05);
-  border: 1px solid rgba(255, 231, 183, 0.12);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
-}
-
-.crew-card__stat small {
-  display: block;
-  color: #c9ab74;
   font-family: Georgia, "Times New Roman", serif;
   font-size: 0.54rem;
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 
+.crew-card__stats {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 4px;
+}
+
+.crew-card__stat {
+  padding: 5px 6px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  border-radius: 7px;
+  background: rgba(255, 242, 216, 0.05);
+  border: 1px solid rgba(255, 231, 183, 0.12);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+}
+
+.crew-card__stat-copy {
+  min-width: 0;
+}
+
+.crew-card__stat small {
+  display: block;
+  color: #c9ab74;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 0.46rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
 .crew-card__stat strong {
   display: block;
-  margin-top: 2px;
+  margin-top: 1px;
   color: #f4dfb1;
   font-family: Georgia, "Times New Roman", serif;
-  font-size: 0.96rem;
+  font-size: 0.76rem;
   line-height: 1;
 }
 
 .crew-card__mini-action {
-  margin-top: 4px;
-  width: 100%;
-  min-height: 22px;
-  border-radius: 6px;
+  width: 78px;
+  min-height: 24px;
+  border-radius: 5px;
   border: 1px solid rgba(237, 198, 124, 0.24);
   background:
     linear-gradient(180deg, rgba(78, 57, 40, 0.96), rgba(27, 19, 14, 0.98));
   color: #fff0cc;
-  font-size: 0.48rem;
+  font-size: 0.43rem;
   font-weight: 700;
+  line-height: 1.05;
   text-transform: uppercase;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.15),
@@ -2741,10 +2837,11 @@ button.battle-unit {
 .robbery-team-picker {
   display: grid;
   align-self: start;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(3, 148px);
+  justify-content: center;
   align-items: start;
   gap: 12px;
-  margin: 8px 18px 6px;
+  margin: 20px auto 10px;
   position: relative;
   z-index: 4;
 }
@@ -2754,26 +2851,27 @@ button.battle-unit {
 }
 
 .robbery-team-picker--cards {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(3, 148px);
 }
 
 .robbery-team-choice {
-  min-height: 218px;
-  padding: 12px;
-  display: grid;
+  width: 148px;
+  min-height: 0;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
   align-self: start;
-  grid-template-columns: 140px 1fr;
-  align-items: start;
-  gap: 14px;
+  align-items: stretch;
+  gap: 6px;
   border: 1px solid rgba(173, 129, 74, 0.42);
-  border-radius: 20px;
+  border-radius: 10px;
   background:
-    linear-gradient(90deg, rgba(20, 14, 10, 0.98) 0%, rgba(20, 14, 10, 0.98) 42%, rgba(56, 40, 29, 0.98) 42%, rgba(45, 31, 23, 0.98) 100%),
+    linear-gradient(180deg, rgba(20, 14, 10, 0.98), rgba(45, 31, 23, 0.98)),
     radial-gradient(circle at top left, rgba(214, 173, 102, 0.1), transparent 28%);
   color: #dfc696;
   text-align: left;
   box-shadow:
-    0 14px 28px rgba(0, 0, 0, 0.28),
+    0 10px 20px rgba(0, 0, 0, 0.28),
     inset 0 1px 0 rgba(255, 239, 210, 0.05);
 }
 
@@ -2791,8 +2889,8 @@ button.battle-unit {
 .robbery-team-choice__portrait {
   position: relative;
   width: 100%;
-  min-height: 190px;
-  border-radius: 16px;
+  min-height: 164px;
+  border-radius: 10px;
   overflow: hidden;
   border: 1px solid rgba(170, 128, 72, 0.4);
   background: #17100c;
@@ -2809,14 +2907,14 @@ button.battle-unit {
 
 .robbery-team-choice__level {
   position: absolute;
-  left: 12px;
-  right: 12px;
-  bottom: 12px;
-  padding: 8px 10px;
-  border-radius: 12px;
+  left: 7px;
+  right: 7px;
+  bottom: 7px;
+  padding: 4px 6px;
+  border-radius: 8px;
   background: rgba(16, 10, 7, 0.88);
   color: #f1d58e;
-  font-size: 0.96rem;
+  font-size: 0.66rem;
   font-weight: 700;
   text-align: center;
   border: 1px solid rgba(214, 173, 102, 0.3);
@@ -2827,36 +2925,40 @@ button.battle-unit {
   color: #efd8aa;
   display: block;
   font-family: Georgia, "Times New Roman", serif;
-  font-size: 1.75rem;
+  font-size: 0.85rem;
   line-height: 1;
+  text-align: center;
 }
 
 .robbery-team-choice__header small {
   display: block;
-  margin-top: 8px;
+  margin-top: 3px;
   color: #d4b073;
   font-family: Georgia, "Times New Roman", serif;
-  font-size: 0.88rem;
+  font-size: 0.5rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+  text-align: center;
 }
 
 .robbery-team-choice__stats {
-  margin-top: 10px;
+  margin-top: 2px;
   display: grid;
-  gap: 10px;
+  grid-template-columns: 1fr;
+  gap: 4px;
 }
 
 .robbery-team-choice__stat {
-  padding: 12px 12px 10px;
-  border-radius: 16px;
+  padding: 5px 6px;
+  border-radius: 7px;
   border: 1px solid rgba(214, 173, 102, 0.14);
   background: rgba(255, 245, 221, 0.04);
+  text-align: center;
 }
 
 .robbery-team-choice__stat small {
   display: block;
-  font-size: 0.72rem;
+  font-size: 0.5rem;
   color: #c9ab74;
   font-family: Georgia, "Times New Roman", serif;
   text-transform: uppercase;
@@ -2865,20 +2967,15 @@ button.battle-unit {
 
 .robbery-team-choice__stat strong {
   display: block;
-  margin-top: 6px;
+  margin-top: 2px;
   color: #f4dfb1;
   font-family: Georgia, "Times New Roman", serif;
-  font-size: 1.45rem;
+  font-size: 0.74rem;
   line-height: 1;
 }
 
 .robbery-team-choice__stat em {
-  display: block;
-  margin-top: 10px;
-  color: #f1dfb8;
-  font-size: 0.62rem;
-  font-style: normal;
-  text-transform: uppercase;
+  display: none;
 }
 
 .hud-mini-map {

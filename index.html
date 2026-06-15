@@ -185,36 +185,28 @@
 
         <div class="character-sheet__body">
           <aside class="character-equipment character-equipment--left">
-            <div class="character-equipment__slot character-equipment__slot--suit">
+            <div class="character-equipment__slot character-equipment__slot--hat" data-slot="hat" role="button" tabindex="0">
               <div class="character-equipment__art" aria-hidden="true"></div>
               <div class="character-equipment__copy">
-                <span>Oltony</span>
-                <strong>Csikos gyapju</strong>
-                <small>Vedelem +3</small>
+                <span>Kalap</span>
+                <strong>Fekete fedora</strong>
+                <small>Stilus +1</small>
               </div>
             </div>
-            <div class="character-equipment__slot character-equipment__slot--vest">
-              <div class="character-equipment__art" aria-hidden="true"></div>
-              <div class="character-equipment__copy">
-                <span>Melleny</span>
-                <strong>Sotet melleny</strong>
-                <small>Tekintely +2</small>
-              </div>
-            </div>
-            <div class="character-equipment__slot character-equipment__slot--shirt">
+            <div class="character-equipment__slot character-equipment__slot--shirt" data-slot="shirt" role="button" tabindex="0">
               <div class="character-equipment__art" aria-hidden="true"></div>
               <div class="character-equipment__copy">
                 <span>Ing</span>
                 <strong>Feher ing</strong>
-                <small>Hirnev +1</small>
+                <small>Fellepes +1</small>
               </div>
             </div>
-            <div class="character-equipment__slot character-equipment__slot--trousers">
+            <div class="character-equipment__slot character-equipment__slot--pants" data-slot="pants" role="button" tabindex="0">
               <div class="character-equipment__art" aria-hidden="true"></div>
               <div class="character-equipment__copy">
                 <span>Nadrag</span>
                 <strong>Fekete szovet</strong>
-                <small>Mozgas +2</small>
+                <small>Rutinos +1</small>
               </div>
             </div>
           </aside>
@@ -228,39 +220,42 @@
           </main>
 
           <aside class="character-equipment character-equipment--right">
-            <div class="character-equipment__slot character-equipment__slot--hat">
-              <div class="character-equipment__art" aria-hidden="true"></div>
-              <div class="character-equipment__copy">
-                <span>Kalap</span>
-                <strong>Fekete fedora</strong>
-                <small>Tekintely +4</small>
-              </div>
-            </div>
-            <div class="character-equipment__slot character-equipment__slot--weapon">
+            <div class="character-equipment__slot character-equipment__slot--weapon" data-slot="weapon" role="button" tabindex="0">
               <div class="character-equipment__art" aria-hidden="true"></div>
               <div class="character-equipment__copy">
                 <span>Fegyver</span>
                 <strong>Colt M1911</strong>
-                <small>Tamadas +8</small>
+                <small>Tamadas +7</small>
               </div>
             </div>
-            <div class="character-equipment__slot character-equipment__slot--shoes">
+            <div class="character-equipment__slot character-equipment__slot--shoes" data-slot="shoes" role="button" tabindex="0">
               <div class="character-equipment__art" aria-hidden="true"></div>
               <div class="character-equipment__copy">
                 <span>Cipo</span>
                 <strong>Bor felcipo</strong>
-                <small>Mozgas +1</small>
+                <small>Lepes +1</small>
               </div>
             </div>
-            <div class="character-equipment__slot character-equipment__slot--watch">
+            <div class="character-equipment__slot character-equipment__slot--watch" data-slot="watch" role="button" tabindex="0">
               <div class="character-equipment__art" aria-hidden="true"></div>
               <div class="character-equipment__copy">
                 <span>Kiegeszito</span>
                 <strong>Zsebora</strong>
-                <small>Hirnev +2</small>
+                <small>Presztizs +1</small>
               </div>
             </div>
           </aside>
+
+          <section id="equipmentPicker" class="equipment-picker hidden" aria-hidden="true">
+            <header class="equipment-picker__header">
+              <div>
+                <div class="equipment-picker__eyebrow">Felszereles</div>
+                <strong id="equipmentPickerTitle">Valassz targyat</strong>
+              </div>
+              <button id="equipmentPickerClose" class="equipment-picker__close" type="button" aria-label="Felszereles bezarasa">×</button>
+            </header>
+            <div id="equipmentPickerList" class="equipment-picker__list"></div>
+          </section>
         </div>
 
         <div class="character-stats">
@@ -282,7 +277,6 @@
           <div class="character-xp__track">
             <i id="characterXpFill"></i>
           </div>
-          <div id="characterXpList" class="character-xp__list"></div>
         </section>
       </div>
     </section>
