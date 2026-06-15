@@ -2540,16 +2540,25 @@ function showChoiceWheel(spot) {
   setChoiceWheelButtons(["robbery", "protection", "baseRest", "close"]);
   const difficulty = getBuildingDifficulty(spot);
   const difficultyInfo = getDifficultyInfo(difficulty);
+  const robberyCost = spot.mode === "shop" ? 18 : 12;
+  const protectionCost = 8;
   if (choiceWheelTitle) choiceWheelTitle.textContent = `${spot.name} - ${difficultyInfo.label}`;
   if (choiceWheelSubtitle) choiceWheelSubtitle.textContent = "";
   if (choiceWheelCoreLabel) choiceWheelCoreLabel.textContent = spot.name;
-  if (choiceWheelAction1) choiceWheelAction1.textContent = `Kirablás (-${spot.mode === "shop" ? 18 : 12})`;
+  if (choiceWheelAction1) {
+    const canRob = state.health > 0 && state.energy >= robberyCost;
+    choiceWheelAction1.textContent = canRob ? `Kirablas (-${robberyCost})` : `Kirablas (${robberyCost} energia kell)`;
+    choiceWheelAction1.disabled = !canRob;
+  }
   if (choiceWheelAction2) {
     const cooldown = getProtectionCooldownRemaining(spot.id);
+    const canProtect = state.health > 0 && state.energy >= protectionCost;
     choiceWheelAction2.textContent = cooldown > 0
       ? `Vedelmi penz (${formatCountdown(cooldown)})`
-      : "Vedelmi penz (-8)";
-    choiceWheelAction2.disabled = cooldown > 0;
+      : canProtect
+        ? `Vedelmi penz (-${protectionCost})`
+        : `Vedelmi penz (${protectionCost} energia kell)`;
+    choiceWheelAction2.disabled = cooldown > 0 || !canProtect;
   }
   if (choiceWheelAction3) {
     choiceWheelAction3.textContent = state.mainBaseSpotId === spot.id ? "Pihenés" : "Fő bázis";
