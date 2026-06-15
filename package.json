@@ -1,0 +1,10 @@
+{
+  "name": "maffia-birodalom",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Maffia: Birodalomepito local online-ready server",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  }
+}

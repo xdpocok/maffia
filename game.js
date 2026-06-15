@@ -1,4 +1,14 @@
 const STORAGE_KEY = "maffia.birodalom.save.phaser.v3";
+const LEGACY_STORAGE_KEYS = [STORAGE_KEY, "maffia.birodalom.save.phaser.v2", "maffia.birodalom.save.phaser.v1"];
+const LAST_PROFILE_KEY = "maffia.birodalom.lastProfile";
+const SAVE_API_BASE = "/api/saves";
+const PROTECTION_COOLDOWN_MS = 5 * 60 * 1000;
+const RECOVERY_DURATION_MS = 20 * 60 * 1000;
+const RECOVERY_AMOUNT = 50;
+const NATURAL_RECOVERY_FULL_MS = 12 * 60 * 60 * 1000;
+const NATURAL_RECOVERY_POINT_MS = NATURAL_RECOVERY_FULL_MS / 100;
+const BUILDING_DIFFICULTY_CYCLE_MS = 4 * 60 * 60 * 1000;
+const DAILY_HIDE_LIMIT = 3;
 const districtDefs = [
   {
     id: "center",
@@ -77,54 +87,138 @@ const rankTable = [
   { fame: 240, name: "Maffia fonok" },
 ];
 
-const houseSpotDefs = [
-  { id: "dome", districtIndex: 0, name: "Kozponti haz", mode: "street", x: 0.36, y: 0.28, w: 0.12, h: 0.12 },
-  { id: "brick-mid", districtIndex: 0, name: "Belvarosi bérhaz", mode: "street", x: 0.24, y: 0.20, w: 0.10, h: 0.11 },
-  { id: "glass-tower", districtIndex: 4, name: "Üvegtorony", mode: "shop", x: 0.83, y: 0.17, w: 0.12, h: 0.22 },
-  { id: "red-roof", districtIndex: 1, name: "Piacteri haz", mode: "shop", x: 0.54, y: 0.34, w: 0.11, h: 0.12 },
-  { id: "brown-block", districtIndex: 3, name: "Ipari haz", mode: "street", x: 0.16, y: 0.61, w: 0.14, h: 0.17 },
-  { id: "glass-low", districtIndex: 4, name: "Elegans villa", mode: "shop", x: 0.49, y: 0.57, w: 0.14, h: 0.13 },
-  { id: "white-villa", districtIndex: 5, name: "Peremkeruleti haz", mode: "street", x: 0.77, y: 0.63, w: 0.12, h: 0.13 },
-  { id: "cream-office", districtIndex: 2, name: "Rakparti iroda", mode: "shop", x: 0.13, y: 0.70, w: 0.11, h: 0.14 },
-  { id: "mid-rise", districtIndex: 2, name: "Kikotoi magasepulet", mode: "shop", x: 0.45, y: 0.41, w: 0.11, h: 0.16 },
-];
+function mapPolygon(points) {
+  return points.map(([x, y]) => [x / 1534, y / 1025]);
+}
 
 const clickableBuildingDefs = [
-  { id: "west-tenement", districtIndex: 0, name: "Belvarosi berhaz", mode: "street", x: 0.106, y: 0.270, w: 0.070, h: 0.128 },
-  { id: "northwest-block", districtIndex: 0, name: "Szurke sarokhaz", mode: "street", x: 0.258, y: 0.192, w: 0.087, h: 0.116 },
-  { id: "west-mid-block", districtIndex: 0, name: "Nyugati sarokhaz", mode: "street", x: 0.234, y: 0.363, w: 0.078, h: 0.125 },
-  { id: "dome-hall", districtIndex: 1, name: "Kupolas csarnok", mode: "shop", x: 0.377, y: 0.253, w: 0.103, h: 0.145 },
-  { id: "north-estate", districtIndex: 4, name: "Foepulet", mode: "shop", x: 0.586, y: 0.070, w: 0.100, h: 0.120 },
-  { id: "sale-block", districtIndex: 4, name: "Villanegyedi tomb", mode: "shop", x: 0.696, y: 0.205, w: 0.082, h: 0.125 },
-  { id: "billboard-tower", districtIndex: 2, name: "Luchese torony", mode: "shop", x: 0.865, y: 0.257, w: 0.105, h: 0.250 },
-  { id: "market-row", districtIndex: 1, name: "Piac sori uzlethaz", mode: "shop", x: 0.617, y: 0.273, w: 0.105, h: 0.125 },
-  { id: "mid-office", districtIndex: 2, name: "Rakparti iroda", mode: "shop", x: 0.500, y: 0.376, w: 0.075, h: 0.130 },
-  { id: "east-office", districtIndex: 2, name: "Keleti uzlethaz", mode: "shop", x: 0.715, y: 0.400, w: 0.090, h: 0.120 },
-  { id: "moretti-import", districtIndex: 3, name: "Moretti import", mode: "street", x: 0.156, y: 0.621, w: 0.100, h: 0.185 },
-  { id: "southwest-tenement", districtIndex: 3, name: "Gyarnegyedi haz", mode: "street", x: 0.237, y: 0.766, w: 0.090, h: 0.160 },
-  { id: "central-bank", districtIndex: 5, name: "Perem bankhaz", mode: "street", x: 0.549, y: 0.585, w: 0.110, h: 0.145 },
-  { id: "courthouse", districtIndex: 5, name: "Feher portikusz", mode: "street", x: 0.716, y: 0.660, w: 0.070, h: 0.115 },
-  { id: "southeast-block", districtIndex: 2, name: "Delkeleti berhaz", mode: "shop", x: 0.941, y: 0.592, w: 0.090, h: 0.145 },
+  { id: "north-estate", number: "02", districtIndex: 4, name: "Foepulet", mode: "shop", polygon: mapPolygon([[795,39],[827,18],[850,20],[851,1],[901,13],[916,29],[949,38],[964,57],[970,108],[944,134],[896,148],[850,131],[811,108],[798,82]]), plot: mapPolygon([[716,55],[895,0],[1031,70],[1012,142],[870,176],[742,127]]) },
+  { id: "west-tenement", number: "04", districtIndex: 0, name: "Belvarosi berhaz", mode: "street", polygon: mapPolygon([[133,256],[155,239],[171,241],[171,225],[198,230],[207,242],[239,249],[254,265],[254,316],[235,335],[188,346],[158,333],[135,313]]), plot: mapPolygon([[57,289],[184,226],[316,289],[307,356],[180,400],[79,352]]) },
+  { id: "northwest-block", number: "05", districtIndex: 0, name: "Szurke sarokhaz", mode: "street", polygon: mapPolygon([[312,185],[342,159],[367,162],[369,145],[416,151],[425,164],[466,173],[482,190],[489,249],[465,272],[405,282],[363,269],[324,254]]), plot: mapPolygon([[287,192],[431,128],[573,192],[551,282],[419,328],[311,275]]) },
+  { id: "dome-hall", number: "05", districtIndex: 1, name: "Kupolas csarnok", mode: "shop", polygon: mapPolygon([[464,252],[496,208],[519,203],[519,187],[570,170],[603,180],[608,195],[647,207],[663,230],[665,282],[646,317],[620,339],[568,362],[526,351],[487,328],[468,297]]), plot: mapPolygon([[430,273],[590,179],[732,246],[704,371],[566,430],[459,356]]) },
+  { id: "market-row", number: "06", districtIndex: 1, name: "Piac sori uzlethaz", mode: "shop", polygon: mapPolygon([[837,281],[861,253],[875,253],[876,237],[915,229],[930,240],[967,247],[984,266],[984,321],[965,341],[921,357],[878,345],[845,326]]), plot: mapPolygon([[806,286],[950,217],[1080,278],[1052,373],[924,416],[832,357]]) },
+  { id: "sale-block", number: "07", districtIndex: 4, name: "Villanegyedi tomb", mode: "shop", polygon: mapPolygon([[963,185],[990,164],[1005,165],[1006,146],[1050,151],[1060,164],[1097,173],[1110,191],[1110,253],[1093,274],[1045,289],[1000,277],[969,257]]), plot: mapPolygon([[944,213],[1070,146],[1194,208],[1170,291],[1051,336],[968,277]]) },
+  { id: "east-small-block", number: "08", districtIndex: 1, name: "Keleti kis uzlethaz", mode: "shop", polygon: mapPolygon([[1116,259],[1138,242],[1150,244],[1150,229],[1173,232],[1180,241],[1195,248],[1205,260],[1205,314],[1190,330],[1161,341],[1133,332],[1119,315]]), plot: mapPolygon([[1083,276],[1160,238],[1230,275],[1215,335],[1148,360],[1095,325]]) },
+  { id: "billboard-tower", number: "09", districtIndex: 2, name: "Luchese torony", mode: "shop", polygon: mapPolygon([[1228,204],[1254,178],[1270,180],[1271,154],[1310,142],[1331,151],[1334,165],[1368,177],[1385,197],[1398,285],[1391,359],[1371,401],[1335,428],[1292,414],[1253,389],[1235,350]]), plot: mapPolygon([[1172,260],[1330,157],[1470,226],[1433,454],[1301,497],[1201,414]]) },
+  { id: "west-mid-block", number: "11", districtIndex: 0, name: "Nyugati sarokhaz", mode: "street", polygon: mapPolygon([[299,361],[328,333],[343,334],[344,314],[386,319],[398,332],[430,338],[443,357],[443,420],[421,442],[369,453],[331,438],[303,419]]), plot: mapPolygon([[268,378],[395,303],[522,370],[500,474],[376,516],[288,453]]) },
+  { id: "mid-office", number: "12", districtIndex: 2, name: "Rakparti iroda", mode: "shop", polygon: mapPolygon([[655,370],[684,340],[700,339],[700,321],[738,311],[752,320],[785,327],[801,345],[806,410],[785,434],[744,450],[700,438],[663,417]]), plot: mapPolygon([[604,390],[746,302],[875,373],[852,482],[731,523],[632,455]]) },
+  { id: "east-office", number: "13", districtIndex: 2, name: "Keleti uzlethaz", mode: "shop", polygon: mapPolygon([[982,405],[1011,375],[1027,376],[1028,357],[1072,363],[1084,375],[1124,383],[1142,403],[1143,463],[1122,485],[1074,500],[1030,487],[991,468]]), plot: mapPolygon([[947,426],[1080,341],[1215,410],[1190,517],[1062,562],[978,492]]) },
+  { id: "central-bank", number: "16", districtIndex: 5, name: "Perem bankhaz", mode: "street", polygon: mapPolygon([[680,574],[711,536],[729,535],[730,512],[785,493],[813,501],[817,518],[855,529],[878,554],[886,629],[866,658],[813,681],[760,669],[716,642],[690,614]]), plot: mapPolygon([[697,578],[815,493],[947,561],[925,700],[800,739],[724,672]]) },
+  { id: "southeast-block", number: "19", districtIndex: 2, name: "Delkeleti berhaz", mode: "shop", polygon: mapPolygon([[1359,574],[1387,541],[1404,542],[1405,522],[1448,512],[1464,523],[1501,531],[1519,551],[1521,634],[1500,657],[1454,674],[1410,661],[1370,640]]), plot: mapPolygon([[1265,626],[1397,525],[1534,592],[1501,752],[1403,787],[1298,721]]) },
+  { id: "moretti-import", number: "20", districtIndex: 3, name: "Moretti import", mode: "street", polygon: mapPolygon([[96,615],[125,576],[147,575],[148,552],[215,531],[246,541],[249,558],[293,572],[325,604],[346,693],[334,743],[302,777],[239,800],[174,782],[123,751],[102,705]]), plot: mapPolygon([[82,646],[242,533],[396,614],[375,793],[219,841],[111,765]]) },
+  { id: "southwest-tenement", number: "21", districtIndex: 3, name: "Gyarnegyedi haz", mode: "street", polygon: mapPolygon([[302,742],[329,713],[344,714],[345,696],[388,686],[403,697],[439,704],[456,724],[459,811],[438,833],[392,850],[349,838],[311,817]]), plot: mapPolygon([[239,820],[388,705],[532,778],[510,930],[358,971],[266,899]]) },
+  { id: "courthouse", number: "23", districtIndex: 5, name: "Feher portikusz", mode: "street", polygon: mapPolygon([[997,665],[1026,632],[1043,633],[1044,615],[1086,606],[1102,617],[1138,624],[1156,644],[1158,709],[1137,731],[1091,748],[1048,736],[1008,716]]), plot: mapPolygon([[962,683],[1091,591],[1237,666],[1210,805],[1081,846],[990,776]]) },
 ];
 
-const backgroundMapFrame = {
-  width: 1535,
-  height: 1025,
-  scaleX: 0.92,
-  centerX: 0.5,
-  centerY: 0.52,
+const clickableParkDefs = [
+  { id: "northwest-park", number: "01", name: "Eszaknyugati park", kind: "park", polygon: mapPolygon([[557,116],[743,15],[897,94],[863,188],[710,231],[586,174]]) },
+  { id: "northeast-park", number: "03", name: "Eszakkeleti park", kind: "park", polygon: mapPolygon([[1026,149],[1208,52],[1370,130],[1341,223],[1180,270],[1054,207]]) },
+  { id: "west-park", number: "10", name: "Nyugati kozkert", kind: "park", polygon: mapPolygon([[0,435],[104,371],[247,443],[222,553],[92,596],[0,542]]) },
+  { id: "central-west-park", number: "15", name: "Moretti ter", kind: "park", polygon: mapPolygon([[350,519],[506,431],[657,509],[624,606],[478,651],[379,587]]) },
+  { id: "central-east-park", number: "17", name: "Kozponti diszkert", kind: "park", polygon: mapPolygon([[821,509],[971,422],[1125,500],[1092,600],[946,645],[847,579]]) },
+  { id: "southwest-park", number: "25", name: "Deli haromszog park", kind: "park", polygon: mapPolygon([[373,974],[536,846],[714,948],[687,1011],[414,1010]]) },
+  { id: "south-center-park", number: "26", name: "Deli szokokut park", kind: "park", polygon: mapPolygon([[693,832],[866,718],[1023,808],[988,914],[831,957],[723,893]]) },
+  { id: "southeast-park", number: "26", name: "Keleti haromszog park", kind: "park", polygon: mapPolygon([[870,966],[1015,855],[1165,946],[1135,1008],[908,1009]]) },
+];
+
+const clickableLotDefs = [
+  { id: "east-empty-lot", number: "14", name: "Keleti ures telek", kind: "lot", polygon: mapPolygon([[1162,554],[1250,488],[1340,540],[1315,616],[1232,641],[1175,603]]) },
+  { id: "central-empty-lot", number: "22", name: "Kozponti ures telek", kind: "lot", polygon: mapPolygon([[477,675],[626,578],[776,659],[745,769],[607,812],[507,744]]) },
+  { id: "southeast-empty-lot", number: "27", name: "Delkeleti ures telek", kind: "lot", polygon: mapPolygon([[1116,803],[1252,702],[1393,781],[1363,884],[1237,925],[1145,865]]) },
+];
+
+const lotHouseLevelDefs = {
+  1: {
+    name: "Kisbolti telekhaz",
+    asset: "./lot-house-shop-level-1.png",
+    income: 80,
+    widthFactor: 0.56,
+    heightFactor: 0.58,
+    yOffset: 0.08,
+  },
+  2: {
+    name: "Kavezos telekhaz",
+    asset: "./lot-house-shop-level-2.png",
+    income: 190,
+    widthFactor: 0.62,
+    heightFactor: 0.62,
+    yOffset: 0.085,
+  },
+  3: {
+    name: "Diszes viragboltos telekhaz",
+    asset: "./lot-house-shop-level-3.png",
+    income: 360,
+    widthFactor: 0.66,
+    heightFactor: 0.66,
+    yOffset: 0.09,
+  },
 };
+
+const LOT_HOUSE_TEXTURE_KEYS = {
+  1: "lot-house-level-1",
+  2: "lot-house-level-2",
+  3: "lot-house-level-3",
+};
+
+const LOT_HOUSE_VISUALS_ENABLED = false;
+
+const crewMemberTemplates = [
+  { id: "luca", name: "Luca Moretti", role: "Vegrehajto", baseAttack: 12, baseDefense: 9, baseHealth: 100 },
+  { id: "marco", name: "Marco Bellini", role: "Fegyveres", baseAttack: 15, baseDefense: 8, baseHealth: 88 },
+  { id: "enzo", name: "Enzo Romano", role: "Megfigyelo", baseAttack: 10, baseDefense: 12, baseHealth: 112 },
+];
+
+function makeCrewMembers() {
+  return crewMemberTemplates.map((member) => ({
+    ...member,
+    level: 1,
+    defenseLevel: 1,
+    health: member.baseHealth,
+  }));
+}
+
+const backgroundMapFrame = {
+  width: 1534,
+  height: 1025,
+  positionX: 0.5,
+  positionY: 0.5,
+};
+
+const buildingHoverAdjustments = Object.fromEntries(
+  clickableBuildingDefs.map((area) => [area.id, {
+    dx: 0,
+    dy: 0,
+    scale: 1,
+    clipScale: 0.995,
+  }]),
+);
 
 const state = {
   profileName: "",
   money: 120,
   fame: 0,
-  crew: 1,
-  heat: 12,
+  crew: 3,
+  heat: 0,
   health: 100,
   energy: 100,
   gearPower: 12,
+  equipment: getDefaultEquipment(),
+  crewMembers: makeCrewMembers(),
+  activeCrewMemberId: "luca",
   mainBaseSpotId: null,
+  territories: {},
+  buildingDifficulties: {},
+  buildingDifficultyCycle: null,
+  activeQuest: null,
+  activeQuests: [],
+  selectedQuestSlot: 0,
+  questNextSpawnAt: 0,
+  protectionCooldowns: {},
+  recoveryEffects: { health: null, energy: null },
+  naturalRecoveryAt: { health: Date.now(), energy: Date.now() },
+  nextPolicePressureAt: 0,
+  hideUsesToday: 0,
+  hideUsesDay: 1,
   day: 1,
   cityLevel: 1,
   districts: [],
@@ -133,11 +227,35 @@ const state = {
 };
 
 let sceneRef = null;
+let pendingSaveTimer = null;
+let saveRequestInFlight = null;
+let latestQueuedSave = null;
+let questCardQuestId = null;
+let mapPan = { x: 0, y: 0 };
+let mapDragState = {
+  active: false,
+  dragging: false,
+  pointerId: null,
+  startX: 0,
+  startY: 0,
+  originX: 0,
+  originY: 0,
+  ignoreClicksUntil: 0,
+};
 
 const overlay = document.getElementById("bootOverlay");
 const registerForm = document.getElementById("registerForm");
 const playerNameInput = document.getElementById("playerName");
 const hudRoot = document.getElementById("hudRoot");
+const mapBackgroundLayer = document.getElementById("mapBackgroundLayer");
+const lotHouseLayer = document.getElementById("lotHouseLayer");
+const mapSvgOverlay = document.getElementById("mapSvgOverlay");
+const auxPanel = document.getElementById("auxPanel");
+const auxPanelBackdrop = document.getElementById("auxPanelBackdrop");
+const auxPanelTitle = document.getElementById("auxPanelTitle");
+const auxPanelSubtitle = document.getElementById("auxPanelSubtitle");
+const auxPanelBody = document.getElementById("auxPanelBody");
+const auxPanelClose = document.getElementById("auxPanelClose");
 const hudAvatarCard = document.querySelector(".hud-avatar-card");
 const hudMoney = document.getElementById("hudMoney");
 const hudFame = document.getElementById("hudFame");
@@ -158,7 +276,15 @@ const hudQuestText = document.getElementById("hudQuestText");
 const hudObjective = document.getElementById("hudObjective");
 const hudObjectiveOne = document.getElementById("hudObjectiveOne");
 const hudObjectiveTwo = document.getElementById("hudObjectiveTwo");
+const hudQuestCard = document.getElementById("hudQuestCard");
+const hudQuestAction = document.getElementById("hudQuestAction");
+const hudQuestClose = document.getElementById("hudQuestClose");
+const hudQuestDelete = document.getElementById("hudQuestDelete");
 const hudLog = document.getElementById("hudLog");
+const hudQuickRank = document.getElementById("hudQuickRank");
+const hudQuickMarket = document.getElementById("hudQuickMarket");
+const hudQuickClan = document.getElementById("hudQuickClan");
+const hudQuickWorld = document.getElementById("hudQuickWorld");
 const hudAction1 = document.getElementById("hudAction1");
 const hudAction2 = document.getElementById("hudAction2");
 const hudAction3 = document.getElementById("hudAction3");
@@ -177,6 +303,41 @@ const choiceWheelAction1 = document.getElementById("choiceWheelAction1");
 const choiceWheelAction2 = document.getElementById("choiceWheelAction2");
 const choiceWheelAction3 = document.getElementById("choiceWheelAction3");
 const choiceWheelAction4 = document.getElementById("choiceWheelAction4");
+const lotInfoModal = document.getElementById("lotInfoModal");
+const lotInfoBackdrop = document.getElementById("lotInfoBackdrop");
+const lotInfoTitle = document.getElementById("lotInfoTitle");
+const lotInfoDescription = document.getElementById("lotInfoDescription");
+const lotInfoLevel = document.getElementById("lotInfoLevel");
+const lotInfoHourlyIncome = document.getElementById("lotInfoHourlyIncome");
+const lotInfoDailyIncome = document.getElementById("lotInfoDailyIncome");
+const lotInfoNextCost = document.getElementById("lotInfoNextCost");
+const lotInfoClose = document.getElementById("lotInfoClose");
+const robberyGame = document.getElementById("robberyGame");
+const robberyGameTitle = document.getElementById("robberyGameTitle");
+const robberyGameSubtitle = document.getElementById("robberyGameSubtitle");
+const robberyGameRetreat = document.getElementById("robberyGameRetreat");
+const robberyHealthText = document.getElementById("robberyHealthText");
+const robberyHealthFill = document.getElementById("robberyHealthFill");
+const robberyControlText = document.getElementById("robberyControlText");
+const robberyControlFill = document.getElementById("robberyControlFill");
+const robberyAlertText = document.getElementById("robberyAlertText");
+const robberyAlertFill = document.getElementById("robberyAlertFill");
+const robberyEnemyPower = document.getElementById("robberyEnemyPower");
+const robberyEnemyPowerFill = document.getElementById("robberyEnemyPowerFill");
+const robberyRound = document.getElementById("robberyRound");
+const robberyInstruction = document.getElementById("robberyInstruction");
+const robberyLoot = document.getElementById("robberyLoot");
+const robberyDefenders = document.getElementById("robberyDefenders");
+const robberyAllies = document.getElementById("robberyAllies");
+const robberyTeamPicker = document.getElementById("robberyTeamPicker");
+const robberyBattleLog = document.getElementById("robberyBattleLog");
+const robberyAttack = document.getElementById("robberyAttack");
+const robberyTactics = [...document.querySelectorAll(".robbery-tactic")];
+const robberyResult = document.getElementById("robberyResult");
+const robberyResultStamp = document.getElementById("robberyResultStamp");
+const robberyResultTitle = document.getElementById("robberyResultTitle");
+const robberyResultText = document.getElementById("robberyResultText");
+const robberyResultContinue = document.getElementById("robberyResultContinue");
 const characterPanel = document.getElementById("characterPanel");
 const characterPanelBackdrop = document.getElementById("characterPanelBackdrop");
 const characterPanelClose = document.getElementById("characterPanelClose");
@@ -191,14 +352,22 @@ const characterFame = document.getElementById("characterFame");
 const characterCrew = document.getElementById("characterCrew");
 const characterHeat = document.getElementById("characterHeat");
 const characterCityLevel = document.getElementById("characterCityLevel");
+const characterXpSummary = document.getElementById("characterXpSummary");
+const characterXpFill = document.getElementById("characterXpFill");
+const characterXpList = document.getElementById("characterXpList");
+const crewCards = document.getElementById("crewCards");
+const crewPowerTotal = document.getElementById("crewPowerTotal");
+let crewPanelRenderKey = "";
 
-let avatarNameEl = null;git status
+let avatarNameEl = null;
 let avatarLevelEl = null;
 let avatarPortraitEl = null;
 let avatarBar1TextEl = null;
 let avatarBar2TextEl = null;
+let avatarBar3TextEl = null;
 let avatarBar1FillEl = null;
 let avatarBar2FillEl = null;
+let avatarBar3FillEl = null;
 let avatarNoteEl = null;
 
 function configureAvatarCard() {
@@ -223,6 +392,10 @@ function configureAvatarCard() {
         <div class="hud-bar-text" id="avatarBar2Text">99 / 100</div>
         <div class="hud-bar hud-bar--blue"><div class="hud-bar__fill" id="avatarBar2Fill"></div></div>
       </div>
+      <div class="hud-bar-row hud-bar-row--xp">
+        <div class="hud-bar-text" id="avatarBar3Text">0 / 20 XP</div>
+        <div class="hud-bar hud-bar--gold"><div class="hud-bar__fill" id="avatarBar3Fill"></div></div>
+      </div>
     </div>
     <div class="hud-note" id="avatarNote">Regisztralj, es indul a varosi felemelkedes.</div>
   `;
@@ -231,8 +404,10 @@ function configureAvatarCard() {
   avatarPortraitEl = document.getElementById("avatarPortrait");
   avatarBar1TextEl = document.getElementById("avatarBar1Text");
   avatarBar2TextEl = document.getElementById("avatarBar2Text");
+  avatarBar3TextEl = document.getElementById("avatarBar3Text");
   avatarBar1FillEl = document.getElementById("avatarBar1Fill");
   avatarBar2FillEl = document.getElementById("avatarBar2Fill");
+  avatarBar3FillEl = document.getElementById("avatarBar3Fill");
   avatarNoteEl = document.getElementById("avatarNote");
 }
 
@@ -249,6 +424,782 @@ function getNextRankFame(fame) {
     if (entry.fame > fame) return entry.fame;
   }
   return rankTable[rankTable.length - 1].fame;
+}
+
+function getCurrentRankEntry(fame) {
+  let current = rankTable[0];
+  for (const entry of rankTable) {
+    if (fame >= entry.fame) current = entry;
+  }
+  return current;
+}
+
+function getDefaultEquipment() {
+  return {
+    suit: { name: "Csikos oltony", power: 3 },
+    vest: { name: "Sotet melleny", power: 2 },
+    shirt: { name: "Feher ing", power: 1 },
+    trousers: { name: "Fekete nadrag", power: 2 },
+    hat: { name: "Fekete fedora", power: 4 },
+    weapon: { name: "Colt M1911", power: 8 },
+    shoes: { name: "Bor felcipo", power: 1 },
+    watch: { name: "Zsebora", power: 2 },
+  };
+}
+
+function normalizeEquipment(source) {
+  const defaults = getDefaultEquipment();
+  const output = {};
+  Object.entries(defaults).forEach(([slot, item]) => {
+    const saved = source && typeof source === "object" ? source[slot] : null;
+    output[slot] = {
+      name: typeof saved?.name === "string" ? saved.name : item.name,
+      power: Number.isFinite(saved?.power) ? Math.max(0, saved.power) : item.power,
+    };
+  });
+  return output;
+}
+
+function syncEquipmentSheet() {
+  const entries = [
+    ["suit", ".character-equipment__slot--suit"],
+    ["vest", ".character-equipment__slot--vest"],
+    ["shirt", ".character-equipment__slot--shirt"],
+    ["trousers", ".character-equipment__slot--trousers"],
+    ["hat", ".character-equipment__slot--hat"],
+    ["weapon", ".character-equipment__slot--weapon"],
+    ["shoes", ".character-equipment__slot--shoes"],
+    ["watch", ".character-equipment__slot--watch"],
+  ];
+
+  entries.forEach(([slot, selector]) => {
+    const root = document.querySelector(selector);
+    const item = state.equipment?.[slot];
+    if (!root || !item) return;
+    const strong = root.querySelector("strong");
+    const small = root.querySelector("small");
+    if (strong) strong.textContent = item.name;
+    if (small) small.textContent = `Er\u0151 +${item.power}`;
+  });
+}
+
+function randomInt(min, max) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function getBuildingDifficultyCycle(now = Date.now()) {
+  return Math.floor(now / BUILDING_DIFFICULTY_CYCLE_MS);
+}
+
+function seededValueForSpot(spot, cycle) {
+  return hash2(
+    cycle + spot.id.length * 17,
+    cycle + (spot.districtIndex ?? 0) * 91,
+    spot.id.charCodeAt(0) + spot.id.charCodeAt(spot.id.length - 1),
+  );
+}
+
+function createRandomBuildingDifficulties(cycle = getBuildingDifficultyCycle(), profileSeed = state.profileName || "") {
+  const playerPower = getPlayerPower();
+  const profileSalt = Array.from(profileSeed).reduce((sum, char) => sum + char.charCodeAt(0), 0);
+  const orderedSpots = [...clickableBuildingDefs].sort(
+    (left, right) => seededValueForSpot(left, cycle + profileSalt) - seededValueForSpot(right, cycle + profileSalt),
+  );
+  const difficulties = {};
+  orderedSpots.forEach((spot, index) => {
+    const tier = index < 7 ? "easy" : index < 13 ? "risk" : "danger";
+    const baseRoll = hash2(cycle + index * 11, profileSalt + spot.id.length * 17, spot.id.charCodeAt(0));
+    if (tier === "easy") difficulties[spot.id] = Math.max(1, playerPower + Math.round(baseRoll * 14) - 8);
+    else if (tier === "risk") difficulties[spot.id] = playerPower + 8 + Math.round(baseRoll * 12);
+    else difficulties[spot.id] = playerPower + 24 + Math.round(baseRoll * 16);
+  });
+  return difficulties;
+}
+
+function normalizeBuildingDifficulties(source, cycle = getBuildingDifficultyCycle()) {
+  const generated = createRandomBuildingDifficulties(cycle);
+  const difficulties = {};
+  clickableBuildingDefs.forEach((spot) => {
+    const savedDifficulty = Number(source?.[spot.id]);
+    difficulties[spot.id] = Number.isFinite(savedDifficulty)
+      ? clamp(Math.round(savedDifficulty), 1, 200)
+      : generated[spot.id];
+  });
+  return difficulties;
+}
+
+function applyMapPanTransform() {
+  const transform = `translate(${mapPan.x}px, ${mapPan.y}px)`;
+  [mapBackgroundLayer, mapSvgOverlay, lotHouseLayer, document.querySelector("#gameRoot canvas")]
+    .forEach((layer) => {
+      if (!layer) return;
+      layer.style.transform = transform;
+      layer.style.willChange = "transform";
+    });
+}
+
+function setMapPan(x, y) {
+  mapPan.x = clamp(Math.round(x), -420, 420);
+  mapPan.y = clamp(Math.round(y), -300, 300);
+  applyMapPanTransform();
+}
+
+function resetMapPan() {
+  setMapPan(0, 0);
+}
+
+function normalizeTerritories(source) {
+  const territories = {};
+  if (!source || typeof source !== "object") return territories;
+  clickableLotDefs.forEach((lot) => {
+    const level = Number(source[lot.id]?.level);
+    if (Number.isFinite(level) && level > 0) {
+      territories[lot.id] = { level: clamp(Math.floor(level), 1, 3) };
+    }
+  });
+  return territories;
+}
+
+function getLotLevel(lot) {
+  return state.territories?.[lot?.id]?.level || 0;
+}
+
+function getLotHouseDef(lot) {
+  return lotHouseLevelDefs[getLotLevel(lot)] || null;
+}
+
+function getLotIncome(lot) {
+  return getLotHouseDef(lot)?.income || 0;
+}
+
+function getLotHourlyIncome(lot) {
+  return Math.round(getLotIncome(lot) / 24);
+}
+
+function getLotInvestmentCost(lot) {
+  const level = getLotLevel(lot);
+  if (level === 0) return 80;
+  if (level === 1) return 180;
+  return 320;
+}
+
+function getTerritoryIncome() {
+  return clickableLotDefs.reduce((sum, lot) => sum + getLotIncome(lot), 0);
+}
+
+function setChoiceWheelButtons(visibleIds) {
+  const map = {
+    robbery: choiceWheelAction1,
+    protection: choiceWheelAction2,
+    baseRest: choiceWheelAction3,
+    close: choiceWheelAction4,
+  };
+  Object.entries(map).forEach(([id, button]) => {
+    if (!button) return;
+    button.classList.toggle("hidden", !visibleIds.includes(id));
+    button.disabled = false;
+  });
+}
+
+let activeAuxPanelKind = null;
+
+function hideAuxPanel() {
+  activeAuxPanelKind = null;
+  auxPanel?.classList.add("hidden");
+  auxPanel?.setAttribute("aria-hidden", "true");
+}
+
+function setAuxPanelContent(title, subtitle, bodyHtml) {
+  if (auxPanelTitle) auxPanelTitle.textContent = title;
+  if (auxPanelSubtitle) auxPanelSubtitle.textContent = subtitle;
+  if (auxPanelBody) auxPanelBody.innerHTML = bodyHtml;
+  auxPanel?.classList.remove("hidden");
+  auxPanel?.setAttribute("aria-hidden", "false");
+}
+
+function renderLeaderboardPanel(saves) {
+  const entries = [...(saves || [])]
+    .sort((left, right) => (right.fame - left.fame) || (right.updatedAt - left.updatedAt))
+    .slice(0, 12);
+  const body = entries.length
+    ? `
+      <div class="aux-panel__cardlist">
+        ${entries.map((entry, index) => `
+          <article class="aux-panel__carditem">
+            <strong>#${index + 1} ${escapeHtml(entry.profileName)}</strong>
+            <div>Hirnev: ${entry.fame} | Penz: ${entry.money}$ | Korozes: ${entry.heat}%</div>
+            <div class="aux-panel__muted">Nap ${entry.day} | Varos szint ${entry.cityLevel} | Frissitve: ${new Date(entry.updatedAt).toLocaleString("hu-HU")}</div>
+          </article>
+        `).join("")}
+      </div>
+    `
+    : `<div class="aux-panel__carditem"><strong>Még nincs ranglista.</strong><div class="aux-panel__muted">Először ments néhány játékot, és itt megjelennek a játékosok.</div></div>`;
+  setAuxPanelContent("Ranglista", "Játékosok", body);
+  activeAuxPanelKind = "rank";
+}
+
+function renderBlackMarketPanel() {
+  const body = `
+    <div class="aux-panel__cardlist">
+      <article class="aux-panel__carditem">
+        <strong>Fekete piac</strong>
+        <div>Ez még egy élő vázlat. Itt később fegyverek, infók és ritka cuccok lesznek.</div>
+        <div class="aux-panel__muted">Most csak a helyét tesszük fel, hogy a rendszer később könnyen bővíthető legyen.</div>
+      </article>
+      <article class="aux-panel__carditem">
+        <strong>Jó ötlet ehhez</strong>
+        <div>Érdemes ide rakni: hamis papírok, fegyver, informátor, védelmi bónusz.</div>
+      </article>
+    </div>
+  `;
+  setAuxPanelContent("Fekete piac", "Árnyék üzlet", body);
+  activeAuxPanelKind = "market";
+}
+
+function renderClanPanel() {
+  const members = Array.isArray(state.crewMembers) ? state.crewMembers : [];
+  const body = `
+    <div class="aux-panel__cardlist">
+      <article class="aux-panel__carditem">
+        <strong>${escapeHtml(state.profileName || "A banda")}</strong>
+        <div>Emberek száma: ${state.crew}</div>
+        <div class="aux-panel__muted">Aktív emberek: ${members.length ? members.map((member) => member.name).join(", ") : "nincs"}</div>
+      </article>
+      ${members.map((member) => `
+        <article class="aux-panel__carditem">
+          <strong>${member.name}</strong>
+          <div>${member.role} | Szint ${member.level} | Ero ${getCrewMemberAttack(member)} | HP ${member.health}</div>
+        </article>
+      `).join("")}
+    </div>
+  `;
+  setAuxPanelContent("Klán", "Banda tagok", body);
+  activeAuxPanelKind = "clan";
+}
+
+function renderWorldMapPanel() {
+  const districts = Array.isArray(state.districts) && state.districts.length ? state.districts : makeDistricts();
+  const body = `
+    <div class="aux-panel__cardlist">
+      ${districtDefs.map((district, index) => {
+        const current = districts[index] || {};
+        return `
+          <article class="aux-panel__carditem">
+            <strong>${district.name}</strong>
+            <div>${district.description}</div>
+            <div class="aux-panel__muted">Biztonság: ${district.security}% | Hűség: ${current?.loyalty ?? 0}% | Ellenőrzés: ${current?.controlled ? "igen" : "nem"}</div>
+          </article>
+        `;
+      }).join("")}
+    </div>
+  `;
+  setAuxPanelContent("Világtérkép", "Kerületek", body);
+  activeAuxPanelKind = "world";
+}
+
+async function openAuxPanel(kind) {
+  hideChoiceWheel();
+  hideQuestCard();
+  if (kind === "rank") {
+    setAuxPanelContent("Ranglista", "Játékosok", `<div class="aux-panel__carditem"><strong>Betöltés...</strong><div class="aux-panel__muted">A játékosok listáját lekérem a szerverről.</div></div>`);
+    activeAuxPanelKind = "rank";
+    try {
+      const response = await fetch(`${SAVE_API_BASE}`, { headers: { Accept: "application/json" } });
+      const payload = response.ok ? await response.json() : { saves: [] };
+      renderLeaderboardPanel(Array.isArray(payload.saves) ? payload.saves : []);
+    } catch {
+      setAuxPanelContent("Ranglista", "Játékosok", `<div class="aux-panel__carditem"><strong>Nem sikerült betölteni.</strong><div class="aux-panel__muted">A szerver épp nem ad vissza listát.</div></div>`);
+      activeAuxPanelKind = "rank";
+    }
+    return;
+  }
+  if (kind === "market") {
+    renderBlackMarketPanel();
+    return;
+  }
+  if (kind === "clan") {
+    renderClanPanel();
+    return;
+  }
+  if (kind === "world") {
+    renderWorldMapPanel();
+  }
+}
+
+function isHudOrDialogTarget(target) {
+  return Boolean(
+    target?.closest?.(
+      ".hud-root, .choice-wheel, .lot-info-modal, .robbery-game, .character-panel, .aux-panel",
+    ),
+  );
+}
+
+function startMapDrag(event) {
+  if (!state.registered) return false;
+  if (event.button !== undefined && event.button !== 0) return false;
+  if (!event.isPrimary) return false;
+  if (isHudOrDialogTarget(event.target)) return false;
+  const canvas = document.querySelector("#gameRoot canvas");
+  const mapTarget = Boolean(
+    event.target?.closest?.("#mapSvgOverlay, #mapBackgroundLayer, #gameRoot canvas") || event.target === canvas,
+  );
+  if (!mapTarget && event.target !== document.body && event.target !== document.documentElement) return false;
+
+  mapDragState.active = true;
+  mapDragState.dragging = false;
+  mapDragState.pointerId = event.pointerId ?? "mouse";
+  mapDragState.startX = event.clientX;
+  mapDragState.startY = event.clientY;
+  mapDragState.originX = mapPan.x;
+  mapDragState.originY = mapPan.y;
+  event.target?.setPointerCapture?.(event.pointerId);
+  return true;
+}
+
+function updateMapDrag(event) {
+  if (!mapDragState.active || (event.pointerId ?? "mouse") !== mapDragState.pointerId) return;
+  const deltaX = event.clientX - mapDragState.startX;
+  const deltaY = event.clientY - mapDragState.startY;
+  if (!mapDragState.dragging) {
+    if (Math.abs(deltaX) < 4 && Math.abs(deltaY) < 4) return;
+    mapDragState.dragging = true;
+    document.body.classList.add("is-dragging-map");
+  }
+  setMapPan(mapDragState.originX + deltaX, mapDragState.originY + deltaY);
+  mapDragState.ignoreClicksUntil = Date.now() + 220;
+  event.preventDefault();
+}
+
+function endMapDrag(event) {
+  if (!mapDragState.active || (event.pointerId ?? "mouse") !== mapDragState.pointerId) return;
+  const wasDragging = mapDragState.dragging;
+  event.target?.releasePointerCapture?.(event.pointerId);
+  mapDragState.active = false;
+  mapDragState.dragging = false;
+  mapDragState.pointerId = null;
+  document.body.classList.remove("is-dragging-map");
+  if (wasDragging) {
+    mapDragState.ignoreClicksUntil = Date.now() + 250;
+    event.preventDefault();
+  }
+}
+
+function suppressClickAfterMapDrag(event) {
+  if (Date.now() <= mapDragState.ignoreClicksUntil) {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  }
+}
+
+function normalizeQuest(quest) {
+  if (!quest || typeof quest !== "object") return null;
+  const spot = getSpotById(quest.spotId);
+  if (!spot) return null;
+  const reward = quest.reward && typeof quest.reward === "object" ? quest.reward : {};
+  const goal = quest.goal && typeof quest.goal === "object" ? quest.goal : {};
+  const allowedStatuses = new Set(["offered", "accepted", "completed"]);
+  const target = clamp(Number.isFinite(goal.target) ? Math.round(goal.target) : 1, 1, 12);
+  const progress = clamp(Number.isFinite(goal.progress) ? Math.round(goal.progress) : 0, 0, target);
+  return {
+    id: typeof quest.id === "string" ? quest.id : `quest-${Date.now()}`,
+    spotId: spot.id,
+    spotName: typeof quest.spotName === "string" ? quest.spotName : spot.name,
+    districtName: typeof quest.districtName === "string" ? quest.districtName : (districtDefs[spot.districtIndex]?.name || "Kerulet"),
+    type: quest.type === "protection" ? "protection" : "robbery",
+    status: allowedStatuses.has(quest.status) ? quest.status : "offered",
+    title: typeof quest.title === "string" ? quest.title : "Kuldetes",
+    description: typeof quest.description === "string" ? quest.description : "",
+    objective: typeof quest.objective === "string" ? quest.objective : "",
+    reward: {
+      slot: typeof reward.slot === "string" ? reward.slot : "weapon",
+      name: typeof reward.name === "string" ? reward.name : "Ismeretlen felszereles",
+      power: Number.isFinite(reward.power) ? Math.max(0, reward.power) : 0,
+    },
+    moneyReward: Number.isFinite(quest.moneyReward) ? Math.max(0, Math.round(quest.moneyReward)) : 80,
+    xpReward: Number.isFinite(quest.xpReward) ? Math.max(0, Math.round(quest.xpReward)) : 18,
+    goal: {
+      action: goal.action === "protection" || quest.type === "protection" ? "protection" : "robbery",
+      mode: goal.mode === "shop" || goal.mode === "street" ? goal.mode : "any",
+      target,
+      progress,
+    },
+    createdAt: Number.isFinite(quest.createdAt) ? quest.createdAt : Date.now(),
+  };
+}
+
+function normalizeQuestList(quests) {
+  const normalized = Array.isArray(quests) ? quests.map(normalizeQuest).filter(Boolean) : [];
+  return normalized.filter((quest) => quest.status === "accepted" || quest.status === "completed").slice(0, 2);
+}
+
+function buildQuestReward(questType, difficulty) {
+  const tier = clamp(Math.floor(difficulty / 18) + 1, 1, 5);
+  const power = 2 + tier * 2 + randomInt(0, 3);
+  const rewardPools = {
+    robbery: [
+      { slot: "weapon", names: ["Fenyesett revolver", "Rovid csovu Tommy", "Nemes Colt", "Sotet automata"] },
+      { slot: "hat", names: ["Kemény fedora", "Selyemkalap", "Aszfaltkalap", "Uj fedora"] },
+      { slot: "watch", names: ["Arany zsebora", "Króm zsebora", "Szivarora", "Noir ora"] },
+    ],
+    protection: [
+      { slot: "suit", names: ["Csikos bandas oltony", "Feher galleros oltony", "Doppelt gombos oltony", "Sotet uzleti oltony"] },
+      { slot: "vest", names: ["Megerositett melleny", "Nehez melleny", "Sotet páncélmelleny", "Varosi melleny"] },
+      { slot: "shoes", names: ["Csendes borcipő", "Fekete gyalogcipo", "Gyors talpu cipo", "Noir cipo"] },
+      { slot: "trousers", names: ["Erős nadrag", "Noir nadrag", "Vastag szovet nadrag", "Ultrakesz nadrag"] },
+    ],
+  };
+  const pool = rewardPools[questType] || rewardPools.robbery;
+  const template = pool[randomInt(0, pool.length - 1)];
+  const name = template.names[Math.min(template.names.length - 1, tier - 1)];
+  return {
+    slot: template.slot,
+    name,
+    power,
+  };
+}
+
+function getQuestActionLabel(quest) {
+  return quest?.type === "protection" ? "Vedelmi penz" : "Kirabalas";
+}
+
+function getQuestRewardText(quest) {
+  if (!quest) return "Jutalom: -";
+  return `Jutalom: ${quest.xpReward} XP, ${quest.moneyReward} $, ${quest.reward.name} (+${quest.reward.power})`;
+}
+
+function getQuestFlavorText(quest) {
+  if (!quest) return "Varj a hazak felett megjeleno felkialtojelre.";
+  const intro = quest.type === "protection"
+    ? `${quest.spotName} kornyeken kezd forrosodni a levego, a helyiek mar csak halkan mernek beszelni.`
+    : `${quest.spotName} ma este tele lesz penzzel es ideges orokkel, pont ettol jo fogas.`;
+  const followUp = quest.type === "protection"
+    ? `Lepj be ${quest.districtName} negyedebe, es tedd egyertelmuve, hogy ezen az utcan te diktalod a szabalyokat.`
+    : `Ha gyors vagy ${quest.districtName} negyedeben, egyszerre szerzel zsakmanyt, hirmevet es tiszteletet.`;
+  return `${intro} ${followUp}`;
+}
+
+function getQuestStatusText(quest) {
+  if (!quest) return "Nincs aktiv kuldetes";
+  if (quest.status === "offered") return "Felajanlva";
+  if (quest.status === "accepted") return `Elfogadva (${quest.goal.progress}/${quest.goal.target})`;
+  if (quest.status === "completed") return `Kesz (${quest.goal.progress}/${quest.goal.target})`;
+  return "Atadva";
+}
+
+function getQuestSlot(slotIndex = state.selectedQuestSlot) {
+  return normalizeQuestList(state.activeQuests)[slotIndex] || null;
+}
+
+function getQuestAtSpot(spotId) {
+  return state.activeQuest?.spotId === spotId ? state.activeQuest : null;
+}
+
+function createQuestMarker(area) {
+  const bounds = getAreaBounds(area);
+  const marker = document.createElementNS("http://www.w3.org/2000/svg", "g");
+  marker.classList.add("map-svg-quest-marker");
+  marker.setAttribute("aria-hidden", "true");
+  const x = (bounds.x + bounds.w * 0.5) * backgroundMapFrame.width;
+  const y = (bounds.y - bounds.h * 0.16) * backgroundMapFrame.height;
+
+  const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+  text.setAttribute("x", x);
+  text.setAttribute("y", y);
+  text.classList.add("map-svg-quest-marker__text");
+  text.textContent = "!";
+
+  marker.appendChild(text);
+  return marker;
+}
+
+function setQuestCardVisible(visible) {
+  hudQuestCard?.classList.toggle("hidden", !visible);
+  hudQuestCard?.setAttribute("aria-hidden", visible ? "false" : "true");
+}
+
+function showQuestCard(quest = state.activeQuest || getQuestSlot()) {
+  if (!quest) return;
+  questCardQuestId = quest.id;
+  if (hudQuestTitle) hudQuestTitle.textContent = "";
+  if (hudQuestText) {
+    hudQuestText.textContent = getQuestFlavorText(quest);
+  }
+  if (hudObjective) hudObjective.textContent = `Feladat: ${quest.objective}`;
+  if (hudObjectiveOne) hudObjectiveOne.textContent = getQuestRewardText(quest);
+  if (hudObjectiveTwo) hudObjectiveTwo.textContent = `Allapot: ${getQuestStatusText(quest)}`;
+  if (hudQuestAction) {
+    const locked = false;
+    hudQuestAction.disabled = locked;
+    hudQuestAction.classList.toggle("is-disabled", locked);
+    hudQuestAction.textContent =
+      quest.status === "offered"
+        ? "Elfogad"
+        : quest.status === "accepted"
+          ? "Folyamatban"
+          : quest.status === "completed"
+            ? "Atadas"
+            : "Atadva";
+  }
+  if (hudQuestDelete) {
+    const canDelete = quest.status === "accepted" || quest.status === "completed";
+    hudQuestDelete.classList.toggle("hidden", !canDelete);
+    hudQuestDelete.disabled = !canDelete;
+  }
+  setQuestCardVisible(true);
+}
+
+function hideQuestCard() {
+  questCardQuestId = null;
+  setQuestCardVisible(false);
+}
+
+function updateQuestHud() {
+  state.activeQuests = normalizeQuestList(state.activeQuests);
+  const quests = state.activeQuests;
+  if (hudQuestTab1) {
+    const label = quests[0]
+      ? `I: ${quests[0].title}${quests[0].status === "completed" ? " [Kesz]" : ` (${quests[0].goal.progress}/${quests[0].goal.target})`}`
+      : "I: nincs felvett kuldetes";
+    hudQuestTab1.textContent = label;
+    hudQuestTab1.dataset.label = label;
+    hudQuestTab1.setAttribute("aria-label", label);
+  }
+  if (hudQuestTab2) {
+    const label = quests[1]
+      ? `II: ${quests[1].title}${quests[1].status === "completed" ? " [Kesz]" : ` (${quests[1].goal.progress}/${quests[1].goal.target})`}`
+      : "II: nincs felvett kuldetes";
+    hudQuestTab2.textContent = label;
+    hudQuestTab2.dataset.label = label;
+    hudQuestTab2.setAttribute("aria-label", label);
+  }
+}
+
+function acceptActiveQuest() {
+  const quest = state.activeQuest;
+  if (!quest) {
+    sceneRef?.setMessage("Nincs elfogadhato kuldetes.");
+    return;
+  }
+  if (quest.status !== "offered") {
+    showQuestCard(quest);
+    sceneRef?.setMessage(
+      quest.status === "accepted"
+        ? `A kuldetes mar el van fogadva: ${quest.spotName}.`
+        : "Ez a kuldetes mar lezarult.",
+    );
+    return;
+  }
+
+  state.activeQuests = normalizeQuestList(state.activeQuests);
+  if (state.activeQuests.length >= 2) {
+    sceneRef?.setMessage("Mar ket felvett kuldetesed van. Fejezz be egyet az I/II slotbol.");
+    return;
+  }
+
+  quest.status = "accepted";
+  quest.goal.progress = 0;
+  state.activeQuests.push(quest);
+  state.selectedQuestSlot = state.activeQuests.length - 1;
+  state.activeQuest = null;
+  sceneRef?.pushLog(`Kuldetes elfogadva: ${quest.spotName}.`);
+  sceneRef?.setMessage(`Kuldetes felveve az ${state.selectedQuestSlot === 0 ? "I" : "II"}. slotba.`);
+  saveGame();
+  sceneRef?.refreshHUD();
+  sceneRef?.refreshMap();
+  showQuestCard(quest);
+}
+
+function grantQuestReward(quest) {
+  if (!quest || quest.status !== "completed") {
+    sceneRef?.setMessage("Ez a kuldetes még nem kész az átadásra.");
+    return false;
+  }
+
+  const reward = quest.reward || { power: 0, name: "Felszereles", slot: "weapon" };
+  state.gearPower += reward.power;
+  const currentEquipment = normalizeEquipment(state.equipment);
+  currentEquipment[reward.slot] = {
+    name: reward.name,
+    power: reward.power,
+  };
+  state.equipment = currentEquipment;
+  state.money += quest.moneyReward;
+  applyFame(quest.xpReward);
+  applyHeat(4);
+  state.activeQuests = normalizeQuestList(state.activeQuests).filter((entry) => entry.id !== quest.id);
+  state.selectedQuestSlot = clamp(state.selectedQuestSlot, 0, Math.max(0, state.activeQuests.length - 1));
+  sceneRef?.pushLog(`Kuldetes atadva: ${quest.title} - +${quest.xpReward} XP, +${quest.moneyReward} $.`);
+  sceneRef?.setMessage(`Atadas sikeres: ${quest.title}. +${quest.xpReward} XP.`);
+  syncEquipmentSheet();
+  saveGame();
+  sceneRef?.refreshHUD();
+  sceneRef?.refreshMap();
+  return true;
+}
+
+function deleteQuest(quest) {
+  if (!quest || (quest.status !== "accepted" && quest.status !== "completed")) {
+    sceneRef?.setMessage("Ezt a kuldetest most nem lehet torolni.");
+    return false;
+  }
+  state.activeQuests = normalizeQuestList(state.activeQuests).filter((entry) => entry.id !== quest.id);
+  state.selectedQuestSlot = clamp(state.selectedQuestSlot, 0, Math.max(0, state.activeQuests.length - 1));
+  sceneRef?.pushLog(`Kuldetes torolve: ${quest.spotName}.`);
+  sceneRef?.setMessage(`${quest.spotName} kuldetese torolve lett.`);
+  saveGame();
+  sceneRef?.refreshHUD();
+  sceneRef?.refreshMap();
+  hideQuestCard();
+  return true;
+}
+
+function handleQuestCardAction() {
+  const quest = state.activeQuest?.id === questCardQuestId
+    ? state.activeQuest
+    : (normalizeQuestList(state.activeQuests).find((entry) => entry.id === questCardQuestId) || null);
+
+  if (quest?.status === "offered") {
+    acceptActiveQuest();
+    return;
+  }
+  if (!quest) {
+    sceneRef?.setMessage("Nincs itt felveheto vagy atadhato kuldetes.");
+    return;
+  }
+  if (quest.status === "completed") {
+    grantQuestReward(quest);
+    hideQuestCard();
+    return;
+  }
+  sceneRef?.setMessage("Elobb teljesitsd a feladatot.");
+}
+
+function scheduleNextQuestSpawn(baseDelay = null) {
+  const delay = Number.isFinite(baseDelay) ? baseDelay : randomInt(35000, 70000);
+  state.questNextSpawnAt = Date.now() + delay;
+}
+
+function spawnRandomQuest() {
+  state.activeQuests = normalizeQuestList(state.activeQuests);
+  if (!state.registered || state.activeQuest || state.activeQuests.length >= 2) return false;
+  const occupiedSpotIds = new Set(state.activeQuests.map((quest) => quest.spotId));
+  const spots = clickableBuildingDefs.filter((spot) => spot.id !== state.mainBaseSpotId && !occupiedSpotIds.has(spot.id));
+  if (!spots.length) return false;
+  const spot = spots[randomInt(0, spots.length - 1)];
+  const questTemplates = [
+    {
+      type: "robbery",
+      title: "Bolti szuret",
+      description: "Rabolj ki 2 boltot a varosban.",
+      objective: "Sikeres kirablas 2 shop/bolt tipusu hazon.",
+      goal: { action: "robbery", mode: "shop", target: 2, progress: 0 },
+      xp: 32,
+      money: 140,
+    },
+    {
+      type: "robbery",
+      title: "Negy utcai meló",
+      description: "Hajts vegre 4 sikeres kirablast barmelyik hazon.",
+      objective: "4 sikeres kirablas barmelyik epuletnel.",
+      goal: { action: "robbery", mode: "any", target: 4, progress: 0 },
+      xp: 46,
+      money: 210,
+    },
+    {
+      type: "protection",
+      title: "Vedett kirakatok",
+      description: "Szedj be vedelmi penzt 3 helyrol.",
+      objective: "3 sikeres vedelmi penz beszedese.",
+      goal: { action: "protection", mode: "any", target: 3, progress: 0 },
+      xp: 36,
+      money: 170,
+    },
+    {
+      type: "robbery",
+      title: "Gazdag celpont",
+      description: `Rabolj ki egy boltot a(z) ${districtDefs[spot.districtIndex]?.name || "kerulet"} kornyeken.`,
+      objective: "1 sikeres bolti kirablas.",
+      goal: { action: "robbery", mode: "shop", target: 1, progress: 0 },
+      xp: 24,
+      money: 110,
+    },
+  ];
+  const template = questTemplates[randomInt(0, questTemplates.length - 1)];
+  const questType = template.type;
+  const difficulty = getBuildingDifficulty(spot);
+  const reward = buildQuestReward(questType, difficulty);
+  state.activeQuest = {
+    id: `quest-${Date.now()}-${randomInt(1000, 9999)}`,
+    spotId: spot.id,
+    spotName: spot.name,
+    districtName: districtDefs[spot.districtIndex]?.name || "Kerulet",
+    type: questType,
+    status: "offered",
+    title: template.title,
+    description: `${spot.name} adta a melot. ${template.description}`,
+    objective: template.objective,
+    reward,
+    moneyReward: template.money + Math.round(difficulty * 1.4),
+    xpReward: template.xp + Math.floor(difficulty / 5),
+    goal: template.goal,
+    createdAt: Date.now(),
+  };
+  scheduleNextQuestSpawn();
+  sceneRef?.pushLog(`Uj kuldetes jelent meg a(z) ${spot.name} felett.`);
+  sceneRef?.setMessage(`Kuldetes erkezett: ${spot.name}.`);
+  saveGame();
+  sceneRef?.refreshHUD();
+  sceneRef?.refreshMap();
+  showQuestCard(state.activeQuest);
+  return true;
+}
+
+function maybeSpawnQuest(force = false) {
+  state.activeQuests = normalizeQuestList(state.activeQuests);
+  if (!state.registered || state.activeQuest || state.activeQuests.length >= 2) {
+    if (state.activeQuest || state.activeQuests.length) updateQuestHud();
+    return false;
+  }
+  if (!state.questNextSpawnAt) {
+    scheduleNextQuestSpawn(randomInt(12000, 24000));
+    saveGame();
+    return false;
+  }
+  if (!force && Date.now() < state.questNextSpawnAt) return false;
+  return spawnRandomQuest();
+}
+
+function completeQuest(actionType, spot) {
+  const mode = spot?.mode === "shop" ? "shop" : "street";
+  let reachedCompletion = false;
+  const quests = normalizeQuestList(state.activeQuests);
+  state.activeQuests = quests.map((quest) => {
+    if (quest.status !== "accepted") return quest;
+    if (quest.goal.action !== actionType) return quest;
+    if (quest.goal.mode !== "any" && quest.goal.mode !== mode) return quest;
+
+    quest.goal.progress = clamp(quest.goal.progress + 1, 0, quest.goal.target);
+    sceneRef?.pushLog(`Kuldetes haladas: ${quest.title} (${quest.goal.progress}/${quest.goal.target}).`);
+    if (quest.goal.progress < quest.goal.target) return quest;
+    quest.status = "completed";
+    reachedCompletion = true;
+    sceneRef?.pushLog(`Kuldetes kesz: ${quest.title}. Atadasra var.`);
+    sceneRef?.setMessage(`Keszen van: ${quest.title}. Nyomj az Atadas gombra az I/II slotban.`);
+    return quest;
+  });
+  state.selectedQuestSlot = clamp(state.selectedQuestSlot, 0, Math.max(0, state.activeQuests.length - 1));
+  if (reachedCompletion) {
+    scheduleNextQuestSpawn(randomInt(18000, 36000));
+    const currentQuest = getQuestSlot();
+    if (currentQuest?.status === "completed") {
+      showQuestCard(currentQuest);
+    } else {
+      updateQuestHud();
+    }
+  }
+  saveGame();
+  sceneRef?.refreshHUD();
+  sceneRef?.refreshMap();
 }
 
 configureAvatarCard();
@@ -294,7 +1245,6 @@ const ROAD_KEYS = [
 const DECOR_KEYS = [
   "tree-a",
   "tree-b",
-  "truck",
   "detail-light-single",
   "detail-light-double",
   "detail-awning-small",
@@ -314,8 +1264,805 @@ function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
 
+function formatCountdown(milliseconds) {
+  const seconds = Math.max(0, Math.ceil(milliseconds / 1000));
+  const minutes = Math.floor(seconds / 60);
+  return `${String(minutes).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
+}
+
+function getProtectionCooldownRemaining(spotId, now = Date.now()) {
+  const expiresAt = Number(state.protectionCooldowns?.[spotId]) || 0;
+  return Math.max(0, expiresAt - now);
+}
+
+function resetDailyHideUsesIfNeeded() {
+  if (state.hideUsesDay === state.day) return false;
+  state.hideUsesDay = state.day;
+  state.hideUsesToday = 0;
+  return true;
+}
+
+function normalizeRecoveryEffect(effect) {
+  if (!effect || typeof effect !== "object") return null;
+  const startedAt = Number(effect.startedAt);
+  const endsAt = Number(effect.endsAt);
+  const appliedAmount = Number(effect.appliedAmount);
+  if (!Number.isFinite(startedAt) || !Number.isFinite(endsAt) || endsAt <= startedAt) return null;
+  return {
+    startedAt,
+    endsAt,
+    appliedAmount: clamp(Number.isFinite(appliedAmount) ? Math.floor(appliedAmount) : 0, 0, RECOVERY_AMOUNT),
+  };
+}
+
+function normalizeTimedActions() {
+  const now = Date.now();
+  const cooldowns = {};
+  if (state.protectionCooldowns && typeof state.protectionCooldowns === "object") {
+    Object.entries(state.protectionCooldowns).forEach(([spotId, expiresAt]) => {
+      if (getSpotById(spotId) && Number.isFinite(Number(expiresAt)) && Number(expiresAt) > Date.now()) {
+        cooldowns[spotId] = Number(expiresAt);
+      }
+    });
+  }
+  state.protectionCooldowns = cooldowns;
+  state.recoveryEffects = {
+    health: normalizeRecoveryEffect(state.recoveryEffects?.health),
+    energy: normalizeRecoveryEffect(state.recoveryEffects?.energy),
+  };
+  state.naturalRecoveryAt = {
+    health: Number.isFinite(Number(state.naturalRecoveryAt?.health)) ? Number(state.naturalRecoveryAt.health) : now,
+    energy: Number.isFinite(Number(state.naturalRecoveryAt?.energy)) ? Number(state.naturalRecoveryAt.energy) : now,
+  };
+  state.nextPolicePressureAt = Number.isFinite(Number(state.nextPolicePressureAt))
+    ? Number(state.nextPolicePressureAt)
+    : 0;
+  state.buildingDifficultyCycle = Number.isFinite(Number(state.buildingDifficultyCycle))
+    ? Math.floor(Number(state.buildingDifficultyCycle))
+    : getBuildingDifficultyCycle(now);
+  state.hideUsesToday = clamp(Number.isFinite(Number(state.hideUsesToday)) ? Math.floor(Number(state.hideUsesToday)) : 0, 0, DAILY_HIDE_LIMIT);
+  state.hideUsesDay = Number.isFinite(Number(state.hideUsesDay)) ? Math.floor(Number(state.hideUsesDay)) : state.day;
+  resetDailyHideUsesIfNeeded();
+}
+
+function getPolicePressureInterval(heat = state.heat) {
+  if (heat >= 90) return 3 * 60 * 1000;
+  if (heat >= 75) return 5 * 60 * 1000;
+  return 8 * 60 * 1000;
+}
+
+function processPolicePressure(now = Date.now()) {
+  if (!state.registered) return false;
+  if (state.heat < 60) {
+    state.nextPolicePressureAt = 0;
+    return false;
+  }
+  if (!state.nextPolicePressureAt) {
+    state.nextPolicePressureAt = now + getPolicePressureInterval(state.heat);
+    return true;
+  }
+  if (now < state.nextPolicePressureAt) return false;
+
+  const loss = Math.max(1, Math.floor(state.money * 0.03));
+  state.money = Math.max(0, state.money - loss);
+  state.nextPolicePressureAt = now + getPolicePressureInterval(state.heat);
+  sceneRef?.pushLog(`A rendorok razziat tartottak. -${loss} $ sarc a magas korozes miatt.`);
+  sceneRef?.setMessage("Magas korozes: a rendorok ujra sarcot vittek el.");
+  return true;
+}
+
+function syncNaturalRecovery(now = Date.now()) {
+  let changed = false;
+  ["health", "energy"].forEach((stat) => {
+    if (state[stat] >= 100) {
+      state.naturalRecoveryAt[stat] = now;
+      return;
+    }
+    const lastRecoveryAt = Math.min(now, state.naturalRecoveryAt[stat]);
+    const recoveredPoints = Math.floor((now - lastRecoveryAt) / NATURAL_RECOVERY_POINT_MS);
+    if (recoveredPoints <= 0) return;
+    state[stat] = clamp(state[stat] + recoveredPoints, 0, 100);
+    state.naturalRecoveryAt[stat] = state[stat] >= 100
+      ? now
+      : lastRecoveryAt + recoveredPoints * NATURAL_RECOVERY_POINT_MS;
+    changed = true;
+  });
+  return changed;
+}
+
+function syncTimedActions(now = Date.now()) {
+  let changed = resetDailyHideUsesIfNeeded();
+  if (syncNaturalRecovery(now)) changed = true;
+  const currentCycle = getBuildingDifficultyCycle(now);
+  if (state.registered && state.buildingDifficultyCycle !== currentCycle) {
+    state.buildingDifficultyCycle = currentCycle;
+    state.buildingDifficulties = createRandomBuildingDifficulties(currentCycle, state.profileName);
+    changed = true;
+  }
+
+  Object.entries(state.protectionCooldowns || {}).forEach(([spotId, expiresAt]) => {
+    if (Number(expiresAt) <= now) {
+      delete state.protectionCooldowns[spotId];
+      changed = true;
+    }
+  });
+
+  ["health", "energy"].forEach((stat) => {
+    const effect = state.recoveryEffects?.[stat];
+    if (!effect) return;
+    const progress = clamp((now - effect.startedAt) / (effect.endsAt - effect.startedAt), 0, 1);
+    const shouldBeApplied = Math.floor(RECOVERY_AMOUNT * progress);
+    const delta = Math.max(0, shouldBeApplied - effect.appliedAmount);
+    if (delta > 0) {
+      state[stat] = clamp(state[stat] + delta, 0, 100);
+      effect.appliedAmount += delta;
+      changed = true;
+    }
+    if (progress >= 1 || effect.appliedAmount >= RECOVERY_AMOUNT || state[stat] >= 100) {
+      state.recoveryEffects[stat] = null;
+      changed = true;
+    }
+  });
+
+  if (processPolicePressure(now)) changed = true;
+
+  return changed;
+}
+
+function canStartCombat(actionLabel = "Ezt a harcot") {
+  syncTimedActions();
+  if (state.health > 0) return true;
+  sceneRef?.setMessage(`${actionLabel} nem indithatod el 0 eleterovel.`);
+  return false;
+}
+
+function getEncounterEnemyPower(encounter = activeRobberyGame) {
+  if (!encounter?.defenders?.length) return 0;
+  return encounter.defenders.reduce((sum, defender) => sum + Math.max(0, defender.attack || Math.round(defender.maxHealth * 0.4)), 0);
+}
+
+function startRecovery(stat) {
+  syncTimedActions();
+  const otherStat = stat === "health" ? "energy" : "health";
+  if (state.recoveryEffects?.[otherStat]) {
+    const remaining = state.recoveryEffects[otherStat].endsAt - Date.now();
+    sceneRef?.setMessage(
+      otherStat === "health"
+        ? `A Lapulas mar folyamatban van. Hatralevo ido: ${formatCountdown(remaining)}.`
+        : `A Talalkozo mar folyamatban van. Hatralevo ido: ${formatCountdown(remaining)}.`,
+    );
+    return false;
+  }
+  if (state[stat] >= 100) {
+    sceneRef?.setMessage(stat === "health" ? "Az eleterod mar maximumon van." : "Az energiad mar maximumon van.");
+    return false;
+  }
+  if (state.recoveryEffects?.[stat]) {
+    const remaining = state.recoveryEffects[stat].endsAt - Date.now();
+    sceneRef?.setMessage(`Ez a toltes mar folyamatban van. Hatralevo ido: ${formatCountdown(remaining)}.`);
+    return false;
+  }
+  const now = Date.now();
+  state.recoveryEffects[stat] = {
+    startedAt: now,
+    endsAt: now + RECOVERY_DURATION_MS,
+    appliedAmount: 0,
+  };
+  return true;
+}
+
+function getAreaPolygon(area) {
+  if (Array.isArray(area.polygon)) return area.polygon;
+  const outline = Array.isArray(area.outline) ? area.outline : [];
+  return outline.map(([x, y]) => [area.x + area.w * x, area.y + area.h * y]);
+}
+
+function getAreaBounds(area) {
+  const polygon = getAreaPolygon(area);
+  const xs = polygon.map(([x]) => x);
+  const ys = polygon.map(([, y]) => y);
+  const left = Math.min(...xs);
+  const right = Math.max(...xs);
+  const top = Math.min(...ys);
+  const bottom = Math.max(...ys);
+  return {
+    x: (left + right) * 0.5,
+    y: (top + bottom) * 0.5,
+    w: right - left,
+    h: bottom - top,
+  };
+}
+
+function getAreaScreenPolygon(area, mapRect) {
+  return getAreaPolygon(area).map(([x, y]) => ({
+    x: mapRect.left + mapRect.width * x,
+    y: mapRect.top + mapRect.height * y,
+  }));
+}
+
+function getAreaScreenMetrics(area, mapRect) {
+  const points = getAreaScreenPolygon(area, mapRect);
+  const xs = points.map((point) => point.x);
+  const ys = points.map((point) => point.y);
+  const left = Math.min(...xs);
+  const right = Math.max(...xs);
+  const top = Math.min(...ys);
+  const bottom = Math.max(...ys);
+  const centerX = xs.reduce((sum, value) => sum + value, 0) / xs.length;
+  const centerY = ys.reduce((sum, value) => sum + value, 0) / ys.length;
+
+  return {
+    points,
+    left,
+    right,
+    top,
+    bottom,
+    width: right - left,
+    height: bottom - top,
+    centerX,
+    centerY,
+  };
+}
+
+function getPlotDifficultyClass(area) {
+  const label = getDifficultyInfo(getBuildingDifficulty(area)).label;
+  if (label === "Konnyu") return "map-svg-plot--easy";
+  if (label === "Kockazatos") return "map-svg-plot--risk";
+  return "map-svg-plot--danger";
+}
+
+function getPlotDifficultyOutline(area) {
+  const difficultyClass = getPlotDifficultyClass(area);
+  if (difficultyClass === "map-svg-plot--easy") return "./map-outline-easy.png";
+  if (difficultyClass === "map-svg-plot--risk") return "./map-outline-risk.png";
+  return "./map-outline-danger.png";
+}
+
+function getBuildingHoverDifficultyOutline(area) {
+  const difficultyClass = getPlotDifficultyClass(area);
+  if (difficultyClass === "map-svg-plot--easy") return "./house-outline-hover-easy.png";
+  if (difficultyClass === "map-svg-plot--risk") return "./house-outline-hover-risk.png";
+  return "./house-outline-hover-danger.png";
+}
+
+function getLotDifficultyClass(area) {
+  const level = getLotLevel(area);
+  if (level <= 0) return "map-svg-lot--easy";
+  if (level === 1) return "map-svg-lot--risk";
+  return "map-svg-lot--danger";
+}
+
+function difficultyColorToCss(color) {
+  return `#${color.toString(16).padStart(6, "0")}`;
+}
+
+function svgPoints(area) {
+  return getAreaPolygon(area)
+    .map(([x, y]) => `${(x * backgroundMapFrame.width).toFixed(1)},${(y * backgroundMapFrame.height).toFixed(1)}`)
+    .join(" ");
+}
+
+function createSvgPolygon(area, classes) {
+  const polygon = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
+  polygon.setAttribute("points", svgPoints(area));
+  polygon.classList.add(...classes);
+  return polygon;
+}
+
+function createSvgAreaLabel(area, kind = "territory") {
+  const bounds = getAreaBounds(area);
+  const centerX = bounds.x * backgroundMapFrame.width;
+  const topY = (bounds.y - bounds.h * 0.5) * backgroundMapFrame.height;
+  const centerY = bounds.y * backgroundMapFrame.height;
+  const labelY = clamp(kind === "building" ? topY - 13 : centerY, 20, backgroundMapFrame.height - 20);
+  const labelWidth = Math.max(96, Math.min(210, area.name.length * 8 + 30));
+
+  const group = document.createElementNS("http://www.w3.org/2000/svg", "g");
+  group.classList.add("map-svg-name-label", `map-svg-name-label--${kind}`);
+
+  const plate = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+  plate.setAttribute("x", String(centerX - labelWidth * 0.5));
+  plate.setAttribute("y", String(labelY - 14));
+  plate.setAttribute("width", String(labelWidth));
+  plate.setAttribute("height", "28");
+  plate.setAttribute("rx", "4");
+  group.appendChild(plate);
+
+  const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+  text.setAttribute("x", String(centerX));
+  text.setAttribute("y", String(labelY + 1));
+  text.textContent = area.name;
+  group.appendChild(text);
+
+  return group;
+}
+
+function createBuildingOutlineOverlay(area, index, defs) {
+  const clipId = `building-hover-clip-${index}`;
+  const clipPath = document.createElementNS("http://www.w3.org/2000/svg", "clipPath");
+  const clipPolygon = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
+  const polygon = getAreaPolygon(area).map(([x, y]) => [
+    x * backgroundMapFrame.width,
+    y * backgroundMapFrame.height,
+  ]);
+  const centerX = polygon.reduce((sum, [x]) => sum + x, 0) / polygon.length;
+  const centerY = polygon.reduce((sum, [, y]) => sum + y, 0) / polygon.length;
+  const adjustment = buildingHoverAdjustments[area.id] ?? {
+    dx: 0,
+    dy: 0,
+    scale: 1,
+    clipScale: 0.995,
+  };
+  const clipScale = adjustment.clipScale ?? 0.995;
+  const clipPoints = polygon
+    .map(([x, y]) => `${(centerX + (x - centerX) * clipScale).toFixed(1)},${(centerY + (y - centerY) * clipScale).toFixed(1)}`)
+    .join(" ");
+  clipPath.id = clipId;
+  clipPolygon.setAttribute("points", clipPoints);
+  clipPath.appendChild(clipPolygon);
+  defs.appendChild(clipPath);
+
+  const image = document.createElementNS("http://www.w3.org/2000/svg", "image");
+  image.setAttribute("href", getBuildingHoverDifficultyOutline(area));
+  image.setAttribute("x", "0");
+  image.setAttribute("y", "0");
+  image.setAttribute("width", String(backgroundMapFrame.width));
+  image.setAttribute("height", String(backgroundMapFrame.height));
+  image.setAttribute("preserveAspectRatio", "none");
+  image.setAttribute("clip-path", `url(#${clipId})`);
+  image.setAttribute(
+    "transform",
+    `translate(${centerX + adjustment.dx} ${centerY + adjustment.dy}) scale(${adjustment.scale}) translate(${-centerX} ${-centerY})`,
+  );
+  image.classList.add("map-svg-building-outline", getPlotDifficultyClass(area));
+  return image;
+}
+
+function createBuildingDifficultyOverlay(area, index, defs) {
+  const clipId = `building-difficulty-clip-${index}`;
+  const clipPath = document.createElementNS("http://www.w3.org/2000/svg", "clipPath");
+  const clipPolygon = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
+  const polygon = area.plot.map(([x, y]) => [
+    x * backgroundMapFrame.width,
+    y * backgroundMapFrame.height,
+  ]);
+  const centerX = polygon.reduce((sum, [x]) => sum + x, 0) / polygon.length;
+  const centerY = polygon.reduce((sum, [, y]) => sum + y, 0) / polygon.length;
+  const clipPoints = polygon
+    .map(([x, y]) => `${(centerX + (x - centerX) * 1.08).toFixed(1)},${(centerY + (y - centerY) * 1.08).toFixed(1)}`)
+    .join(" ");
+
+  clipPath.id = clipId;
+  clipPolygon.setAttribute("points", clipPoints);
+  clipPath.appendChild(clipPolygon);
+  defs.appendChild(clipPath);
+
+  const image = document.createElementNS("http://www.w3.org/2000/svg", "image");
+  image.setAttribute("href", getPlotDifficultyOutline(area));
+  image.setAttribute("x", "0");
+  image.setAttribute("y", "0");
+  image.setAttribute("width", String(backgroundMapFrame.width));
+  image.setAttribute("height", String(backgroundMapFrame.height));
+  image.setAttribute("preserveAspectRatio", "none");
+  image.setAttribute("clip-path", `url(#${clipId})`);
+  image.classList.add("map-svg-building-difficulty", getPlotDifficultyClass(area));
+  return image;
+}
+
+function createTerritoryHoverOverlay(area, index, defs) {
+  const clipId = `territory-hover-clip-${index}`;
+  const clipPath = document.createElementNS("http://www.w3.org/2000/svg", "clipPath");
+  const clipPolygon = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
+  const polygon = getAreaPolygon(area).map(([x, y]) => [
+    x * backgroundMapFrame.width,
+    y * backgroundMapFrame.height,
+  ]);
+  const centerX = polygon.reduce((sum, [x]) => sum + x, 0) / polygon.length;
+  const centerY = polygon.reduce((sum, [, y]) => sum + y, 0) / polygon.length;
+  const clipPoints = polygon
+    .map(([x, y]) => `${(centerX + (x - centerX) * 1.025).toFixed(1)},${(centerY + (y - centerY) * 1.025).toFixed(1)}`)
+    .join(" ");
+
+  clipPath.id = clipId;
+  clipPolygon.setAttribute("points", clipPoints);
+  clipPath.appendChild(clipPolygon);
+  defs.appendChild(clipPath);
+
+  const image = document.createElementNS("http://www.w3.org/2000/svg", "image");
+  image.setAttribute("href", "./territory-outline-hover-base.png");
+  image.setAttribute("x", "0");
+  image.setAttribute("y", "0");
+  image.setAttribute("width", String(backgroundMapFrame.width));
+  image.setAttribute("height", String(backgroundMapFrame.height));
+  image.setAttribute("preserveAspectRatio", "none");
+  image.setAttribute("clip-path", `url(#${clipId})`);
+  image.classList.add("map-svg-territory-hover");
+  return image;
+}
+
+function createLotHouseOverlay(area) {
+  if (!LOT_HOUSE_VISUALS_ENABLED) return null;
+  const level = getLotLevel(area);
+  const houseDef = lotHouseLevelDefs[level];
+  if (!houseDef) return null;
+
+  const bounds = getAreaBounds(area);
+  const drawWidth = bounds.w * backgroundMapFrame.width * houseDef.scale;
+  const drawHeight = drawWidth * 1.46;
+  const centerX = bounds.x * backgroundMapFrame.width;
+  const baseY = (bounds.y + bounds.h * 0.72) * backgroundMapFrame.height;
+
+  const image = document.createElementNS("http://www.w3.org/2000/svg", "image");
+  const assetHref = new URL(houseDef.asset, window.location.href).href;
+  image.setAttribute("href", assetHref);
+  image.setAttributeNS("http://www.w3.org/1999/xlink", "xlink:href", assetHref);
+  image.setAttribute("x", String(centerX - drawWidth * 0.5));
+  image.setAttribute("y", String(baseY - drawHeight + houseDef.yOffset));
+  image.setAttribute("width", String(drawWidth));
+  image.setAttribute("height", String(drawHeight));
+  image.setAttribute("preserveAspectRatio", "xMidYMax meet");
+  image.setAttribute("aria-hidden", "true");
+  image.setAttribute("overflow", "visible");
+  image.classList.add("map-svg-lot-house", `map-svg-lot-house--level-${level}`);
+  return image;
+}
+
+function renderLotHouseLayer(frameLeft, frameTop, frameWidth, frameHeight) {
+  if (!LOT_HOUSE_VISUALS_ENABLED) {
+    lotHouseLayer?.classList.add("hidden");
+    lotHouseLayer?.replaceChildren();
+    return;
+  }
+  if (!lotHouseLayer) return;
+  lotHouseLayer.replaceChildren();
+  lotHouseLayer.classList.toggle("hidden", !state.registered);
+
+  clickableLotDefs.forEach((area) => {
+    const level = getLotLevel(area);
+    const houseDef = lotHouseLevelDefs[level];
+    if (!houseDef) return;
+
+    const bounds = getAreaBounds(area);
+    const baseX = frameLeft + frameWidth * bounds.x;
+    const baseY = frameTop + frameHeight * (bounds.y + bounds.h * 0.72);
+    const drawWidth = frameWidth * bounds.w * houseDef.scale;
+
+    const wrapper = document.createElement("div");
+    wrapper.className = `lot-house-layer__item lot-house-layer__item--level-${level}`;
+    wrapper.style.left = `${baseX}px`;
+    wrapper.style.top = `${baseY + houseDef.yOffset}px`;
+    wrapper.style.width = `${drawWidth}px`;
+
+    const card = document.createElement("div");
+    card.className = "lot-house-layer__card";
+    wrapper.appendChild(card);
+
+    const image = document.createElement("img");
+    image.src = houseDef.asset;
+    image.alt = "";
+    image.setAttribute("aria-hidden", "true");
+    image.addEventListener("error", () => {
+      card.style.background = "rgba(220, 70, 40, 0.55)";
+      card.style.border = "3px solid rgba(255, 230, 180, 0.9)";
+    });
+    wrapper.appendChild(image);
+    lotHouseLayer.appendChild(wrapper);
+  });
+}
+
+function getBackgroundMapRect(width = window.innerWidth, height = window.innerHeight) {
+  const scale = Math.min(width / backgroundMapFrame.width, height / backgroundMapFrame.height);
+  const frameWidth = backgroundMapFrame.width * scale;
+  const frameHeight = backgroundMapFrame.height * scale;
+  return {
+    width: frameWidth,
+    height: frameHeight,
+    left: (width - frameWidth) * backgroundMapFrame.positionX,
+    top: (height - frameHeight) * backgroundMapFrame.positionY,
+  };
+}
+
+function clearSvgMapSelection() {
+  mapSvgOverlay?.querySelectorAll(".is-selected").forEach((area) => {
+    area.classList.remove("is-selected");
+  });
+}
+
+function selectSvgMapArea(areaId) {
+  clearSvgMapSelection();
+  mapSvgOverlay?.querySelectorAll(`[data-area-id="${areaId}"]`).forEach((area) => {
+    area.classList.add("is-selected");
+  });
+}
+
+function getScreenMapArea(area, frameLeft, frameTop, frameWidth, frameHeight) {
+  const bounds = area.w && area.h ? area : getAreaBounds(area);
+  return {
+    ...area,
+    x: frameLeft + frameWidth * bounds.x,
+    y: frameTop + frameHeight * bounds.y,
+    w: frameWidth * bounds.w,
+    h: frameHeight * bounds.h,
+    mapX: bounds.x,
+    mapY: bounds.y,
+  };
+}
+
+function handleSvgMapAreaClick(area, frameLeft, frameTop, frameWidth, frameHeight) {
+  if (!state.registered) return;
+  if (Date.now() <= mapDragState.ignoreClicksUntil) return;
+  selectSvgMapArea(area.id);
+  const screenArea = getScreenMapArea(area, frameLeft, frameTop, frameWidth, frameHeight);
+
+  if (area.kind === "park" || area.kind === "lot") {
+    showChoiceWheel(screenArea);
+    return;
+  }
+
+  state.selectedDistrictIndex = clamp(area.districtIndex, 0, state.districts.length - 1);
+  sceneRef?.refreshHUD();
+  const quest = getQuestAtSpot(area.id);
+  if (quest?.status === "offered") {
+    showQuestCard(quest);
+    sceneRef?.setMessage(`Uj kuldetes var itt: ${area.name}.`);
+  } else {
+    showChoiceWheel(screenArea);
+  }
+  saveGame();
+}
+
+function renderSvgMapOverlay() {
+  if (!mapSvgOverlay) return;
+  const mapRect = getBackgroundMapRect(window.innerWidth, window.innerHeight);
+  const frameWidth = mapRect.width;
+  const frameHeight = mapRect.height;
+  const frameLeft = mapRect.left;
+  const frameTop = mapRect.top;
+
+  if (mapBackgroundLayer) {
+    mapBackgroundLayer.style.left = `${frameLeft}px`;
+    mapBackgroundLayer.style.top = `${frameTop}px`;
+    mapBackgroundLayer.style.width = `${frameWidth}px`;
+    mapBackgroundLayer.style.height = `${frameHeight}px`;
+  }
+  mapSvgOverlay.style.left = `${frameLeft}px`;
+  mapSvgOverlay.style.top = `${frameTop}px`;
+  mapSvgOverlay.style.width = `${frameWidth}px`;
+  mapSvgOverlay.style.height = `${frameHeight}px`;
+  mapSvgOverlay.classList.toggle("hidden", !state.registered);
+  mapSvgOverlay.replaceChildren();
+  const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
+  mapSvgOverlay.appendChild(defs);
+  [...clickableParkDefs, ...clickableLotDefs].forEach((area, index) => {
+    const group = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    group.classList.add("map-svg-territory-group");
+    group.appendChild(createTerritoryHoverOverlay(area, index, defs));
+
+    const territoryClasses = [
+      "map-svg-territory",
+      area.kind === "park" ? "map-svg-territory--park" : "map-svg-territory--lot",
+    ];
+    if (area.kind === "lot") territoryClasses.push(getLotDifficultyClass(area));
+    const polygon = createSvgPolygon(area, territoryClasses);
+    polygon.setAttribute("aria-label", area.name);
+    polygon.dataset.areaId = area.id;
+    if (area.kind === "lot" && getLotLevel(area) > 0) {
+      polygon.classList.add("is-owned");
+      polygon.setAttribute("aria-label", `${area.name}, ${getLotLevel(area)}. szintu haz`);
+    }
+    polygon.addEventListener("click", () => handleSvgMapAreaClick(area, frameLeft, frameTop, frameWidth, frameHeight));
+    group.appendChild(polygon);
+    group.appendChild(createSvgAreaLabel(area));
+    mapSvgOverlay.appendChild(group);
+  });
+
+  clickableBuildingDefs.forEach((area, index) => {
+    const plot = createSvgPolygon(
+      { polygon: area.plot },
+      ["map-svg-plot", "map-svg-plot--building", getPlotDifficultyClass(area)],
+    );
+    plot.dataset.areaId = area.id;
+    plot.addEventListener("click", () => handleSvgMapAreaClick(area, frameLeft, frameTop, frameWidth, frameHeight));
+
+    const group = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    group.classList.add("map-svg-building-group");
+    group.appendChild(createBuildingOutlineOverlay(area, index, defs));
+    group.appendChild(plot);
+
+    const polygon = createSvgPolygon(area, ["map-svg-area", "map-svg-area--building"]);
+    polygon.setAttribute("aria-label", area.name);
+    polygon.dataset.areaId = area.id;
+    if (getQuestAtSpot(area.id)) {
+      polygon.classList.add("map-svg-area--quest");
+    }
+    if (activeChoiceSpot?.id === area.id) {
+      polygon.classList.add("is-selected");
+    }
+    const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
+    title.textContent = area.name;
+    polygon.appendChild(title);
+    polygon.addEventListener("click", () => handleSvgMapAreaClick(area, frameLeft, frameTop, frameWidth, frameHeight));
+    group.appendChild(polygon);
+    group.appendChild(createSvgAreaLabel(area, "building"));
+    if (getQuestAtSpot(area.id)) {
+      group.appendChild(createQuestMarker(area));
+    }
+    mapSvgOverlay.appendChild(group);
+  });
+  applyMapPanTransform();
+}
+
 function formatMoney(value) {
   return `${value} $`;
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function normalizeCrewMembers(members) {
+  const savedMembers = Array.isArray(members) ? members : [];
+  return crewMemberTemplates.map((template) => {
+    const saved = savedMembers.find((member) => member?.id === template.id) || {};
+    const level = clamp(Number.isFinite(saved.level) ? Math.round(saved.level) : 1, 1, 20);
+    const defenseLevel = clamp(Number.isFinite(saved.defenseLevel) ? Math.round(saved.defenseLevel) : 1, 1, 20);
+    return {
+      ...template,
+      level,
+      defenseLevel,
+      health: clamp(Number.isFinite(saved.health) ? saved.health : template.baseHealth, 0, template.baseHealth),
+    };
+  });
+}
+
+function getCrewMemberAttack(member) {
+  return member ? member.baseAttack + (member.level - 1) * 5 : 0;
+}
+
+function getCrewMemberDefense(member) {
+  return member ? member.baseDefense + (member.defenseLevel - 1) * 4 : 0;
+}
+
+function getCrewMemberUpgradeCost(member) {
+  return member ? 45 + member.level * 35 : 0;
+}
+
+function getCrewMemberDefenseUpgradeCost(member) {
+  return member ? 35 + member.defenseLevel * 30 : 0;
+}
+
+function getCrewMemberHealCost(member) {
+  if (!member) return 0;
+  const missingHealth = Math.max(0, member.baseHealth - member.health);
+  if (!missingHealth) return 0;
+  return 12 + missingHealth * 2;
+}
+
+function getActiveCrewMember() {
+  return state.crewMembers.find((member) => member.id === state.activeCrewMemberId) || state.crewMembers[0] || null;
+}
+
+function renderCrewPanel() {
+  if (!crewCards) return;
+  if (!Array.isArray(state.crewMembers) || state.crewMembers.length === 0) {
+    state.crewMembers = makeCrewMembers();
+  }
+  const members = Array.isArray(state.crewMembers) ? state.crewMembers : makeCrewMembers();
+  const totalPower = members.reduce((sum, member) => sum + getCrewMemberAttack(member), 0);
+  const renderKey = `${state.money}|${state.activeCrewMemberId}|${members.map((member) => `${member.id}:${member.level}:${member.health}`).join("|")}`;
+  if (renderKey === crewPanelRenderKey) return;
+  crewPanelRenderKey = renderKey;
+  if (crewPowerTotal) crewPowerTotal.textContent = `${totalPower} ero`;
+
+  crewCards.innerHTML = members.map((member) => {
+    const attack = getCrewMemberAttack(member);
+    const defense = getCrewMemberDefense(member);
+    const cost = getCrewMemberUpgradeCost(member);
+    const defenseCost = getCrewMemberDefenseUpgradeCost(member);
+    const healCost = getCrewMemberHealCost(member);
+    const isActive = member.id === state.activeCrewMemberId;
+    return `
+      <article class="crew-card${isActive ? " is-active" : ""}" data-member-id="${member.id}">
+        <div class="crew-card__portrait">
+          <img src="./assets/character/gangster-character.png" alt="${member.name}">
+          <div class="crew-card__level">${member.level}. szint</div>
+        </div>
+        <div class="crew-card__body">
+          <div class="crew-card__header">
+            <strong class="crew-card__name">${member.name}</strong>
+            <div class="crew-card__role">${member.role}</div>
+          </div>
+          <div class="crew-card__stats">
+            <div class="crew-card__stat crew-card__stat--wide">
+              <small>Ero</small>
+              <strong>${attack}</strong>
+              <button class="crew-card__mini-action" data-crew-action="upgrade" type="button"${state.money < cost || member.level >= 20 ? " disabled" : ""}>${member.level >= 20 ? "Max" : `Fejlesztes ${cost}$`}</button>
+            </div>
+            <div class="crew-card__stat crew-card__stat--wide">
+              <small>HP</small>
+              <strong>${member.health}/${member.baseHealth}</strong>
+              <button class="crew-card__mini-action" data-crew-action="heal" type="button"${state.money < healCost || healCost <= 0 ? " disabled" : ""}>${healCost > 0 ? `Feltoltes ${healCost}$` : "Max elet"}</button>
+            </div>
+            <div class="crew-card__stat crew-card__stat--wide">
+              <small>Vedelem</small>
+              <strong>${defense}</strong>
+              <button class="crew-card__mini-action" data-crew-action="defense" type="button"${state.money < defenseCost || member.defenseLevel >= 20 ? " disabled" : ""}>${member.defenseLevel >= 20 ? "Max" : `Fejlesztes ${defenseCost}$`}</button>
+            </div>
+          </div>
+        </div>
+      </article>
+    `;
+  }).join("");
+}
+
+function upgradeCrewMember(memberId) {
+  const member = state.crewMembers.find((entry) => entry.id === memberId);
+  if (!member) return;
+  if (member.level >= 20) {
+    sceneRef?.setMessage(`${member.name} elerte a maximalis szintet.`);
+    return;
+  }
+  const cost = getCrewMemberUpgradeCost(member);
+  if (!canAfford(cost)) {
+    sceneRef?.setMessage(`Nincs eleg penz ${member.name} fejlesztesere.`);
+    return;
+  }
+
+  state.money -= cost;
+  member.level += 1;
+  member.health = member.baseHealth;
+  state.activeCrewMemberId = member.id;
+  sceneRef?.pushLog(`${member.name} fejlodott. Most ${member.level}. szintu.`);
+  sceneRef?.setMessage(`${member.name} ereje ${getCrewMemberAttack(member)} lett.`);
+  saveGame();
+  sceneRef?.refreshHUD();
+}
+
+function upgradeCrewMemberDefense(memberId) {
+  const member = state.crewMembers.find((entry) => entry.id === memberId);
+  if (!member) return;
+  if (member.defenseLevel >= 20) {
+    sceneRef?.setMessage(`${member.name} elerte a maximalis vedelmi szintet.`);
+    return;
+  }
+  const cost = getCrewMemberDefenseUpgradeCost(member);
+  if (!canAfford(cost)) {
+    sceneRef?.setMessage(`Nincs eleg penz ${member.name} vedelmenek fejlesztesere.`);
+    return;
+  }
+
+  state.money -= cost;
+  member.defenseLevel += 1;
+  state.activeCrewMemberId = member.id;
+  sceneRef?.pushLog(`${member.name} vedelme megerosodott. Most ${getCrewMemberDefense(member)} pont.`);
+  sceneRef?.setMessage(`${member.name} vedelme ${getCrewMemberDefense(member)} lett.`);
+  saveGame();
+  sceneRef?.refreshHUD();
+}
+
+function healCrewMember(memberId) {
+  const member = state.crewMembers.find((entry) => entry.id === memberId);
+  if (!member) return;
+  const healCost = getCrewMemberHealCost(member);
+  if (!healCost) {
+    sceneRef?.setMessage(`${member.name} mar maximum eleteroen van.`);
+    return;
+  }
+  if (!canAfford(healCost)) {
+    sceneRef?.setMessage(`Nincs eleg penz ${member.name} gyogyitasara.`);
+    return;
+  }
+  state.money -= healCost;
+  member.health = member.baseHealth;
+  sceneRef?.pushLog(`${member.name} teljesen meggyogyult. -${healCost} $.`);
+  sceneRef?.setMessage(`${member.name} ujra maximum eleteron van.`);
+  saveGame();
+  sceneRef?.refreshHUD();
 }
 
 function hash2(x, y, salt = 0) {
@@ -334,13 +2081,323 @@ function makeDistricts() {
 
 function setHudVisible(visible) {
   hudRoot?.classList.toggle("hidden", !visible);
-  if (!visible) hideCharacterPanel();
+  mapSvgOverlay?.classList.toggle("hidden", !visible);
+  if (!visible) {
+    hideCharacterPanel();
+    robberyGame?.classList.add("hidden");
+    robberyGame?.setAttribute("aria-hidden", "true");
+    activeRobberyGame = null;
+  }
 }
 
 let activeChoiceSpot = null;
+let activeRobberyGame = null;
+
+const robberyTacticDefs = {
+  stealth: {
+    name: "Lopakodás",
+    strongAgainst: "watcher",
+    damage: 17,
+    alert: 7,
+  },
+  force: {
+    name: "Fegyveres roham",
+    strongAgainst: "bodyguard",
+    damage: 26,
+    alert: 18,
+  },
+  intimidation: {
+    name: "Megfélemlítés",
+    strongAgainst: "boss",
+    damage: 21,
+    alert: 11,
+  },
+};
+
+const robberyDefenderTemplates = {
+  watcher: { role: "Megfigyelő", icon: "◎" },
+  bodyguard: { role: "Testőr", icon: "♜" },
+  boss: { role: "Helyi főnök", icon: "♛" },
+};
+
+function createRobberyDefenders(spot, difficulty) {
+  const count = difficulty >= 72 ? 4 : difficulty >= 44 ? 3 : 2;
+  const types = ["watcher", "bodyguard", "boss", "bodyguard"];
+  const names = ["Salvatore", "Tommy", "Vincent", "Giovanni"];
+
+  return Array.from({ length: count }, (_, index) => {
+    const type = types[index];
+    const maxHealth = Math.round(28 + difficulty * 0.42 + index * 4);
+    return {
+      id: `${spot.id}-guard-${index}`,
+      name: names[index],
+      type,
+      maxHealth,
+      health: maxHealth,
+    };
+  });
+}
+
+function getRobberyControl(encounter = activeRobberyGame) {
+  if (!encounter?.defenders?.length) return 0;
+  const total = encounter.defenders.reduce((sum, defender) => sum + defender.maxHealth, 0);
+  const remaining = encounter.defenders.reduce((sum, defender) => sum + Math.max(0, defender.health), 0);
+  return clamp(Math.round(((total - remaining) / total) * 100), 0, 100);
+}
+
+function refreshRobberyGame() {
+  const encounter = activeRobberyGame;
+  if (!encounter || !robberyGame) return;
+
+  const control = getRobberyControl(encounter);
+  if (robberyGameTitle) robberyGameTitle.textContent = encounter.spot.name;
+  if (robberyGameSubtitle) {
+    robberyGameSubtitle.textContent = `${encounter.difficultyInfo.label} célpont · erő ${encounter.difficulty}`;
+  }
+  if (robberyHealthText) robberyHealthText.textContent = `${state.health}%`;
+  if (robberyHealthFill) robberyHealthFill.style.width = `${state.health}%`;
+  if (robberyControlText) robberyControlText.textContent = `${control}%`;
+  if (robberyControlFill) robberyControlFill.style.width = `${control}%`;
+  if (robberyAlertText) robberyAlertText.textContent = `${Math.round(encounter.alert)}%`;
+  if (robberyAlertFill) robberyAlertFill.style.width = `${encounter.alert}%`;
+  if (robberyRound) robberyRound.textContent = `${encounter.round}. kör`;
+  if (robberyLoot) robberyLoot.textContent = `Zsákmány: ${encounter.loot} $`;
+  if (robberyInstruction) {
+    const selected = encounter.defenders.find((defender) => defender.id === encounter.selectedDefenderId);
+    robberyInstruction.textContent = selected?.health > 0
+      ? `Célpont: ${selected.name}`
+      : "Válassz egy őrt!";
+  }
+  if (robberyBattleLog) robberyBattleLog.textContent = encounter.message;
+
+  robberyTactics.forEach((button) => {
+    button.classList.toggle("is-selected", button.dataset.tactic === encounter.selectedTactic);
+  });
+
+  if (robberyDefenders) {
+    robberyDefenders.replaceChildren();
+    encounter.defenders.forEach((defender, index) => {
+      const template = robberyDefenderTemplates[defender.type];
+      const healthPercent = clamp(Math.round((defender.health / defender.maxHealth) * 100), 0, 100);
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = `robbery-defender robbery-defender--${index + 1}`;
+      button.classList.toggle("is-selected", encounter.selectedDefenderId === defender.id);
+      button.classList.toggle("is-defeated", defender.health <= 0);
+      button.disabled = encounter.ended || defender.health <= 0;
+      button.innerHTML = `
+        <span class="robbery-defender__portrait">${template.icon}</span>
+        <span class="robbery-defender__copy">
+          <strong>${defender.name}</strong>
+          <small>${template.role}</small>
+          <span class="robbery-defender__health"><i style="width:${healthPercent}%"></i></span>
+          <em>${healthPercent}%</em>
+        </span>
+      `;
+      button.addEventListener("click", () => {
+        if (!activeRobberyGame || defender.health <= 0) return;
+        activeRobberyGame.selectedDefenderId = defender.id;
+        activeRobberyGame.message = `${defender.name} kijelölve. Válassz módszert, majd támadj.`;
+        refreshRobberyGame();
+      });
+      robberyDefenders.appendChild(button);
+    });
+  }
+
+  if (robberyAttack) robberyAttack.disabled = encounter.ended;
+}
+
+function showRobberyResult(success, title, text) {
+  if (!activeRobberyGame) return;
+  activeRobberyGame.ended = true;
+  robberyResult?.classList.remove("hidden");
+  robberyResult?.classList.toggle("is-failure", !success);
+  if (robberyResultStamp) robberyResultStamp.textContent = success ? "Siker" : "Kudarc";
+  if (robberyResultTitle) robberyResultTitle.textContent = title;
+  if (robberyResultText) robberyResultText.textContent = text;
+  if (robberyAttack) robberyAttack.disabled = true;
+}
+
+function finishRobberySuccess() {
+  const encounter = activeRobberyGame;
+  if (!encounter || encounter.ended) return;
+
+  const target = encounter.targetDistrict;
+  const baseGain = encounter.mode === "shop" ? 52 : 30;
+  const gain = Math.round(baseGain + encounter.loot + state.cityLevel * 8 + encounter.difficulty * 0.35);
+  const fameGain = encounter.mode === "shop" ? 8 : 5;
+  const heatGain = Math.round(7 + encounter.alert * 0.15);
+  const healthLost = Math.max(0, encounter.healthAtStart - state.health);
+
+  state.money += gain;
+  applyFame(fameGain);
+  applyHeat(heatGain);
+  if (target) {
+    target.loyalty = clamp(target.loyalty + (encounter.mode === "shop" ? 9 : 5), 0, 100);
+    if (!target.controlled && target.loyalty >= 65) {
+      target.controlled = true;
+      sceneRef?.pushLog(`${target.name} most mar a bandadhoz tartozik.`);
+    }
+  }
+  completeQuest("robbery", encounter.spot);
+  sceneRef?.pushLog(`${encounter.spot.name} kirabolva a mini-játékban: +${gain} $.`);
+  sceneRef?.setMessage(`${encounter.spot.name} kirablása sikerült.`);
+  saveGame();
+  sceneRef?.refreshHUD();
+  sceneRef?.refreshMap();
+  showRobberyResult(
+    true,
+    "A rajtaütés sikerült",
+    `Zsákmány: +${gain} $ · Hírnév: +${fameGain} · Sérülés: -${healthLost} · Körözés: +${heatGain}%`,
+  );
+}
+
+function finishRobberyFailure(reason) {
+  const encounter = activeRobberyGame;
+  if (!encounter || encounter.ended) return;
+  const heatGain = encounter.alert >= 100 ? 18 : 8;
+  state.health = Math.max(state.health, 12);
+  state.naturalRecoveryAt.health = Date.now();
+  const healthLost = Math.max(0, encounter.healthAtStart - state.health);
+  applyHeat(heatGain);
+  sceneRef?.pushLog(`${encounter.spot.name}: a rablás kudarcba fulladt.`);
+  sceneRef?.setMessage(reason);
+  saveGame();
+  sceneRef?.refreshHUD();
+  sceneRef?.refreshMap();
+  showRobberyResult(
+    false,
+    "A rajtaütés kudarcba fulladt",
+    `${reason} Sérülés: -${healthLost} · Körözés: +${heatGain}%`,
+  );
+}
+
+function startRobberyMinigame(spot) {
+  if (!state.registered || !spot || !robberyGame) return;
+  if (!canStartCombat("A rajtautest")) return;
+  const energyCost = spot.mode === "shop" ? 18 : 12;
+  if (!spendEnergy(energyCost)) return;
+
+  const difficulty = getBuildingDifficulty(spot);
+  const defenders = createRobberyDefenders(spot, difficulty);
+  activeRobberyGame = {
+    spot,
+    targetDistrict: getSelectedDistrict(),
+    mode: spot.mode === "shop" ? "shop" : "street",
+    difficulty,
+    difficultyInfo: getDifficultyInfo(difficulty),
+    defenders,
+    selectedDefenderId: defenders[0].id,
+    selectedTactic: "stealth",
+    alert: clamp(Math.round((difficulty - getPlayerPower()) * 0.45), 0, 24),
+    loot: 0,
+    round: 1,
+    healthAtStart: state.health,
+    message: "A banda elfoglalta a bejáratot. Válaszd ki az első őrt!",
+    ended: false,
+  };
+
+  hideChoiceWheel();
+  robberyResult?.classList.add("hidden");
+  robberyResult?.classList.remove("is-failure");
+  robberyGame.classList.remove("hidden");
+  robberyGame.setAttribute("aria-hidden", "false");
+  robberyGame.style.setProperty("--encounter-accent", difficultyColorToCss(getDifficultyInfo(difficulty).color));
+  saveGame();
+  refreshRobberyGame();
+  sceneRef?.refreshHUD();
+}
+
+function playRobberyTurn() {
+  const encounter = activeRobberyGame;
+  if (!encounter || encounter.ended) return;
+  const defender = encounter.defenders.find((entry) => entry.id === encounter.selectedDefenderId && entry.health > 0)
+    || encounter.defenders.find((entry) => entry.health > 0);
+  if (!defender) {
+    finishRobberySuccess();
+    return;
+  }
+
+  encounter.selectedDefenderId = defender.id;
+  const tactic = robberyTacticDefs[encounter.selectedTactic] || robberyTacticDefs.stealth;
+  const isStrong = tactic.strongAgainst === defender.type;
+  const powerBonus = Math.round(getPlayerPower() * 0.16);
+  const damage = clamp(
+    Math.round((tactic.damage + powerBonus + randomInt(-4, 7)) * (isStrong ? 1.5 : 1) - encounter.difficulty * 0.08),
+    7,
+    58,
+  );
+  defender.health = Math.max(0, defender.health - damage);
+  const defeated = defender.health <= 0;
+  const lootGain = randomInt(7, 16) + (defeated ? randomInt(12, 24) : 0);
+  encounter.loot += lootGain;
+  encounter.alert = clamp(
+    encounter.alert + tactic.alert + Math.round(encounter.difficulty / 22) + randomInt(0, 5) - (isStrong ? 4 : 0),
+    0,
+    100,
+  );
+
+  const remainingDefender = encounter.defenders.find((entry) => entry.health > 0);
+  if (remainingDefender) {
+    const retaliation = clamp(
+      Math.round(2 + encounter.difficulty / 18 + randomInt(0, 6) - (encounter.selectedTactic === "stealth" ? 2 : 0)),
+      2,
+      14,
+    );
+    state.health = clamp(state.health - retaliation, 0, 100);
+    encounter.message = defeated
+      ? `${defender.name} kiesett. +${lootGain} $ zsákmány, az őrök visszavágtak: -${retaliation} életerő.`
+      : `${tactic.name}: ${damage} sebzés. +${lootGain} $ zsákmány, visszavágás: -${retaliation} életerő.`;
+    encounter.selectedDefenderId = remainingDefender.id;
+  } else {
+    encounter.message = `${defender.name} kiesett. Az épület védelme összeomlott.`;
+  }
+  encounter.round += 1;
+  sceneRef?.refreshHUD();
+
+  if (!remainingDefender) {
+    finishRobberySuccess();
+    return;
+  }
+  if (state.health <= 1) {
+    finishRobberyFailure("A bandád túl súlyosan megsérült.");
+    return;
+  }
+  if (encounter.alert >= 100) {
+    finishRobberyFailure("Megérkezett a rendőrség.");
+    return;
+  }
+  refreshRobberyGame();
+}
+
+function retreatFromRobbery() {
+  if (!activeRobberyGame) return;
+  if (activeRobberyGame.ended) {
+    closeRobberyGame();
+    return;
+  }
+  activeRobberyGame.alert = clamp(activeRobberyGame.alert + 10, 0, 100);
+  finishRobberyFailure("A banda zsákmány nélkül visszavonult.");
+}
+
+function closeRobberyGame() {
+  robberyGame?.classList.add("hidden");
+  robberyGame?.setAttribute("aria-hidden", "true");
+  robberyResult?.classList.add("hidden");
+  activeRobberyGame = null;
+  if (state.heat >= 100) triggerBust();
+  saveGame();
+  sceneRef?.refreshHUD();
+  sceneRef?.refreshMap();
+}
 
 function refreshCharacterPanel() {
   const level = getRankLevel(state.fame);
+  const currentRank = getCurrentRankEntry(state.fame);
+  const nextRankFame = getNextRankFame(state.fame);
+  const currentThreshold = currentRank.fame;
+  const xpSpan = Math.max(1, nextRankFame - currentThreshold);
+  const xpProgress = clamp(Math.round(((state.fame - currentThreshold) / xpSpan) * 100), 0, 100);
   if (characterName) characterName.textContent = state.profileName || "Ismeretlen";
   if (characterRank) characterRank.textContent = rankForFame(state.fame);
   if (characterMoney) characterMoney.textContent = String(state.money);
@@ -352,6 +2409,26 @@ function refreshCharacterPanel() {
   if (characterCrew) characterCrew.textContent = String(state.crew);
   if (characterHeat) characterHeat.textContent = `${state.heat}%`;
   if (characterCityLevel) characterCityLevel.textContent = String(state.cityLevel);
+  if (characterXpSummary) {
+    characterXpSummary.textContent = nextRankFame > state.fame
+      ? `${state.fame - currentThreshold} / ${xpSpan} XP a kovetkezo szinthez`
+      : "Maximum szint elerve";
+  }
+  if (characterXpFill) characterXpFill.style.width = `${nextRankFame > state.fame ? xpProgress : 100}%`;
+  if (characterXpList) {
+    characterXpList.innerHTML = rankTable.map((entry, index) => {
+      const reached = state.fame >= entry.fame;
+      const isCurrent = entry.fame === currentThreshold;
+      return `
+        <div class="character-xp__item${reached ? " is-reached" : ""}${isCurrent ? " is-current" : ""}">
+          <span>${index + 1}. szint</span>
+          <strong>${entry.name}</strong>
+          <em>${entry.fame} XP</em>
+        </div>
+      `;
+    }).join("");
+  }
+  syncEquipmentSheet();
 }
 
 function showCharacterPanel() {
@@ -370,11 +2447,39 @@ function hideCharacterPanel() {
 function hideChoiceWheel() {
   activeChoiceSpot = null;
   choiceWheel?.classList.add("hidden");
+  choiceWheel?.setAttribute("aria-hidden", "true");
+  sceneRef?.spotGraphics?.clear();
+  clearSvgMapSelection();
+}
+
+function showLotInfoModal(lot) {
+  if (!lotInfoModal || !lot) return;
+  const level = getLotLevel(lot);
+  const houseDef = getLotHouseDef(lot);
+  const nextCost = level >= 3 ? null : getLotInvestmentCost(lot);
+  if (lotInfoTitle) lotInfoTitle.textContent = lot.name;
+  if (lotInfoDescription) {
+    lotInfoDescription.textContent = houseDef
+      ? `${houseDef.name}. A haz jelenleg stabil passziv bevetelt termel a birodalmadnak.`
+      : "A telek meg ures. Vasarlas utan megjelenik rajta a 1930-as stilusu haz.";
+  }
+  if (lotInfoLevel) lotInfoLevel.textContent = houseDef ? `${level}. szint` : "Nincs megveve";
+  if (lotInfoHourlyIncome) lotInfoHourlyIncome.textContent = `${getLotHourlyIncome(lot)} $`;
+  if (lotInfoDailyIncome) lotInfoDailyIncome.textContent = `${getLotIncome(lot)} $`;
+  if (lotInfoNextCost) lotInfoNextCost.textContent = nextCost ? `${nextCost} $` : "Maximum";
+  lotInfoModal.classList.remove("hidden");
+  lotInfoModal.setAttribute("aria-hidden", "false");
+}
+
+function hideLotInfoModal() {
+  lotInfoModal?.classList.add("hidden");
+  lotInfoModal?.setAttribute("aria-hidden", "true");
 }
 
 function showChoiceWheel(spot) {
   activeChoiceSpot = spot;
   if (!choiceWheel || !choiceWheelPanel) return;
+  syncTimedActions();
 
   const panelWidth = 188;
   const panelHeight = 188;
@@ -382,19 +2487,125 @@ function showChoiceWheel(spot) {
   const y = clamp(spot.y, panelHeight / 2 + 16, window.innerHeight - panelHeight / 2 - 16);
 
   choiceWheel.classList.remove("hidden");
+  choiceWheel.setAttribute("aria-hidden", "false");
   choiceWheelPanel.style.left = `${x}px`;
   choiceWheelPanel.style.top = `${y}px`;
+  if (spot.kind === "park") {
+    setChoiceWheelButtons(["robbery", "protection", "baseRest", "close"]);
+    const healthRecovery = state.recoveryEffects.health;
+    const energyRecovery = state.recoveryEffects.energy;
+    const hideUsesLeft = Math.max(0, DAILY_HIDE_LIMIT - state.hideUsesToday);
+    if (choiceWheelTitle) choiceWheelTitle.textContent = spot.name;
+    if (choiceWheelSubtitle) choiceWheelSubtitle.textContent = "Semleges terulet";
+    if (choiceWheelCoreLabel) choiceWheelCoreLabel.textContent = "Park";
+    if (choiceWheelAction1) {
+      choiceWheelAction1.textContent = healthRecovery
+        ? `Lapulas (${formatCountdown(healthRecovery.endsAt - Date.now())})`
+        : energyRecovery
+          ? "Lapulas (varakozik)"
+        : `Lapulas (+50 HP, ${hideUsesLeft}/3)`;
+      choiceWheelAction1.disabled = Boolean(healthRecovery) || Boolean(energyRecovery) || hideUsesLeft <= 0;
+    }
+    if (choiceWheelAction2) {
+      choiceWheelAction2.textContent = energyRecovery
+        ? `Talalkozo (${formatCountdown(energyRecovery.endsAt - Date.now())})`
+        : healthRecovery
+          ? "Talalkozo (varakozik)"
+        : "Talalkozo (+50 energia)";
+      choiceWheelAction2.disabled = Boolean(energyRecovery) || Boolean(healthRecovery);
+    }
+    if (choiceWheelAction3) choiceWheelAction3.textContent = "Terulet info";
+    if (choiceWheelAction4) choiceWheelAction4.textContent = "Bezaras";
+    return;
+  }
+  if (spot.kind === "lot") {
+    const level = getLotLevel(spot);
+    const cost = getLotInvestmentCost(spot);
+    const houseDef = getLotHouseDef(spot);
+    const isMaxLevel = level >= 3;
+    setChoiceWheelButtons(isMaxLevel ? ["protection", "close"] : ["robbery", "protection", "close"]);
+    if (choiceWheelTitle) choiceWheelTitle.textContent = spot.name;
+    if (choiceWheelSubtitle) {
+      choiceWheelSubtitle.textContent = houseDef
+        ? `${level}. szintu haz - ${getLotIncome(spot)} $ / nap`
+        : "Megvasarolhato terulet";
+    }
+    if (choiceWheelCoreLabel) choiceWheelCoreLabel.textContent = houseDef ? `Haz ${level}` : "Ures telek";
+    if (choiceWheelAction1) choiceWheelAction1.textContent = level ? `Fejlesztes (${cost} $)` : `Vasarlas (${cost} $)`;
+    if (choiceWheelAction2) choiceWheelAction2.textContent = "Telek info";
+    if (choiceWheelAction3) choiceWheelAction3.textContent = "";
+    if (choiceWheelAction4) choiceWheelAction4.textContent = "Bezaras";
+    return;
+  }
+  setChoiceWheelButtons(["robbery", "protection", "baseRest", "close"]);
   const difficulty = getBuildingDifficulty(spot);
   const difficultyInfo = getDifficultyInfo(difficulty);
   if (choiceWheelTitle) choiceWheelTitle.textContent = `${spot.name} - ${difficultyInfo.label}`;
   if (choiceWheelSubtitle) choiceWheelSubtitle.textContent = "";
   if (choiceWheelCoreLabel) choiceWheelCoreLabel.textContent = spot.name;
   if (choiceWheelAction1) choiceWheelAction1.textContent = `Kirablás (-${spot.mode === "shop" ? 18 : 12})`;
-  if (choiceWheelAction2) choiceWheelAction2.textContent = "Védelmi pénz (-8)";
+  if (choiceWheelAction2) {
+    const cooldown = getProtectionCooldownRemaining(spot.id);
+    choiceWheelAction2.textContent = cooldown > 0
+      ? `Vedelmi penz (${formatCountdown(cooldown)})`
+      : "Vedelmi penz (-8)";
+    choiceWheelAction2.disabled = cooldown > 0;
+  }
   if (choiceWheelAction3) {
     choiceWheelAction3.textContent = state.mainBaseSpotId === spot.id ? "Pihenés" : "Fő bázis";
   }
   if (choiceWheelAction4) choiceWheelAction4.textContent = "Bezárás";
+}
+
+function runTerritoryAction(actionId, territory) {
+  if (territory.kind === "park") {
+    if (actionId === "robbery") {
+      resetDailyHideUsesIfNeeded();
+      if (state.hideUsesToday >= DAILY_HIDE_LIMIT) {
+        sceneRef?.setMessage("A Lapulast ma mar haromszor hasznaltad.");
+        return;
+      }
+      if (!startRecovery("health")) return;
+      state.hideUsesToday += 1;
+      const heatLoss = Math.min(state.heat, 10);
+      state.heat -= heatLoss;
+      state.districts.forEach((district) => {
+        district.loyalty = clamp(district.loyalty - 3, 0, 100);
+      });
+      sceneRef?.pushLog(`${territory.name}: lapulas, -${heatLoss}% korozes, -3% befolyas.`);
+      sceneRef?.setMessage("A Lapulas elindult: 20 perc alatt legfeljebb +50 eletero.");
+    } else if (actionId === "protection") {
+      if (!startRecovery("energy")) return;
+      sceneRef?.pushLog(`${territory.name}: talalkozo indult.`);
+      sceneRef?.setMessage("A Talalkozo elindult: 20 perc alatt legfeljebb +50 energia.");
+    } else if (actionId === "baseRest") {
+      sceneRef?.setMessage("A park semleges terulet: lapulashoz es talalkozokhoz hasznalhato.");
+    }
+    return;
+  }
+
+  if (territory.kind === "lot") {
+    if (actionId === "robbery") {
+      const level = getLotLevel(territory);
+      if (level >= 3) {
+        sceneRef?.setMessage("Ez a haz mar a legdiszesebb szinten all.");
+        return;
+      }
+      const cost = getLotInvestmentCost(territory);
+      if (!canAfford(cost)) {
+        sceneRef?.setMessage(`Nincs eleg penz. Szükséges: ${cost} $.`);
+        return;
+      }
+      if (!spendEnergy(15)) return;
+      state.money -= cost;
+      state.territories[territory.id] = { level: level + 1 };
+      applyFame(level === 0 ? 6 : 4);
+      sceneRef?.pushLog(`${territory.name}: haz ${level + 1}. szint, -${cost} $.`);
+      sceneRef?.setMessage(`${territory.name}: ${getLotHouseDef(territory)?.name || "Haz"} - ${getLotIncome(territory)} $ napi bevetel.`);
+    } else if (actionId === "protection") {
+      showLotInfoModal(territory);
+    }
+  }
 }
 
 function runChoiceAction(actionId) {
@@ -406,11 +2617,28 @@ function runChoiceAction(actionId) {
     return;
   }
 
+  if (spot.kind === "park" || spot.kind === "lot") {
+    runTerritoryAction(actionId, spot);
+    saveGame();
+    sceneRef?.refreshHUD();
+    sceneRef?.refreshScene();
+    if (spot.kind !== "lot" || actionId !== "protection") {
+      hideChoiceWheel();
+    }
+    return;
+  }
+
   state.selectedDistrictIndex = clamp(spot.districtIndex, 0, state.districts.length - 1);
   if (actionId === "robbery") {
-    raidDistrict(getSelectedDistrict(), spot.mode === "shop" ? "shop" : "street", spot);
+    startRobberyMinigame(spot);
+    return;
   } else if (actionId === "protection") {
-    collectProtectionMoney(getSelectedDistrict(), spot.name);
+    if (getProtectionCooldownRemaining(spot.id) > 0) {
+      sceneRef?.setMessage(`Innen meg nem szedhetsz vedelmi penzt. Hatralevo ido: ${formatCountdown(getProtectionCooldownRemaining(spot.id))}.`);
+      showChoiceWheel(spot);
+      return;
+    }
+    collectProtectionMoney(getSelectedDistrict(), spot.name, spot);
   } else if (actionId === "baseRest") {
     if (state.mainBaseSpotId === spot.id) {
       restAtBase(spot);
@@ -427,60 +2655,200 @@ function runChoiceAction(actionId) {
   hideChoiceWheel();
 }
 
-function loadGame() {
-  const storageKeys = [STORAGE_KEY, "maffia.birodalom.save.phaser.v2", "maffia.birodalom.save.phaser.v1"];
+function rememberLastProfileName(name) {
   try {
-    const raw = storageKeys.map((key) => window.localStorage.getItem(key)).find(Boolean);
-    if (!raw) return false;
-    const saved = JSON.parse(raw);
-    Object.assign(state, saved);
-    if (!Array.isArray(state.districts) || state.districts.length === 0) {
-      state.districts = makeDistricts();
+    if (name) {
+      window.localStorage.setItem(LAST_PROFILE_KEY, name);
+    } else {
+      window.localStorage.removeItem(LAST_PROFILE_KEY);
     }
-    state.day = Number.isFinite(state.day) ? state.day : 1;
-    state.health = Number.isFinite(state.health) ? clamp(state.health, 1, 100) : 100;
-    state.energy = Number.isFinite(state.energy) ? clamp(state.energy, 0, 100) : 100;
-    state.gearPower = Number.isFinite(state.gearPower) ? Math.max(0, state.gearPower) : 12;
-    state.mainBaseSpotId = typeof state.mainBaseSpotId === "string" ? state.mainBaseSpotId : null;
-    if (state.mainBaseSpotId && !getSpotById(state.mainBaseSpotId)) {
-      state.mainBaseSpotId = null;
-    }
-    state.selectedDistrictIndex = clamp(
-      Number.isInteger(state.selectedDistrictIndex) ? state.selectedDistrictIndex : 0,
-      0,
-      state.districts.length - 1,
-    );
-    state.registered = Boolean(state.profileName);
-    return state.registered;
   } catch {
-    return false;
+    // Ignore local convenience storage issues and keep the game running.
   }
 }
 
-function saveGame() {
+function getRememberedProfileName() {
   try {
-    window.localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({
-        profileName: state.profileName,
-        money: state.money,
-        fame: state.fame,
-        crew: state.crew,
-        heat: state.heat,
-        health: state.health,
-        energy: state.energy,
-        gearPower: state.gearPower,
-        mainBaseSpotId: state.mainBaseSpotId,
-        day: state.day,
-        cityLevel: state.cityLevel,
-        districts: state.districts,
-        selectedDistrictIndex: state.selectedDistrictIndex,
-        registered: state.registered,
-      }),
-    );
+    return window.localStorage.getItem(LAST_PROFILE_KEY) || "";
   } catch {
-    // The game remains playable when local file storage is unavailable.
+    return "";
   }
+}
+
+function getLegacyLocalSave() {
+  try {
+    const raw = LEGACY_STORAGE_KEYS.map((key) => window.localStorage.getItem(key)).find(Boolean);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function createSaveSnapshot() {
+  syncTimedActions();
+  return {
+    profileName: state.profileName,
+    money: state.money,
+    fame: state.fame,
+    crew: state.crew,
+    heat: state.heat,
+    health: state.health,
+    energy: state.energy,
+    gearPower: state.gearPower,
+    equipment: state.equipment,
+    crewMembers: state.crewMembers,
+    activeCrewMemberId: state.activeCrewMemberId,
+    mainBaseSpotId: state.mainBaseSpotId,
+    territories: state.territories,
+    buildingDifficulties: state.buildingDifficulties,
+    buildingDifficultyCycle: state.buildingDifficultyCycle,
+    activeQuest: state.activeQuest,
+    activeQuests: state.activeQuests,
+    selectedQuestSlot: state.selectedQuestSlot,
+    questNextSpawnAt: state.questNextSpawnAt,
+    protectionCooldowns: state.protectionCooldowns,
+    recoveryEffects: state.recoveryEffects,
+    naturalRecoveryAt: state.naturalRecoveryAt,
+    nextPolicePressureAt: state.nextPolicePressureAt,
+    hideUsesToday: state.hideUsesToday,
+    hideUsesDay: state.hideUsesDay,
+    day: state.day,
+    cityLevel: state.cityLevel,
+    districts: state.districts,
+    selectedDistrictIndex: state.selectedDistrictIndex,
+    registered: state.registered,
+  };
+}
+
+function hydrateState(saved) {
+  if (!saved || typeof saved !== "object") return false;
+  Object.assign(state, saved);
+  if (!Array.isArray(state.districts) || state.districts.length === 0) {
+    state.districts = makeDistricts();
+  }
+  state.day = Number.isFinite(state.day) ? state.day : 1;
+  state.crew = Number.isFinite(state.crew) ? Math.max(3, Math.round(state.crew)) : 3;
+  state.health = Number.isFinite(state.health) ? clamp(state.health, 0, 100) : 100;
+  state.energy = Number.isFinite(state.energy) ? clamp(state.energy, 0, 100) : 100;
+  state.gearPower = Number.isFinite(state.gearPower) ? Math.max(0, state.gearPower) : 12;
+  state.equipment = normalizeEquipment(state.equipment);
+  state.crewMembers = normalizeCrewMembers(state.crewMembers);
+  state.activeCrewMemberId = state.crewMembers.some((member) => member.id === state.activeCrewMemberId)
+    ? state.activeCrewMemberId
+    : state.crewMembers[0].id;
+  state.territories = normalizeTerritories(state.territories);
+  state.buildingDifficulties = normalizeBuildingDifficulties(state.buildingDifficulties, state.buildingDifficultyCycle);
+  state.mainBaseSpotId = typeof state.mainBaseSpotId === "string" ? state.mainBaseSpotId : null;
+  if (state.mainBaseSpotId && !getSpotById(state.mainBaseSpotId)) {
+    state.mainBaseSpotId = null;
+  }
+  state.activeQuest = normalizeQuest(state.activeQuest);
+  state.activeQuests = normalizeQuestList(state.activeQuests);
+  if (!state.activeQuests.length && state.activeQuest?.status === "accepted") {
+    state.activeQuests = [state.activeQuest];
+    state.activeQuest = null;
+  }
+  state.selectedQuestSlot = clamp(
+    Number.isInteger(state.selectedQuestSlot) ? state.selectedQuestSlot : 0,
+    0,
+    1,
+  );
+  state.questNextSpawnAt = Number.isFinite(state.questNextSpawnAt)
+    ? state.questNextSpawnAt
+    : Date.now() + randomInt(12000, 24000);
+  state.selectedDistrictIndex = clamp(
+    Number.isInteger(state.selectedDistrictIndex) ? state.selectedDistrictIndex : 0,
+    0,
+    state.districts.length - 1,
+  );
+  normalizeTimedActions();
+  syncTimedActions();
+  state.registered = Boolean(state.profileName);
+  return state.registered;
+}
+
+async function requestSaveApi(profileName, method = "GET", body = null, keepalive = false) {
+  const response = await fetch(`${SAVE_API_BASE}/${encodeURIComponent(profileName)}`, {
+    method,
+    headers: body ? { "Content-Type": "application/json" } : undefined,
+    body: body ? JSON.stringify(body) : undefined,
+    keepalive,
+  });
+  if (!response.ok) {
+    throw new Error(`Save API error: ${response.status}`);
+  }
+  if (response.status === 204) return null;
+  return response.json();
+}
+
+async function flushQueuedSave(forceKeepalive = false) {
+  if (saveRequestInFlight || !latestQueuedSave?.profileName) return saveRequestInFlight;
+  const snapshot = latestQueuedSave;
+  latestQueuedSave = null;
+  saveRequestInFlight = requestSaveApi(snapshot.profileName, "PUT", { state: snapshot }, forceKeepalive)
+    .catch(() => {
+      // The live game continues even if the remote save endpoint is temporarily unavailable.
+    })
+    .finally(async () => {
+      saveRequestInFlight = null;
+      if (latestQueuedSave?.profileName) {
+        await flushQueuedSave();
+      }
+    });
+  return saveRequestInFlight;
+}
+
+function queueSaveSnapshot(snapshot, immediate = false) {
+  latestQueuedSave = snapshot;
+  rememberLastProfileName(snapshot.profileName);
+  if (pendingSaveTimer) {
+    window.clearTimeout(pendingSaveTimer);
+    pendingSaveTimer = null;
+  }
+  if (immediate) {
+    void flushQueuedSave();
+    return;
+  }
+  pendingSaveTimer = window.setTimeout(() => {
+    pendingSaveTimer = null;
+    void flushQueuedSave();
+  }, 180);
+}
+
+async function deleteRemoteSave(profileName) {
+  if (!profileName) return;
+  try {
+    await requestSaveApi(profileName, "DELETE");
+  } catch {
+    // Ignore delete failures so the UI reset can still complete locally.
+  }
+}
+
+async function loadGame(profileName = "") {
+  const normalizedProfileName = profileName.trim().slice(0, 18);
+  if (!normalizedProfileName) return false;
+  try {
+    const remoteSave = await requestSaveApi(normalizedProfileName, "GET");
+    if (remoteSave?.found && hydrateState(remoteSave.state)) {
+      rememberLastProfileName(state.profileName);
+      queueSaveSnapshot(createSaveSnapshot(), true);
+      return true;
+    }
+  } catch {
+    // Fall back to legacy local data if the database is not reachable yet.
+  }
+
+  const legacySave = getLegacyLocalSave();
+  if (legacySave?.profileName === normalizedProfileName && hydrateState(legacySave)) {
+    queueSaveSnapshot(createSaveSnapshot(), true);
+    return true;
+  }
+  return false;
+}
+
+function saveGame(immediate = false) {
+  if (!state.registered || !state.profileName) return;
+  queueSaveSnapshot(createSaveSnapshot(), immediate);
 }
 
 function rankForFame(fame) {
@@ -504,27 +2872,33 @@ function applyFame(amount) {
 }
 
 function applyActionDamage(min = 3, max = 15) {
+  syncTimedActions();
   const healthLoss = Math.floor(Math.random() * (max - min + 1)) + min;
-  state.health = clamp(state.health - healthLoss, 1, 100);
+  state.health = clamp(state.health - healthLoss, 0, 100);
+  state.naturalRecoveryAt.health = Date.now();
   return healthLoss;
 }
 
 function getPlayerPower() {
   const level = getRankLevel(state.fame);
+  const activeCrewPower = getCrewMemberAttack(getActiveCrewMember());
   return Math.round(
     state.gearPower
       + level * 8
       + state.crew * 5
+      + activeCrewPower
       + state.cityLevel * 5
       + state.fame * 0.1,
   );
 }
 
 function getBuildingDifficulty(spot) {
+  const savedDifficulty = Number(state.buildingDifficulties?.[spot?.id]);
+  if (Number.isFinite(savedDifficulty)) return savedDifficulty;
   const district = state.districts[spot?.districtIndex] || districtDefs[spot?.districtIndex] || {};
   const baseSecurity = district.security ?? 50;
-  const seedX = Math.round((spot?.x ?? 0) * 1000) + (spot?.districtIndex ?? 0) * 37;
-  const seedY = Math.round((spot?.y ?? 0) * 1000) + (spot?.id?.length ?? 0) * 29;
+  const seedX = Math.round((spot?.mapX ?? spot?.x ?? 0) * 1000) + (spot?.districtIndex ?? 0) * 37;
+  const seedY = Math.round((spot?.mapY ?? spot?.y ?? 0) * 1000) + (spot?.id?.length ?? 0) * 29;
   const seedSalt = (spot?.id?.charCodeAt(0) ?? 0) + (spot?.id?.charCodeAt((spot?.id?.length ?? 1) - 1) ?? 0);
   const randomFactor = hash2(seedX, seedY, seedSalt);
   const modeBias = spot?.mode === "shop" ? 10 : -4;
@@ -543,11 +2917,13 @@ function getDifficultyInfo(difficulty) {
 }
 
 function spendEnergy(cost) {
+  syncTimedActions();
   if (state.energy < cost) {
     sceneRef?.setMessage(`Nincs eleg akciopont. Szükséges: ${cost}.`);
     return false;
   }
   state.energy = clamp(state.energy - cost, 0, 100);
+  state.naturalRecoveryAt.energy = Date.now();
   return true;
 }
 
@@ -577,7 +2953,7 @@ function restAtBase(spot) {
   const healthGain = Math.min(100 - state.health, 28);
   const energyGain = Math.min(100 - state.energy, 100);
   const heatLoss = Math.min(state.heat, 35);
-  state.health = clamp(state.health + healthGain, 1, 100);
+  state.health = clamp(state.health + healthGain, 0, 100);
   state.energy = clamp(state.energy + energyGain, 0, 100);
   state.heat = clamp(state.heat - heatLoss, 0, 100);
   sceneRef?.pushLog(`Pihenes a bazison. +${healthGain} eletero, +${energyGain} akciopont, -${heatLoss} korozes.`);
@@ -590,6 +2966,7 @@ function raidDistrict(targetDistrict, mode = "street", targetSpot = null) {
     sceneRef?.setMessage("Elobb regisztralj.");
     return;
   }
+  if (!canStartCombat("A tamadast")) return;
   if (!spendEnergy(mode === "shop" ? 18 : 12)) return;
 
   const target = targetDistrict || getSelectedDistrict();
@@ -631,15 +3008,23 @@ function raidDistrict(targetDistrict, mode = "street", targetSpot = null) {
 
   sceneRef?.pushLog(`${label} kirabolva: +${gain} $, -${healthLoss} eletero.`);
   sceneRef?.setMessage(`${label} kirabolva. Serules: -${healthLoss} eletero.`);
+  if (targetSpot) {
+    completeQuest("robbery", targetSpot);
+  }
   saveGame();
 }
 
-function collectProtectionMoney(targetDistrict, buildingName = "Haz") {
+function collectProtectionMoney(targetDistrict, buildingName = "Haz", targetSpot = null) {
   if (!state.registered) {
     sceneRef?.setMessage("Elobb regisztralj.");
-    return;
+    return false;
   }
-  if (!spendEnergy(8)) return;
+  if (!canStartCombat("A vedelmi penz beszedest")) return false;
+  if (targetSpot && getProtectionCooldownRemaining(targetSpot.id) > 0) {
+    sceneRef?.setMessage(`Innen meg nem szedhetsz vedelmi penzt. Hatralevo ido: ${formatCountdown(getProtectionCooldownRemaining(targetSpot.id))}.`);
+    return false;
+  }
+  if (!spendEnergy(8)) return false;
 
   const target = targetDistrict || getSelectedDistrict();
   const gain = Math.floor(Math.random() * 21) + 10;
@@ -658,7 +3043,12 @@ function collectProtectionMoney(targetDistrict, buildingName = "Haz") {
 
   sceneRef?.pushLog(`${buildingName}: +${gain} $ vedelmi penz.`);
   sceneRef?.setMessage(`${buildingName} kifizette a vedelmi penzt.`);
+  if (targetSpot) {
+    state.protectionCooldowns[targetSpot.id] = Date.now() + PROTECTION_COOLDOWN_MS;
+    completeQuest("protection", targetSpot);
+  }
   saveGame();
+  return true;
 }
 
 function advanceDistrictLoyalty() {
@@ -747,27 +3137,39 @@ function handleUpgradeCity() {
 }
 
 function handleLayLow() {
-  if (!spendEnergy(5)) return;
-  state.heat = clamp(state.heat - 22, 0, 100);
-  const healing = Math.min(20, 100 - state.health);
-  state.health = clamp(state.health + healing, 1, 100);
-  sceneRef?.pushLog(`A banda lapult egy napot. Korozes csokkent, +${healing} eletero.`);
-  sceneRef?.setMessage(`A helyzet lehult. Gyogyulas: +${healing} eletero.`);
+  resetDailyHideUsesIfNeeded();
+  if (state.hideUsesToday >= DAILY_HIDE_LIMIT) {
+    sceneRef?.setMessage("A Lapulast ma mar haromszor hasznaltad.");
+    return;
+  }
+  if (!startRecovery("health")) return;
+  state.hideUsesToday += 1;
+  state.heat = clamp(state.heat - 10, 0, 100);
+  state.districts.forEach((district) => {
+    district.loyalty = clamp(district.loyalty - 3, 0, 100);
+  });
+  sceneRef?.pushLog("A banda lapulni kezdett. -10% korozes, -3% befolyas.");
+  sceneRef?.setMessage("A Lapulas elindult: 20 perc alatt legfeljebb +50 eletero.");
+  saveGame();
 }
 
 function endDay() {
   const controlled = state.districts.filter((district) => district.controlled);
-  const income = controlled.reduce((sum, district) => sum + district.value * 20 + district.loyalty, 0);
+  const districtIncome = controlled.reduce((sum, district) => sum + district.value * 20 + district.loyalty, 0);
+  const territoryIncome = getTerritoryIncome();
+  const income = districtIncome + territoryIncome;
   const fameBonus = controlled.length * 2 + state.cityLevel;
 
   state.money += income;
   applyFame(fameBonus);
   state.day += 1;
-  state.health = clamp(state.health + 10, 1, 100);
+  state.hideUsesToday = 0;
+  state.hideUsesDay = state.day;
+  state.health = clamp(state.health + 10, 0, 100);
   state.energy = 100;
   advanceDistrictLoyalty();
   state.heat = clamp(state.heat - 6, 0, 100);
-  sceneRef?.pushLog(`Nap vege: +${income} $, +${fameBonus} hirnev.`);
+  sceneRef?.pushLog(`Nap vege: +${income} $ (${territoryIncome} $ hazbevetel), +${fameBonus} hirnev.`);
 
   if (state.heat >= 100) {
     triggerBust();
@@ -780,58 +3182,97 @@ function endDay() {
 }
 
 function startNewGame(name) {
+  closeRobberyGame();
+  resetMapPan();
+  hideAuxPanel();
   state.profileName = name.trim().slice(0, 18);
   state.money = 120;
   state.fame = 0;
-  state.crew = 1;
-  state.heat = 12;
+  state.crew = 3;
+  state.heat = 0;
   state.health = 100;
   state.energy = 100;
   state.gearPower = 12;
+  state.equipment = getDefaultEquipment();
+  state.crewMembers = makeCrewMembers();
+  state.activeCrewMemberId = "luca";
   state.mainBaseSpotId = null;
+  state.territories = {};
+  state.activeQuest = null;
+  state.activeQuests = [];
+  state.selectedQuestSlot = 0;
+  state.questNextSpawnAt = Date.now() + randomInt(12000, 24000);
+  state.protectionCooldowns = {};
+  state.recoveryEffects = { health: null, energy: null };
+  state.naturalRecoveryAt = { health: Date.now(), energy: Date.now() };
+  state.nextPolicePressureAt = 0;
+  state.hideUsesToday = 0;
+  state.hideUsesDay = 1;
   state.day = 1;
   state.cityLevel = 1;
   state.districts = makeDistricts();
   state.selectedDistrictIndex = 0;
+  state.buildingDifficultyCycle = getBuildingDifficultyCycle();
+  state.buildingDifficulties = createRandomBuildingDifficulties(state.buildingDifficultyCycle, state.profileName);
   state.registered = true;
-  saveGame();
+  rememberLastProfileName(state.profileName);
+  saveGame(true);
   overlay.classList.add("hidden");
   setHudVisible(true);
   hideChoiceWheel();
+  hideQuestCard();
   sceneRef?.resetLogs();
   sceneRef?.refreshScene();
   sceneRef?.setMessage("Valassz egy hazat, es allitsd fo bazissá.");
 }
 
 function resetGame() {
-  [
-    STORAGE_KEY,
-    "maffia.birodalom.save.phaser.v2",
-    "maffia.birodalom.save.phaser.v1",
-  ].forEach((key) => {
+  const profileNameToDelete = state.profileName;
+  closeRobberyGame();
+  resetMapPan();
+  hideAuxPanel();
+  [...LEGACY_STORAGE_KEYS, LAST_PROFILE_KEY].forEach((key) => {
     try {
       window.localStorage.removeItem(key);
     } catch {
       // Ignore unavailable local storage and continue resetting the game.
     }
   });
+  void deleteRemoteSave(profileNameToDelete);
   state.profileName = "";
   state.money = 120;
   state.fame = 0;
-  state.crew = 1;
-  state.heat = 12;
+  state.crew = 3;
+  state.heat = 0;
   state.health = 100;
   state.energy = 100;
   state.gearPower = 12;
+  state.equipment = getDefaultEquipment();
+  state.crewMembers = makeCrewMembers();
+  state.activeCrewMemberId = "luca";
   state.mainBaseSpotId = null;
+  state.territories = {};
+  state.buildingDifficulties = {};
+  state.activeQuest = null;
+  state.activeQuests = [];
+  state.selectedQuestSlot = 0;
+  state.questNextSpawnAt = Date.now() + randomInt(12000, 24000);
+  state.protectionCooldowns = {};
+  state.recoveryEffects = { health: null, energy: null };
+  state.naturalRecoveryAt = { health: Date.now(), energy: Date.now() };
+  state.nextPolicePressureAt = 0;
+  state.hideUsesToday = 0;
+  state.hideUsesDay = 1;
   state.day = 1;
   state.cityLevel = 1;
   state.districts = makeDistricts();
   state.selectedDistrictIndex = 0;
+  state.buildingDifficultyCycle = null;
   state.registered = false;
   overlay.classList.remove("hidden");
   setHudVisible(false);
   hideChoiceWheel();
+  hideQuestCard();
   playerNameInput.value = "";
   sceneRef?.resetLogs();
   sceneRef?.refreshScene();
@@ -861,12 +3302,12 @@ class CityScene extends Phaser.Scene {
     this.spotLabels = [];
     this.mapLabels = [];
     this.mapSprites = [];
-    this.carSprites = [];
     this.actionButtons = [];
     this.logLines = [];
     this.clanChatLines = [];
     this.currentMessage = "";
     this.mapLayout = { originX: 0, originY: 0, tileW: 64, tileH: 32 };
+    this.resizeRefreshTimer = null;
   }
 
   create() {
@@ -877,6 +3318,23 @@ class CityScene extends Phaser.Scene {
     this.spotGraphics = this.add.graphics().setScrollFactor(0).setDepth(850);
     this.createUI();
     this.scale.on("resize", this.onResize, this);
+    this.time.addEvent({
+      delay: 5000,
+      loop: true,
+      callback: () => maybeSpawnQuest(),
+    });
+    this.time.addEvent({
+      delay: 1000,
+      loop: true,
+      callback: () => {
+        const changed = syncTimedActions();
+        if (changed) {
+          saveGame();
+          this.refreshHUD();
+        }
+        if (activeChoiceSpot) showChoiceWheel(activeChoiceSpot);
+      },
+    });
     this.assetsReady = false;
     this.setMessage("A varos betoltese folyamatban...");
     this.loadInlineAssets()
@@ -886,6 +3344,7 @@ class CityScene extends Phaser.Scene {
       .finally(() => {
         this.assetsReady = true;
         this.refreshScene();
+        maybeSpawnQuest();
         if (state.registered) {
           this.setMessage("A mentett birodalom betoltve.");
         }
@@ -894,6 +3353,7 @@ class CityScene extends Phaser.Scene {
 
   resetLogs() {
     this.clanChatLines = [];
+    crewPanelRenderKey = "";
     this.refreshHUD();
   }
 
@@ -937,6 +3397,11 @@ class CityScene extends Phaser.Scene {
     const healthValue = Math.max(0, Math.min(healthMax, state.health));
     const energyValue = Math.max(0, Math.min(energyMax, state.energy));
     const selected = getSelectedDistrict();
+    const nextRankFame = getNextRankFame(state.fame);
+    const currentRank = getCurrentRankEntry(state.fame);
+    const currentThreshold = currentRank.fame;
+    const xpSpan = Math.max(1, nextRankFame - currentThreshold);
+    const xpProgress = clamp(Math.round(((state.fame - currentThreshold) / xpSpan) * 100), 0, 100);
 
     if (avatarNameEl) avatarNameEl.textContent = profileName;
     if (avatarLevelEl) avatarLevelEl.textContent = String(avatarLevel);
@@ -945,6 +3410,12 @@ class CityScene extends Phaser.Scene {
     if (avatarBar2TextEl) avatarBar2TextEl.textContent = `${energyValue} / ${energyMax}`;
     if (avatarBar1FillEl) avatarBar1FillEl.style.width = `${(healthValue / healthMax) * 100}%`;
     if (avatarBar2FillEl) avatarBar2FillEl.style.width = `${(energyValue / energyMax) * 100}%`;
+    if (avatarBar3TextEl) {
+      avatarBar3TextEl.textContent = nextRankFame > state.fame
+        ? `${state.fame - currentThreshold} / ${xpSpan} XP`
+        : "Maximum XP";
+    }
+    if (avatarBar3FillEl) avatarBar3FillEl.style.width = `${nextRankFame > state.fame ? xpProgress : 100}%`;
     if (avatarNoteEl) {
       avatarNoteEl.textContent = this.currentMessage || (
         selected
@@ -953,21 +3424,11 @@ class CityScene extends Phaser.Scene {
       );
     }
     refreshCharacterPanel();
+    renderCrewPanel();
 
-    if (hudQuestTab1) {
-      const mainQuest = `Fo: ${selected?.name || "Terjeszkedes"}`;
-      hudQuestTab1.textContent = mainQuest;
-      hudQuestTab1.dataset.label = mainQuest;
-      hudQuestTab1.setAttribute("aria-label", mainQuest);
-    }
-    if (hudQuestTab2) {
-      const sideQuest = state.heat > 50 ? "Mellek: Lapulj" : "Mellek: Penzszerzes";
-      hudQuestTab2.textContent = sideQuest;
-      hudQuestTab2.dataset.label = sideQuest;
-      hudQuestTab2.setAttribute("aria-label", sideQuest);
-    }
-    if (hudQuestTab1) hudQuestTab1.classList.toggle("is-active", true);
-    if (hudQuestTab2) hudQuestTab2.classList.toggle("is-active", false);
+    updateQuestHud();
+    if (hudQuestTab1) hudQuestTab1.classList.toggle("is-active", Boolean(state.activeQuests?.[0]));
+    if (hudQuestTab2) hudQuestTab2.classList.toggle("is-active", Boolean(state.activeQuests?.[1]));
 
     if (this.uiTexts.profile) {
       this.uiTexts.profile.setText(state.profileName || "Ismeretlen");
@@ -1156,8 +3617,10 @@ class CityScene extends Phaser.Scene {
       ...ROAD_KEYS.map((key) => [key, assets[key]]),
       ["tree-a", assets.treeA],
       ["tree-b", assets.treeB],
-      ["truck", assets.truck],
       ...DECOR_KEYS.slice(3).map((key) => [key, assets[key]]),
+      [LOT_HOUSE_TEXTURE_KEYS[1], "./lot-house-shop-level-1.png"],
+      [LOT_HOUSE_TEXTURE_KEYS[2], "./lot-house-shop-level-2.png"],
+      [LOT_HOUSE_TEXTURE_KEYS[3], "./lot-house-shop-level-3.png"],
     ].filter(([, src]) => Boolean(src));
 
     const loadOne = (key, src) =>
@@ -1192,8 +3655,6 @@ class CityScene extends Phaser.Scene {
     this.mapLabels = [];
     this.mapSprites.forEach((sprite) => sprite.destroy());
     this.mapSprites = [];
-    this.carSprites.forEach((sprite) => sprite.destroy());
-    this.carSprites = [];
     this.spotGraphics?.clear();
     this.highlightGraphics.clear();
   }
@@ -1315,7 +3776,6 @@ class CityScene extends Phaser.Scene {
         this.addMapSprite("detail-awning-small", pos.x + 20, pos.y + 16, 0.76, 34);
         this.addMapSprite("detail-light-single", pos.x - 40, pos.y + 22, 0.68, 34);
       } else if (district.id === "harbor") {
-        this.addMapSprite("truck", pos.x + 32, pos.y + 18, 0.4, 40);
         this.addMapSprite("detail-barrier-type-b", pos.x - 32, pos.y + 18, 0.8, 34);
       } else if (district.id === "industrial") {
         this.addMapSprite("detail-barrier-type-a", pos.x - 18, pos.y + 22, 0.78, 32);
@@ -1332,7 +3792,8 @@ class CityScene extends Phaser.Scene {
       }
 
       const zone = this.add.zone(pos.x, pos.y + 10, 140, 110).setInteractive({ useHandCursor: true });
-      zone.on("pointerdown", () => {
+      zone.on("pointerup", () => {
+        if (Date.now() <= mapDragState.ignoreClicksUntil) return;
         state.selectedDistrictIndex = index;
         this.refreshHUD();
         this.drawDistrictHighlight();
@@ -1355,28 +3816,6 @@ class CityScene extends Phaser.Scene {
       label.setDepth(pos.y + 60);
       this.mapLabels.push(label);
     });
-
-    const streetCars = [
-      { x: 2.2, y: 2.2, dx: 40 },
-      { x: 4.6, y: 1.9, dx: -30 },
-      { x: 7.9, y: 3.1, dx: 38 },
-      { x: 6.1, y: 6.8, dx: -30 },
-      { x: 3.0, y: 8.2, dx: 28 },
-      { x: 9.2, y: 5.8, dx: -24 },
-    ];
-    streetCars.forEach((car) => {
-      const pos = gridToScreen(originX, originY, tileW, tileH, car.x, car.y);
-      const sprite = this.addMapSprite("truck", pos.x, pos.y + 10, 0.42, 48, -22);
-      this.tweens.add({
-        targets: sprite,
-        x: pos.x + car.dx,
-        duration: 3800 + Math.random() * 1500,
-        yoyo: true,
-        repeat: -1,
-        ease: "Sine.inOut",
-      });
-      this.carSprites.push(sprite);
-    });
   }
 
   refreshMap() {
@@ -1384,105 +3823,82 @@ class CityScene extends Phaser.Scene {
     const height = this.scale.height;
     this.resetSceneObjects();
     this.mapGraphics.clear();
+    lotHouseLayer?.classList.add("hidden");
+    renderSvgMapOverlay();
     if (!this.assetsReady) {
       return;
     }
     this.buildInteractiveMap(width, height);
+    if (LOT_HOUSE_VISUALS_ENABLED) {
+      this.renderOwnedLotHouses(width, height);
+    }
     this.drawDistrictHighlight();
   }
 
   buildInteractiveMap(width, height) {
-    const frameWidth = width * backgroundMapFrame.scaleX;
-    const frameHeight = frameWidth * (backgroundMapFrame.height / backgroundMapFrame.width);
-    const frameLeft = width * backgroundMapFrame.centerX - frameWidth * 0.5;
-    const frameTop = height * backgroundMapFrame.centerY - frameHeight * 0.5;
+    const mapRect = getBackgroundMapRect(width, height);
+    this.hotspotLayout = clickableBuildingDefs.map((spot) => {
+      const bounds = getAreaBounds(spot);
+      return {
+        ...spot,
+        x: mapRect.left + mapRect.width * bounds.x,
+        y: mapRect.top + mapRect.height * bounds.y,
+        w: mapRect.width * bounds.w,
+        h: mapRect.height * bounds.h,
+      };
+    });
+  }
 
-    this.hotspotLayout = clickableBuildingDefs.map((spot) => ({
-      ...spot,
-      x: frameLeft + frameWidth * spot.x,
-      y: frameTop + frameHeight * spot.y,
-      w: frameWidth * spot.w,
-      h: frameHeight * spot.h,
-    }));
+  renderOwnedLotHouses(width, height) {
+    if (!LOT_HOUSE_VISUALS_ENABLED) return;
+    const mapRect = getBackgroundMapRect(width, height);
+    clickableLotDefs.forEach((lot) => {
+      const level = getLotLevel(lot);
+      const textureKey = LOT_HOUSE_TEXTURE_KEYS[level];
+      if (!textureKey || !this.textures.exists(textureKey)) return;
 
-    this.hotspotLayout.forEach((spot) => {
-      const difficulty = getBuildingDifficulty(spot);
-      const difficultyInfo = getDifficultyInfo(difficulty);
-      const markerColor = difficultyInfo.color;
-      const isBaseSpot = state.mainBaseSpotId === spot.id;
-      const halo = this.add.ellipse(
-        spot.x,
-        spot.y + spot.h * 0.28,
-        spot.w * 0.72,
-        spot.h * 0.24,
-        markerColor,
-        0.08,
-      ).setStrokeStyle(2, markerColor, 0.7).setDepth(830);
-      halo.setBlendMode(Phaser.BlendModes.ADD);
-      const labelText = `${spot.name.toUpperCase()} · ${difficultyInfo.label.toUpperCase()}${isBaseSpot ? " · BÁZIS" : ""}`;
-      const label = this.add.text(spot.x, spot.y - spot.h * 0.6, labelText, {
-        fontFamily: "Georgia, 'Times New Roman', serif",
-        fontSize: "11px",
-        color: "#f5e9cc",
-        stroke: "#24170f",
-        strokeThickness: 3,
-        align: "center",
-      }).setOrigin(0.5, 1).setAlpha(0.86).setDepth(832);
-      if (isBaseSpot) {
-        this.add.text(spot.x + spot.w * 0.28, spot.y - spot.h * 0.3, "★", {
-          fontFamily: "Georgia, 'Times New Roman', serif",
-          fontSize: "16px",
-          color: "#f0d08c",
-          stroke: "#24170f",
-          strokeThickness: 2,
-        }).setOrigin(0.5).setDepth(833);
+      const levelDef = lotHouseLevelDefs[level] || lotHouseLevelDefs[1];
+      const metrics = getAreaScreenMetrics(lot, mapRect);
+      const texture = this.textures.get(textureKey);
+      const source = texture?.getSourceImage?.();
+      const aspectRatio = source && source.width && source.height
+        ? source.height / source.width
+        : 1;
+      const lotPixelWidth = metrics.width;
+      const lotPixelHeight = metrics.height;
+      const groundInset = 9;
+
+      this.mapGraphics.fillStyle(0x766548, 0.18);
+      this.mapGraphics.lineStyle(1, 0xb89a64, 0.18);
+      this.mapGraphics.beginPath();
+      metrics.points.forEach((point, index) => {
+        if (index === 0) {
+          this.mapGraphics.moveTo(point.x, point.y);
+          return;
+        }
+        this.mapGraphics.lineTo(point.x, point.y);
+      });
+      this.mapGraphics.closePath();
+      this.mapGraphics.fillPath();
+      this.mapGraphics.strokePath();
+
+      let drawWidth = lotPixelWidth * levelDef.widthFactor;
+      let drawHeight = drawWidth * aspectRatio;
+      const maxHeight = lotPixelHeight * levelDef.heightFactor;
+      if (drawHeight > maxHeight) {
+        drawHeight = maxHeight;
+        drawWidth = drawHeight / aspectRatio;
       }
-      this.tweens.add({
-        targets: halo,
-        scaleX: 1.12,
-        scaleY: 1.12,
-        alpha: 0.18,
-        duration: 1500 + Math.random() * 500,
-        yoyo: true,
-        repeat: -1,
-        ease: "Sine.inOut",
-      });
-      this.spotMarkers.push(halo);
-      this.spotLabels.push(label);
 
-      const zone = this.add.zone(spot.x, spot.y, spot.w, spot.h).setInteractive({ useHandCursor: true });
-      zone.on("pointerdown", () => {
-        state.selectedDistrictIndex = clamp(spot.districtIndex, 0, state.districts.length - 1);
-        this.refreshHUD();
-        this.drawDistrictHighlight();
-        showChoiceWheel(spot);
-        saveGame();
-      });
-      zone.on("pointerover", () => {
-        this.spotGraphics.clear();
-        this.spotGraphics.fillStyle(markerColor, 0.18);
-        this.spotGraphics.fillRoundedRect(
-          spot.x - spot.w * 0.5,
-          spot.y - spot.h * 0.5,
-          spot.w,
-          spot.h,
-          12,
-        );
-        this.spotGraphics.lineStyle(2, markerColor, 0.9);
-        this.spotGraphics.strokeRoundedRect(
-          spot.x - spot.w * 0.5,
-          spot.y - spot.h * 0.5,
-          spot.w,
-          spot.h,
-          12,
-        );
-        label.setAlpha(1);
-      });
-      zone.on("pointerout", () => {
-        this.spotGraphics.clear();
-        label.setAlpha(0.86);
-      });
-      this.districtHotspots.push(zone);
+      const anchorX = metrics.centerX;
+      const anchorY = metrics.bottom - groundInset - lotPixelHeight * levelDef.yOffset;
+      const sprite = this.add.image(anchorX, anchorY, textureKey);
+      sprite.setOrigin(0.5, 1);
+      sprite.setDisplaySize(drawWidth, drawHeight);
+      sprite.setAngle(0);
+      sprite.setAlpha(0.99);
+      sprite.setDepth(anchorY + 20);
+      this.mapSprites.push(sprite);
     });
   }
 
@@ -1496,13 +3912,18 @@ class CityScene extends Phaser.Scene {
     const width = gameSize.width || this.scale.width;
     const height = gameSize.height || this.scale.height;
     this.cameras.main.setViewport(0, 0, width, height);
-    this.refreshMap();
-    this.layoutUI();
+    if (this.resizeRefreshTimer) {
+      window.clearTimeout(this.resizeRefreshTimer);
+    }
+    this.resizeRefreshTimer = window.setTimeout(() => {
+      this.resizeRefreshTimer = null;
+      this.refreshMap();
+      this.layoutUI();
+    }, 100);
   }
 
   update() {
-    if (!this.assetsReady) return;
-    this.drawDistrictHighlight();
+    // The city map is event-driven; no per-frame redraw is needed.
   }
 }
 
@@ -1518,6 +3939,458 @@ const config = {
     height: window.innerHeight,
   },
   scene: [CityScene],
+};
+
+createRobberyDefenders = function createThreeDefenders(spot, difficulty) {
+  const names = ["Salvatore", "Vincent", "Tommy"];
+  const types = ["watcher", "boss", "bodyguard"];
+  return names.map((name, index) => {
+    const maxHealth = Math.round(42 + difficulty * 0.28 + index * 6);
+    return {
+      id: `${spot.id}-guard-${index}`,
+      name,
+      type: types[index],
+      maxHealth,
+      health: maxHealth,
+      attack: Math.round(4 + difficulty * 0.06 + index),
+    };
+  });
+};
+
+function createBattleAllies(selectedMemberIds) {
+  const members = selectedMemberIds
+    .map((memberId) => state.crewMembers.find((member) => member.id === memberId))
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((member) => ({
+      id: member.id,
+      name: member.name,
+      role: member.role,
+      maxHealth: member.baseHealth,
+      health: member.health,
+      attack: getCrewMemberAttack(member),
+      defense: getCrewMemberDefense(member),
+      isPlayer: false,
+    }));
+  const player = {
+    id: "player",
+    name: state.profileName || "Fonok",
+    role: "Te",
+    maxHealth: 100,
+    health: state.health,
+    attack: Math.max(16, Math.round(getPlayerPower() * 0.42)),
+    defense: Math.max(10, Math.round((10 + getRankLevel(state.fame) * 2 + state.cityLevel) * 0.55)),
+    isPlayer: true,
+  };
+  return [members[0], player, members[1]];
+}
+
+function rebalanceDefendersForEncounter(encounter) {
+  if (!encounter?.allies?.length || !encounter?.defenders?.length) return;
+  const averageAttack = encounter.allies.reduce((sum, ally) => sum + ally.attack, 0) / encounter.allies.length;
+  const averageHealth = encounter.allies.reduce((sum, ally) => sum + ally.maxHealth, 0) / encounter.allies.length;
+  const attackWeights = [0.92, 1.01, 0.92];
+  const healthWeights = [0.89, 1.08, 0.89];
+
+  encounter.defenders = encounter.defenders.map((defender, index) => {
+    const attackVariance = 0.93 + hash2(index + 1, encounter.spot.id.length, state.day) * 0.1;
+    const healthVariance = 0.94 + hash2(index + 7, encounter.spot.id.charCodeAt(0), state.fame) * 0.09;
+    const maxHealth = Math.max(52, Math.round(averageHealth * (healthWeights[index] || 1) * healthVariance));
+    return {
+      ...defender,
+      maxHealth,
+      health: maxHealth,
+      attack: Math.max(10, Math.round(averageAttack * (attackWeights[index] || 1) * attackVariance)),
+    };
+  });
+
+  encounter.difficulty = Math.round(averageAttack * 3 + averageHealth * 0.55);
+  encounter.difficultyInfo = { label: "Kiegyenlitett", color: 0xd6ad42, successChance: 0.5 };
+}
+
+function chooseEnemyTarget(livingAllies) {
+  if (!livingAllies.length) return null;
+  if (livingAllies.length === 1) return livingAllies[0];
+
+  const mostWounded = [...livingAllies].sort(
+    (left, right) => (left.health / left.maxHealth) - (right.health / right.maxHealth),
+  )[0];
+  const player = livingAllies.find((ally) => ally.isPlayer);
+  const roll = Math.random();
+
+  if (player && player.health > 0 && roll < 0.34) return player;
+  if (roll < 0.78) return mostWounded;
+  return livingAllies[randomInt(0, livingAllies.length - 1)];
+}
+
+function clearBattleAnimation(encounter) {
+  if (!encounter || activeRobberyGame !== encounter || encounter.ended) return;
+  encounter.actionAnimation = null;
+  refreshRobberyGame();
+}
+
+function resolveEnemyCounterattack(encounter, enemyAttackerId, allyTargetId) {
+  if (!encounter || activeRobberyGame !== encounter || encounter.ended) return;
+  const enemyAttacker = encounter.defenders.find((defender) => defender.id === enemyAttackerId && defender.health > 0);
+  const allyTarget = encounter.allies.find((ally) => ally.id === allyTargetId && ally.health > 0);
+  if (!enemyAttacker || !allyTarget) {
+    encounter.turnLocked = false;
+    clearBattleAnimation(encounter);
+    return;
+  }
+
+  const retaliation = clamp(
+    Math.round(enemyAttacker.attack + randomInt(-4, 5)),
+    Math.max(8, Math.round(enemyAttacker.attack * 0.7)),
+    Math.round(enemyAttacker.attack * 1.34),
+  );
+  const mitigatedDamage = Math.max(4, retaliation - Math.round((allyTarget.defense || 0) * 0.45));
+  allyTarget.health = Math.max(0, allyTarget.health - mitigatedDamage);
+  encounter.actionAnimation = {
+    actorId: enemyAttacker.id,
+    targetId: allyTarget.id,
+    side: "enemy",
+    type: "attack",
+  };
+  encounter.message = `${enemyAttacker.name} ralott ${allyTarget.name} karakterere: -${mitigatedDamage} HP.`;
+  encounter.round += 1;
+  encounter.allyTurnIndex += 1;
+  encounter.alert = clamp(encounter.alert + randomInt(2, 5), 0, 100);
+  syncBattleHealth(encounter);
+  refreshRobberyGame();
+  sceneRef?.refreshHUD();
+
+  if (!encounter.allies.some((ally) => ally.health > 0)) {
+    window.setTimeout(() => {
+      if (activeRobberyGame === encounter && !encounter.ended) {
+        finishRobberyFailure("A teljes csapatod elesett.");
+      }
+    }, 700);
+    return;
+  }
+
+  encounter.turnLocked = false;
+  window.setTimeout(() => clearBattleAnimation(encounter), 420);
+}
+
+function scheduleEnemyCounterattack(encounter) {
+  if (!encounter || activeRobberyGame !== encounter || encounter.ended) return;
+  const livingEnemies = encounter.defenders.filter((defender) => defender.health > 0);
+  const livingAllies = encounter.allies.filter((ally) => ally.health > 0);
+  if (!livingEnemies.length) {
+    finishRobberySuccess();
+    return;
+  }
+  if (!livingAllies.length) {
+    finishRobberyFailure("A teljes csapatod elesett.");
+    return;
+  }
+
+  const enemyAttacker = livingEnemies[randomInt(0, livingEnemies.length - 1)];
+  encounter.actionAnimation = {
+    actorId: enemyAttacker.id,
+    targetId: null,
+    side: "enemy",
+    type: "thinking",
+  };
+  encounter.message = `${enemyAttacker.name} felmeri a helyzetet...`;
+  refreshRobberyGame();
+
+  window.setTimeout(() => {
+    if (activeRobberyGame !== encounter || encounter.ended) return;
+    const freshTargets = encounter.allies.filter((ally) => ally.health > 0);
+    const allyTarget = chooseEnemyTarget(freshTargets);
+    if (!allyTarget) {
+      finishRobberyFailure("A teljes csapatod elesett.");
+      return;
+    }
+    encounter.actionAnimation = {
+      actorId: enemyAttacker.id,
+      targetId: allyTarget.id,
+      side: "enemy",
+      type: "aim",
+    };
+    encounter.message = `${enemyAttacker.name} kivalasztotta ${allyTarget.name} karakteret celpontnak.`;
+    refreshRobberyGame();
+
+    window.setTimeout(() => {
+      resolveEnemyCounterattack(encounter, enemyAttacker.id, allyTarget.id);
+    }, 650);
+  }, 520);
+}
+
+function getBattleBackground(defenders = []) {
+  const defeatedKey = defenders.map((defender) => defender.health <= 0 ? "1" : "0").join("");
+  const backgroundsByDefeatedEnemy = {
+    "000": "./battle.png",
+    "100": "./battle1.png",
+    "010": "./battle-dead-center.png",
+    "001": "./battle-dead-right.png",
+    "110": "./battle-dead-left-center.png",
+    "101": "./battle 2.png",
+    "011": "./battle-dead-center-right.png",
+    "111": "./battle3.png",
+  };
+  return backgroundsByDefeatedEnemy[defeatedKey] || "./battle.png";
+}
+
+function syncBattleHealth(encounter) {
+  const player = encounter?.allies?.find((ally) => ally.isPlayer);
+  if (player) state.health = clamp(player.health, 0, 100);
+  encounter?.allies?.forEach((ally) => {
+    if (ally.isPlayer) return;
+    const member = state.crewMembers.find((entry) => entry.id === ally.id);
+    if (member) member.health = clamp(ally.health, 0, member.baseHealth);
+  });
+}
+
+refreshRobberyGame = function refreshThreeVsThreeBattle() {
+  const encounter = activeRobberyGame;
+  if (!encounter || !robberyGame) return;
+  const selectedDefender = encounter.defenders.find((defender) => defender.id === encounter.selectedDefenderId && defender.health > 0);
+  const arena = robberyGame.querySelector(".robbery-game__arena");
+  const control = getRobberyControl(encounter);
+  const enemyPower = getEncounterEnemyPower(encounter);
+  const animation = encounter.actionAnimation || {};
+
+  if (arena) {
+    arena.style.backgroundImage = `linear-gradient(180deg, rgba(4, 3, 2, 0.08), rgba(4, 3, 2, 0.34)), url("${getBattleBackground(encounter.defenders)}")`;
+    arena.style.backgroundPosition = "center center";
+    arena.style.backgroundSize = "contain";
+    arena.classList.toggle("is-enemy-thinking", animation.side === "enemy" && animation.type === "thinking");
+  }
+  robberyGame.style.setProperty("--encounter-accent", difficultyColorToCss(encounter.difficultyInfo?.color || 0xd6ad42));
+  if (robberyGameTitle) robberyGameTitle.textContent = encounter.spot.name;
+  if (robberyGameSubtitle) robberyGameSubtitle.textContent = encounter.battleStarted
+    ? "Kiegyenlitett 3v3 harc - nagyjabol 50/50 esely"
+    : "Valassz ket embert magad melle";
+  if (robberyHealthText) robberyHealthText.textContent = `${state.health}%`;
+  if (robberyHealthFill) robberyHealthFill.style.width = `${state.health}%`;
+  if (robberyControlText) robberyControlText.textContent = `${control}%`;
+  if (robberyControlFill) robberyControlFill.style.width = `${control}%`;
+  if (robberyAlertText) robberyAlertText.textContent = `${Math.round(encounter.alert)}%`;
+  if (robberyAlertFill) robberyAlertFill.style.width = `${encounter.alert}%`;
+  if (robberyEnemyPower) robberyEnemyPower.textContent = String(enemyPower);
+  if (robberyEnemyPowerFill) robberyEnemyPowerFill.style.width = `${clamp(Math.round((enemyPower / Math.max(1, enemyPower + getPlayerPower() * 2)) * 100), 12, 100)}%`;
+  if (robberyRound) robberyRound.textContent = `${encounter.round}. kor`;
+  if (robberyInstruction) robberyInstruction.textContent = encounter.battleStarted
+    ? `Celpont: ${selectedDefender?.name || "valassz ellenseget"}`
+    : `Csapattarsak: ${encounter.selectedMemberIds.length}/2`;
+  if (robberyLoot) robberyLoot.textContent = `Zsakmany: ${encounter.loot} $`;
+  if (robberyBattleLog) robberyBattleLog.textContent = encounter.message;
+
+  robberyDefenders?.replaceChildren();
+  encounter.defenders.forEach((defender, index) => {
+    const healthPercent = clamp(Math.round((defender.health / defender.maxHealth) * 100), 0, 100);
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = `battle-unit battle-unit--enemy battle-unit--enemy-${index + 1}`;
+    button.dataset.unitId = defender.id;
+    button.classList.toggle("is-selected", encounter.selectedDefenderId === defender.id);
+    button.classList.toggle("is-defeated", defender.health <= 0);
+    button.classList.toggle("is-attacking", animation.actorId === defender.id && animation.type === "attack");
+    button.classList.toggle("is-targeted", animation.targetId === defender.id);
+    button.classList.toggle("is-thinking", animation.actorId === defender.id && (animation.type === "thinking" || animation.type === "aim"));
+    button.disabled = encounter.ended || encounter.turnLocked || !encounter.battleStarted || defender.health <= 0;
+    button.innerHTML = `
+      <span class="battle-unit__name">${defender.name}</span>
+      <span class="battle-unit__role">${robberyDefenderTemplates[defender.type].role}</span>
+      <span class="battle-unit__health"><i style="width:${healthPercent}%"></i></span>
+      <em>${healthPercent}%</em>
+    `;
+    button.addEventListener("click", () => {
+      if (!activeRobberyGame || defender.health <= 0) return;
+      activeRobberyGame.selectedDefenderId = defender.id;
+      activeRobberyGame.message = `${defender.name} kijelolve celpontnak.`;
+      refreshRobberyGame();
+    });
+    robberyDefenders?.appendChild(button);
+  });
+
+  robberyAllies?.replaceChildren();
+  (encounter.allies || []).forEach((ally, index) => {
+    const healthPercent = clamp(Math.round((ally.health / ally.maxHealth) * 100), 0, 100);
+    const unit = document.createElement("div");
+    unit.className = `battle-unit battle-unit--ally battle-unit--ally-${index + 1}${ally.health <= 0 ? " is-defeated" : ""}${ally.isPlayer ? " is-player" : ""}`;
+    unit.dataset.unitId = ally.id;
+    unit.classList.toggle("is-attacking", animation.actorId === ally.id && animation.type === "attack");
+    unit.classList.toggle("is-targeted", animation.targetId === ally.id);
+    unit.classList.toggle("is-thinking", animation.actorId === ally.id && (animation.type === "thinking" || animation.type === "aim"));
+    unit.innerHTML = `
+      <span class="battle-unit__name">${ally.name}</span>
+      <span class="battle-unit__role">${ally.role}</span>
+      <span class="battle-unit__health"><i style="width:${healthPercent}%"></i></span>
+      <em>${healthPercent}%</em>
+    `;
+    robberyAllies?.appendChild(unit);
+  });
+
+  robberyTeamPicker?.classList.toggle("is-hidden", encounter.battleStarted);
+  robberyTeamPicker?.replaceChildren();
+  state.crewMembers.forEach((member) => {
+    const selected = encounter.selectedMemberIds.includes(member.id);
+    const locked = encounter.battleStarted || (!selected && encounter.selectedMemberIds.length >= 2);
+    const attack = getCrewMemberAttack(member);
+    const defense = getCrewMemberDefense(member);
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = `robbery-team-choice${selected ? " is-selected" : ""}`;
+    button.classList.toggle("is-disabled", locked);
+    button.disabled = locked;
+    button.innerHTML = `
+      <div class="robbery-team-choice__portrait">
+        <img src="./assets/character/gangster-character.png" alt="${member.name}">
+        <div class="robbery-team-choice__level">${member.level}. szint</div>
+      </div>
+      <div class="robbery-team-choice__header">
+        <strong>${member.name}</strong>
+        <small>${member.role} · ${member.level}. szint</small>
+      </div>
+      <div class="robbery-team-choice__stats">
+        <div class="robbery-team-choice__stat">
+          <small>Ero</small>
+          <strong>${attack}</strong>
+          <em>Fejlesztes</em>
+        </div>
+        <div class="robbery-team-choice__stat">
+          <small>HP</small>
+          <strong>${member.health}/${member.baseHealth}</strong>
+          <em>Feltoltes</em>
+        </div>
+        <div class="robbery-team-choice__stat">
+          <small>Vedelem</small>
+          <strong>${defense}</strong>
+          <em>Fejlesztes</em>
+        </div>
+      </div>
+    `;
+    button.addEventListener("click", () => {
+      if (!activeRobberyGame || activeRobberyGame.battleStarted) return;
+      activeRobberyGame.selectedMemberIds = selected
+        ? activeRobberyGame.selectedMemberIds.filter((id) => id !== member.id)
+        : [...activeRobberyGame.selectedMemberIds, member.id];
+      activeRobberyGame.message = `${activeRobberyGame.selectedMemberIds.length}/2 csapattars kivalasztva.`;
+      refreshRobberyGame();
+    });
+    robberyTeamPicker?.appendChild(button);
+  });
+
+  robberyTactics.forEach((button) => button.classList.remove("is-selected"));
+  robberyTactics.forEach((button) => {
+    button.classList.toggle("is-selected", button.dataset.tactic === encounter.selectedTactic);
+    button.disabled = encounter.ended || encounter.turnLocked || !encounter.battleStarted;
+  });
+  if (robberyAttack) {
+    robberyAttack.disabled = encounter.ended || encounter.finalizing || encounter.turnLocked || (!encounter.battleStarted && encounter.selectedMemberIds.length !== 2);
+    robberyAttack.textContent = !encounter.battleStarted ? "Harc inditasa" : encounter.turnLocked ? "Ellenseg lep..." : "Tamadas";
+  }
+};
+
+startRobberyMinigame = function startThreeVsThreeBattle(spot) {
+  if (!state.registered || !spot || !robberyGame) return;
+  if (!canStartCombat("A rajtautest")) return;
+  const energyCost = spot.mode === "shop" ? 18 : 12;
+  if (!spendEnergy(energyCost)) return;
+  const difficulty = getBuildingDifficulty(spot);
+  const defenders = createRobberyDefenders(spot, difficulty);
+  activeRobberyGame = {
+    spot,
+    targetDistrict: state.districts[spot.districtIndex] || getSelectedDistrict(),
+    mode: spot.mode === "shop" ? "shop" : "street",
+    difficulty,
+    difficultyInfo: getDifficultyInfo(difficulty),
+    defenders,
+    allies: [],
+    selectedMemberIds: [],
+    selectedDefenderId: defenders[0].id,
+    battleStarted: false,
+    allyTurnIndex: 0,
+    alert: 0,
+    loot: 0,
+    round: 1,
+    healthAtStart: state.health,
+    message: "Valassz ket embert a harc megkezdesehez.",
+    turnLocked: false,
+    actionAnimation: null,
+    ended: false,
+  };
+  hideChoiceWheel();
+  robberyResult?.classList.add("hidden");
+  robberyResult?.classList.remove("is-failure");
+  robberyGame.classList.remove("hidden");
+  robberyGame.setAttribute("aria-hidden", "false");
+  robberyGame.style.setProperty("--encounter-accent", difficultyColorToCss(getDifficultyInfo(difficulty).color));
+  refreshRobberyGame();
+  sceneRef?.refreshHUD();
+};
+
+playRobberyTurn = function playThreeVsThreeTurn() {
+  const encounter = activeRobberyGame;
+  if (!encounter || encounter.ended) return;
+  if (!encounter.battleStarted) {
+    if (encounter.selectedMemberIds.length !== 2) return;
+    encounter.allies = createBattleAllies(encounter.selectedMemberIds);
+    rebalanceDefendersForEncounter(encounter);
+    encounter.battleStarted = true;
+    encounter.message = "A harc elkezdodott. Valassz ellenseget, majd tamadj!";
+    refreshRobberyGame();
+    return;
+  }
+  if (encounter.turnLocked) return;
+
+  const livingAllies = encounter.allies.filter((ally) => ally.health > 0);
+  const livingEnemies = encounter.defenders.filter((defender) => defender.health > 0);
+  if (!livingAllies.length) {
+    finishRobberyFailure("A teljes csapatod elesett.");
+    return;
+  }
+  if (!livingEnemies.length) {
+    finishRobberySuccess();
+    return;
+  }
+  const attacker = livingAllies[encounter.allyTurnIndex % livingAllies.length];
+  const target = encounter.defenders.find((defender) => defender.id === encounter.selectedDefenderId && defender.health > 0) || livingEnemies[0];
+  if (!attacker || !target) return;
+
+  const tactic = robberyTacticDefs[encounter.selectedTactic] || robberyTacticDefs.stealth;
+  const tacticBonus = tactic.strongAgainst === target.type ? 1.16 : 1;
+  const damage = clamp(
+    Math.round((attacker.attack + randomInt(-3, 4)) * tacticBonus),
+    Math.max(9, Math.round(attacker.attack * 0.72)),
+    Math.round(attacker.attack * 1.36),
+  );
+  target.health = Math.max(0, target.health - damage);
+  encounter.loot += randomInt(5, 12) + (target.health <= 0 ? randomInt(12, 22) : 0);
+  encounter.alert = clamp(encounter.alert + Math.round(tactic.alert * 0.45) + randomInt(1, 4), 0, 100);
+  encounter.turnLocked = true;
+  encounter.actionAnimation = {
+    actorId: attacker.id,
+    targetId: target.id,
+    side: "ally",
+    type: "attack",
+  };
+  encounter.message = `${attacker.name} ${damage} sebzest okozott ${target.name} ellen.`;
+  refreshRobberyGame();
+  sceneRef?.refreshHUD();
+
+  const enemiesAfterAttack = encounter.defenders.filter((defender) => defender.health > 0);
+  if (!enemiesAfterAttack.length) {
+    syncBattleHealth(encounter);
+    encounter.finalizing = true;
+    encounter.message = `${target.name} is kiesett. Az ellenseges csapat legyozve.`;
+    refreshRobberyGame();
+    window.setTimeout(() => {
+      if (activeRobberyGame === encounter && !encounter.ended) {
+        finishRobberySuccess();
+      }
+    }, 760);
+    return;
+  }
+
+  encounter.selectedDefenderId = target.health > 0 ? target.id : enemiesAfterAttack[0].id;
+  window.setTimeout(() => {
+    scheduleEnemyCounterattack(encounter);
+  }, 500);
 };
 
 function bindHudActions() {
@@ -1557,8 +4430,56 @@ function bindHudActions() {
       showCharacterPanel();
     }
   });
+
+  hudQuickRank?.addEventListener("click", () => openAuxPanel("rank"));
+  hudQuickMarket?.addEventListener("click", () => openAuxPanel("market"));
+  hudQuickClan?.addEventListener("click", () => openAuxPanel("clan"));
+  hudQuickWorld?.addEventListener("click", () => openAuxPanel("world"));
+
+  auxPanelClose?.addEventListener("click", hideAuxPanel);
+  auxPanelBackdrop?.addEventListener("click", hideAuxPanel);
+
+  hudQuestTab1?.addEventListener("click", () => {
+    const quest = getQuestSlot(0);
+    state.selectedQuestSlot = 0;
+    if (quest) {
+      showQuestCard(quest);
+    } else {
+      sceneRef?.setMessage("Az I. slotban nincs felvett kuldetes.");
+    }
+  });
+  hudQuestTab2?.addEventListener("click", () => {
+    const quest = getQuestSlot(1);
+    state.selectedQuestSlot = 1;
+    if (quest) {
+      showQuestCard(quest);
+    } else {
+      sceneRef?.setMessage("A II. slotban nincs felvett kuldetes.");
+    }
+  });
+  hudQuestAction?.addEventListener("click", handleQuestCardAction);
+  hudQuestDelete?.addEventListener("click", () => {
+    const quest = state.activeQuest?.id === questCardQuestId
+      ? state.activeQuest
+      : (normalizeQuestList(state.activeQuests).find((entry) => entry.id === questCardQuestId) || null);
+    deleteQuest(quest);
+  });
+  hudQuestClose?.addEventListener("click", hideQuestCard);
   characterPanelClose?.addEventListener("click", hideCharacterPanel);
   characterPanelBackdrop?.addEventListener("click", hideCharacterPanel);
+  crewCards?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-crew-action]");
+    const card = event.target.closest("[data-member-id]");
+    if (!button || !card) return;
+    const memberId = card.dataset.memberId;
+    if (button.dataset.crewAction === "upgrade") {
+      upgradeCrewMember(memberId);
+    } else if (button.dataset.crewAction === "heal") {
+      healCrewMember(memberId);
+    } else if (button.dataset.crewAction === "defense") {
+      upgradeCrewMemberDefense(memberId);
+    }
+  });
 
   choiceWheelBackdrop?.addEventListener("click", () => {
     hideChoiceWheel();
@@ -1568,16 +4489,42 @@ function bindHudActions() {
   choiceWheelAction2?.addEventListener("click", () => runChoiceAction("protection"));
   choiceWheelAction3?.addEventListener("click", () => runChoiceAction("baseRest"));
   choiceWheelAction4?.addEventListener("click", () => runChoiceAction("close"));
+  lotInfoClose?.addEventListener("click", hideLotInfoModal);
+  lotInfoBackdrop?.addEventListener("click", hideLotInfoModal);
+
+  robberyTactics.forEach((button) => {
+    button.addEventListener("click", () => {
+      if (!activeRobberyGame || activeRobberyGame.ended) return;
+      activeRobberyGame.selectedTactic = button.dataset.tactic || "stealth";
+      activeRobberyGame.message = `${robberyTacticDefs[activeRobberyGame.selectedTactic].name} kiválasztva.`;
+      refreshRobberyGame();
+    });
+  });
+  robberyAttack?.addEventListener("click", playRobberyTurn);
+  robberyGameRetreat?.addEventListener("click", retreatFromRobbery);
+  robberyResultContinue?.addEventListener("click", closeRobberyGame);
 }
 
 window.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
+    hideLotInfoModal();
+    hideAuxPanel();
+    if (activeRobberyGame) {
+      retreatFromRobbery();
+      return;
+    }
     hideCharacterPanel();
     hideChoiceWheel();
   }
 });
 
-registerForm.addEventListener("submit", (event) => {
+window.addEventListener("pointerdown", startMapDrag, true);
+window.addEventListener("pointermove", updateMapDrag, true);
+window.addEventListener("pointerup", endMapDrag, true);
+window.addEventListener("pointercancel", endMapDrag, true);
+window.addEventListener("click", suppressClickAfterMapDrag, true);
+
+registerForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const name = playerNameInput.value.trim();
   if (!name) {
@@ -1585,25 +4532,35 @@ registerForm.addEventListener("submit", (event) => {
     return;
   }
 
-  const saved = loadGame();
+  registerForm.querySelector('button[type="submit"]')?.setAttribute("disabled", "disabled");
+  const saved = await loadGame(name);
   if (saved && state.profileName === name) {
     overlay.classList.add("hidden");
     setHudVisible(true);
     sceneRef?.refreshScene();
+    registerForm.querySelector('button[type="submit"]')?.removeAttribute("disabled");
     return;
   }
 
   startNewGame(name);
+  registerForm.querySelector('button[type="submit"]')?.removeAttribute("disabled");
 });
 
-if (loadGame()) {
-  playerNameInput.value = state.profileName;
-}
+playerNameInput.value = getRememberedProfileName();
 
 bindHudActions();
 setHudVisible(false);
 new Phaser.Game(config);
 
 window.addEventListener("beforeunload", () => {
-  saveGame();
+  const snapshot = state.registered ? createSaveSnapshot() : null;
+  if (!snapshot?.profileName) return;
+  try {
+    navigator.sendBeacon(
+      `${SAVE_API_BASE}/${encodeURIComponent(snapshot.profileName)}`,
+      new Blob([JSON.stringify({ state: snapshot })], { type: "application/json" }),
+    );
+  } catch {
+    saveGame(true);
+  }
 });

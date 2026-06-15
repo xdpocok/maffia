@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Maffia: Birodalomépítő</title>
-    <link rel="stylesheet" href="./style.css" />
+    <link rel="stylesheet" href="./style.css?v=battle-3v3-2" />
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.90.0/dist/phaser.min.js"></script>
   </head>
   <body>
@@ -33,8 +33,11 @@
       </section>
     </div>
 
+    <img id="mapBackgroundLayer" class="map-background-layer" src="./map-background-clean.png" alt="" aria-hidden="true">
     <div id="gameRoot" class="game-root"></div>
     <div id="mapAtmosphere" class="map-atmosphere" aria-hidden="true"></div>
+    <div id="lotHouseLayer" class="lot-house-layer hidden" aria-hidden="true"></div>
+    <svg id="mapSvgOverlay" class="map-svg-overlay hidden" viewBox="0 0 1534 1025" preserveAspectRatio="none" aria-label="Interaktiv varosterkep"></svg>
     <div id="choiceWheel" class="choice-wheel hidden" aria-hidden="true">
       <div class="choice-wheel__backdrop" id="choiceWheelBackdrop"></div>
       <div class="choice-wheel__panel" id="choiceWheelPanel">
@@ -49,6 +52,124 @@
         <button class="choice-wheel__button choice-wheel__button--base" id="choiceWheelAction4" type="button">Bezárás</button>
       </div>
     </div>
+
+    <section id="auxPanel" class="aux-panel hidden" aria-hidden="true">
+      <div id="auxPanelBackdrop" class="aux-panel__backdrop"></div>
+      <article class="aux-panel__card" role="dialog" aria-modal="true" aria-labelledby="auxPanelTitle">
+        <header class="aux-panel__header">
+          <div>
+            <div class="aux-panel__eyebrow" id="auxPanelSubtitle">Részletek</div>
+            <h2 id="auxPanelTitle">Panel</h2>
+          </div>
+          <button id="auxPanelClose" class="aux-panel__close" type="button" aria-label="Panel bezarasa">×</button>
+        </header>
+        <div id="auxPanelBody" class="aux-panel__body"></div>
+      </article>
+    </section>
+
+    <section id="lotInfoModal" class="lot-info-modal hidden" aria-hidden="true">
+      <div id="lotInfoBackdrop" class="lot-info-modal__backdrop"></div>
+      <article class="lot-info-modal__panel" role="dialog" aria-modal="true" aria-labelledby="lotInfoTitle">
+        <div class="lot-info-modal__eyebrow">Telek info</div>
+        <h3 id="lotInfoTitle">Ures telek</h3>
+        <p id="lotInfoDescription" class="lot-info-modal__description"></p>
+        <dl class="lot-info-modal__stats">
+          <div>
+            <dt>Fejlesztes</dt>
+            <dd id="lotInfoLevel">0. szint</dd>
+          </div>
+          <div>
+            <dt>Orankent</dt>
+            <dd id="lotInfoHourlyIncome">0 $</dd>
+          </div>
+          <div>
+            <dt>Naponta</dt>
+            <dd id="lotInfoDailyIncome">0 $</dd>
+          </div>
+          <div>
+            <dt>Kovetkezo koltseg</dt>
+            <dd id="lotInfoNextCost">180 $</dd>
+          </div>
+        </dl>
+        <button id="lotInfoClose" class="lot-info-modal__close" type="button">BezĂˇrĂˇs</button>
+      </article>
+    </section>
+
+    <section id="robberyGame" class="robbery-game hidden" aria-hidden="true">
+      <div class="robbery-game__backdrop"></div>
+      <article class="robbery-game__panel" role="dialog" aria-modal="true" aria-labelledby="robberyGameTitle">
+        <header class="robbery-game__header">
+          <div>
+            <div class="robbery-game__eyebrow">Taktikai rajtaütés</div>
+            <h2 id="robberyGameTitle">Épület kirablása</h2>
+            <p id="robberyGameSubtitle">Válassz célpontot és módszert.</p>
+          </div>
+          <button id="robberyGameRetreat" class="robbery-game__retreat" type="button">Visszavonulás</button>
+        </header>
+
+        <div id="robberyTeamPicker" class="robbery-team-picker robbery-team-picker--cards" aria-label="Csapattarsak kivalasztasa"></div>
+
+        <div class="robbery-game__meters">
+          <div class="robbery-meter robbery-meter--health">
+            <div class="robbery-meter__copy"><span>Életerő</span><strong id="robberyHealthText">100%</strong></div>
+            <div class="robbery-meter__track"><div id="robberyHealthFill" class="robbery-meter__fill"></div></div>
+          </div>
+          <div class="robbery-meter robbery-meter--control">
+            <div class="robbery-meter__copy"><span>Befolyás</span><strong id="robberyControlText">0%</strong></div>
+            <div class="robbery-meter__track"><div id="robberyControlFill" class="robbery-meter__fill"></div></div>
+          </div>
+          <div class="robbery-meter robbery-meter--alert">
+            <div class="robbery-meter__copy"><span>Riadó</span><strong id="robberyAlertText">0%</strong></div>
+            <div class="robbery-meter__track"><div id="robberyAlertFill" class="robbery-meter__fill"></div></div>
+          </div>
+          <div class="robbery-meter robbery-meter--enemy">
+            <div class="robbery-meter__copy"><span>Ellenseges ero</span><strong id="robberyEnemyPower">0</strong></div>
+            <div class="robbery-meter__track"><div id="robberyEnemyPowerFill" class="robbery-meter__fill"></div></div>
+          </div>
+        </div>
+
+        <div class="robbery-game__arena">
+          <div id="robberyAllies" class="robbery-allies" aria-label="Sajat csapat"></div>
+          <div class="robbery-game__status">
+            <span id="robberyRound">1. kör</span>
+            <strong id="robberyInstruction">Válassz egy őrt!</strong>
+            <span id="robberyLoot">Zsákmány: 0 $</span>
+          </div>
+          <div id="robberyDefenders" class="robbery-defenders" aria-label="Az épület védői"></div>
+          <div id="robberyBattleLog" class="robbery-battle-log">A banda elfoglalta a bejáratot.</div>
+        </div>
+
+        <footer class="robbery-game__footer">
+          <div class="robbery-tactics" aria-label="Támadási módszerek">
+            <button class="robbery-tactic is-selected" data-tactic="stealth" type="button">
+              <span class="robbery-tactic__icon">♠</span>
+              <strong>Lopakodás</strong>
+              <small>Erős a megfigyelő ellen</small>
+            </button>
+            <button class="robbery-tactic" data-tactic="force" type="button">
+              <span class="robbery-tactic__icon">✦</span>
+              <strong>Fegyveres roham</strong>
+              <small>Erős a testőr ellen</small>
+            </button>
+            <button class="robbery-tactic" data-tactic="intimidation" type="button">
+              <span class="robbery-tactic__icon">◆</span>
+              <strong>Megfélemlítés</strong>
+              <small>Erős a főnök ellen</small>
+            </button>
+          </div>
+          <button id="robberyAttack" class="robbery-game__attack" type="button">Támadás!</button>
+        </footer>
+
+        <div id="robberyResult" class="robbery-result hidden">
+          <div class="robbery-result__card">
+            <div id="robberyResultStamp" class="robbery-result__stamp">Siker</div>
+            <h3 id="robberyResultTitle">A rajtaütés sikerült</h3>
+            <p id="robberyResultText"></p>
+            <button id="robberyResultContinue" type="button">Vissza a városba</button>
+          </div>
+        </div>
+      </article>
+    </section>
 
     <section id="characterPanel" class="character-panel hidden" aria-hidden="true">
       <div id="characterPanelBackdrop" class="character-panel__backdrop"></div>
@@ -152,6 +273,17 @@
           <div class="character-stat"><span>Korozes</span><strong id="characterHeat">12%</strong></div>
           <div class="character-stat"><span>Varos szint</span><strong id="characterCityLevel">1</strong></div>
         </div>
+
+        <section class="character-xp">
+          <div class="character-xp__summary">
+            <strong>XP utvonal</strong>
+            <span id="characterXpSummary">0 / 20 XP a kovetkezo szinthez</span>
+          </div>
+          <div class="character-xp__track">
+            <i id="characterXpFill"></i>
+          </div>
+          <div id="characterXpList" class="character-xp__list"></div>
+        </section>
       </div>
     </section>
 
@@ -195,37 +327,54 @@
         <button id="hudQuestTab2" class="hud-quest-tab" type="button">Mellék küldetés</button>
       </section>
 
+      <section id="hudQuestCard" class="hud-quest-card hud-panel hidden" aria-hidden="true">
+        <header class="hud-quest-header">
+          <div>
+            <div class="hud-mini-title">Kuldetes</div>
+          </div>
+          <div class="hud-quest-actions">
+            <button id="hudQuestAction" class="hud-inline-button" type="button">Elfogad</button>
+            <button id="hudQuestClose" class="hud-inline-button hud-inline-button--secondary" type="button">Bezar</button>
+          </div>
+        </header>
+        <div class="hud-quest-body">
+          <p id="hudQuestText">Varj a hazak felett megjeleno felkialtojelre.</p>
+          <div class="hud-quest-box">
+            <div id="hudObjective">Feladat: -</div>
+            <div id="hudObjectiveOne">Jutalom: -</div>
+            <div id="hudObjectiveTwo">Allapot: Nincs aktiv kuldetes</div>
+          </div>
+          <button id="hudQuestDelete" class="hud-inline-button hud-inline-button--secondary hidden" type="button">Torles</button>
+        </div>
+      </section>
+
+      <aside id="crewPanel" class="crew-panel hud-panel" aria-label="Sajat embereim">
+        <div class="crew-panel__header">
+          <div>
+            <div class="hud-mini-title">A banda</div>
+            <strong>Embereim</strong>
+          </div>
+          <span id="crewPowerTotal">0 ero</span>
+        </div>
+        <div id="crewCards" class="crew-cards"></div>
+      </aside>
+
       <div class="hud-log-card hud-panel">
         <div class="hud-mini-title">Klán chat</div>
         <div id="hudLog" class="hud-log"></div>
       </div>
 
       <nav class="hud-bottom-bar hud-panel">
-        <button class="hud-action hud-action-slot" id="hudAction1" type="button" aria-label="Utcai rablas">
-          <span></span>
-        </button>
-        <button class="hud-action hud-action-slot" id="hudAction2" type="button" aria-label="Bolt kifosztasa">
-          <span></span>
-        </button>
-        <button class="hud-action hud-action-slot" id="hudAction3" type="button" aria-label="Toborzas">
-          <span></span>
-        </button>
-        <button class="hud-action hud-action-slot" id="hudAction4" type="button" aria-label="Kerulet atvetele">
-          <span></span>
-        </button>
-        <button class="hud-action hud-action-slot" id="hudAction5" type="button" aria-label="Varos fejlesztese">
-          <span></span>
-        </button>
-        <button class="hud-action hud-action-slot" id="hudAction6" type="button" aria-label="Lapulas">
-          <span></span>
-        </button>
-        <button class="hud-action hud-action-slot hud-action-primary" id="hudReset" type="button" aria-label="Uj jatek">
-          <span></span>
-        </button>
+        <div class="hud-bottom-bar__quick-row">
+          <button class="hud-quick-btn" id="hudQuickRank" type="button">Ranglista</button>
+          <button class="hud-quick-btn" id="hudQuickMarket" type="button">Fekete piac</button>
+          <button class="hud-quick-btn" id="hudQuickClan" type="button">Klán</button>
+          <button class="hud-quick-btn" id="hudQuickWorld" type="button">Világtérkép</button>
+        </div>
       </nav>
     </div>
 
     <script src="./assets-inline.js"></script>
-    <script src="./game.js"></script>
+    <script src="./game.js?v=timed-actions-1"></script>
   </body>
 </html>
