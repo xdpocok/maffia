@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Maffia Admin</title>
+  <link rel="stylesheet" href="./admin.css">
+</head>
+<body>
+  <main class="admin-shell">
+    <header class="admin-hero">
+      <div>
+        <p class="admin-eyebrow">Maffia adatkezelo</p>
+        <h1>Jatekosok es mentesek</h1>
+        <p class="admin-copy">Innen gyorsan at tudod nezni a menteseket, szerkeszteni tudod az allapotot, vagy torolheted a hibas profilt.</p>
+      </div>
+      <div class="admin-actions">
+        <button id="adminRefreshBtn" type="button">Frissites</button>
+      </div>
+    </header>
+
+    <section class="admin-summary" id="adminSummary"></section>
+
+    <section class="admin-layout">
+      <div class="admin-panel">
+        <div class="admin-toolbar">
+          <label class="admin-search">
+            <span>Kereses</span>
+            <input id="adminSearchInput" type="search" placeholder="Profilnev vagy telek kod">
+          </label>
+        </div>
+        <div class="admin-table-wrap">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>Jatekos</th>
+                <th>Szint</th>
+                <th>Hirnev</th>
+                <th>Penz</th>
+                <th>Korozes</th>
+                <th>Bazis</th>
+                <th>Frissitve</th>
+              </tr>
+            </thead>
+            <tbody id="adminTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <aside class="admin-panel admin-panel--detail">
+        <div class="admin-detail-header">
+          <div>
+            <p class="admin-eyebrow">Profil reszletek</p>
+            <h2 id="adminDetailTitle">Valassz ki egy jatekost</h2>
+          </div>
+          <div class="admin-detail-actions">
+            <button id="adminSaveBtn" type="button" disabled>Ment</button>
+            <button id="adminDeleteBtn" type="button" class="is-danger" disabled>Torol</button>
+          </div>
+        </div>
+        <div class="admin-detail-meta" id="adminDetailMeta">A jobb oldali szerkeszto a kivalsztott profil teljes allapotat mutatja JSON-ben.</div>
+        <textarea id="adminStateEditor" spellcheck="false" placeholder="{ }"></textarea>
+        <div class="admin-feedback" id="adminFeedback"></div>
+      </aside>
+    </section>
+  </main>
+
+  <script src="./admin.js"></script>
+</body>
+</html>

@@ -1,2 +1,4 @@
 data/*.sqlite
 data/*.sqlite-*
+assets/world/map-expanded-composite.png
+assets/world/world-map-expanded-composite.png

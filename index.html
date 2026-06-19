@@ -33,7 +33,7 @@
       </section>
     </div>
 
-    <img id="mapBackgroundLayer" class="map-background-layer" src="./map-background-clean.png" alt="" aria-hidden="true">
+    <img id="mapBackgroundLayer" class="map-background-layer" src="./assets/map/map-background-clean.png" alt="" aria-hidden="true">
     <div id="gameRoot" class="game-root"></div>
     <div id="mapAtmosphere" class="map-atmosphere" aria-hidden="true"></div>
     <div id="lotHouseLayer" class="lot-house-layer hidden" aria-hidden="true"></div>
@@ -50,6 +50,7 @@
         <button class="choice-wheel__button choice-wheel__button--protection" id="choiceWheelAction2" type="button">Védelmi pénz</button>
         <button class="choice-wheel__button choice-wheel__button--close" id="choiceWheelAction3" type="button">Fő bázis</button>
         <button class="choice-wheel__button choice-wheel__button--base" id="choiceWheelAction4" type="button">Bezárás</button>
+        <button class="choice-wheel__button choice-wheel__button--quest hidden" id="choiceWheelAction5" type="button">Küldetés</button>
       </div>
     </div>
 
@@ -61,9 +62,30 @@
             <div class="aux-panel__eyebrow" id="auxPanelSubtitle">Részletek</div>
             <h2 id="auxPanelTitle">Panel</h2>
           </div>
-          <button id="auxPanelClose" class="aux-panel__close" type="button" aria-label="Panel bezarasa">×</button>
+          <button id="auxPanelClose" class="aux-panel__close" type="button" aria-label="Panel bezárása">×</button>
         </header>
         <div id="auxPanelBody" class="aux-panel__body"></div>
+      </article>
+    </section>
+
+    <section id="policeRaidPanel" class="police-raid hidden" aria-hidden="true">
+      <div id="policeRaidBackdrop" class="police-raid__backdrop"></div>
+      <article class="police-raid__card" role="dialog" aria-modal="true" aria-labelledby="policeRaidTitle">
+        <div class="police-raid__stamp">RAZZIA</div>
+        <div class="police-raid__eyebrow">Varosi nyomozoosztag</div>
+        <h2 id="policeRaidTitle">A rendorok ujra lecsaptak</h2>
+        <p id="policeRaidText">A jarorok sarcot vittek el, mert a korozesed mar tul magas.</p>
+        <div class="police-raid__metrics">
+          <div class="police-raid__metric">
+            <span>Elvitt penz</span>
+            <strong id="policeRaidLoss">0 $</strong>
+          </div>
+          <div class="police-raid__metric">
+            <span>Korozes</span>
+            <strong id="policeRaidHeat">0%</strong>
+          </div>
+        </div>
+        <button id="policeRaidClose" class="police-raid__close" type="button">Vissza az utcara</button>
       </article>
     </section>
 
@@ -91,7 +113,7 @@
             <dd id="lotInfoNextCost">180 $</dd>
           </div>
         </dl>
-        <button id="lotInfoClose" class="lot-info-modal__close" type="button">BezĂˇrĂˇs</button>
+        <button id="lotInfoClose" class="lot-info-modal__close" type="button">Bezárás</button>
       </article>
     </section>
 
@@ -157,7 +179,10 @@
               <small>Erős a főnök ellen</small>
             </button>
           </div>
-          <button id="robberyAttack" class="robbery-game__attack" type="button">Támadás!</button>
+          <div class="robbery-game__actions">
+            <button id="robberyAuto" class="robbery-game__auto" type="button">Automata: KI</button>
+            <button id="robberyAttack" class="robbery-game__attack" type="button">Támadás!</button>
+          </div>
         </footer>
 
         <div id="robberyResult" class="robbery-result hidden">
@@ -252,7 +277,7 @@
                 <div class="equipment-picker__eyebrow">Felszereles</div>
                 <strong id="equipmentPickerTitle">Valassz targyat</strong>
               </div>
-              <button id="equipmentPickerClose" class="equipment-picker__close" type="button" aria-label="Felszereles bezarasa">×</button>
+              <button id="equipmentPickerClose" class="equipment-picker__close" type="button" aria-label="Felszerelés bezárása">×</button>
             </header>
             <div id="equipmentPickerList" class="equipment-picker__list"></div>
           </section>
@@ -264,9 +289,7 @@
           <div class="character-stat"><span>Tamadas</span><strong id="characterAttack">18</strong></div>
           <div class="character-stat"><span>Vedelem</span><strong id="characterDefense">12</strong></div>
           <div class="character-stat"><span>Hirnev</span><strong id="characterFame">0</strong></div>
-          <div class="character-stat"><span>Banda</span><strong id="characterCrew">1</strong></div>
           <div class="character-stat"><span>Korozes</span><strong id="characterHeat">12%</strong></div>
-          <div class="character-stat"><span>Varos szint</span><strong id="characterCityLevel">1</strong></div>
         </div>
 
         <section class="character-xp">
@@ -361,7 +384,7 @@
       <nav class="hud-bottom-bar hud-panel">
         <div class="hud-bottom-bar__quick-row">
           <button class="hud-quick-btn" id="hudQuickRank" type="button">Ranglista</button>
-          <button class="hud-quick-btn" id="hudQuickMarket" type="button">Fekete piac</button>
+          <button class="hud-quick-btn" id="hudQuickMarket" type="button">Piac</button>
           <button class="hud-quick-btn" id="hudQuickClan" type="button">Klán</button>
           <button class="hud-quick-btn" id="hudQuickWorld" type="button">Világtérkép</button>
         </div>

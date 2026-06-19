@@ -118,6 +118,8 @@ async function handleApiRequest(request, response, pathname) {
         day: Number.isFinite(Number(state.day)) ? Math.round(Number(state.day)) : 1,
         heat: Number.isFinite(Number(state.heat)) ? Math.round(Number(state.heat)) : 0,
         cityLevel: Number.isFinite(Number(state.cityLevel)) ? Math.round(Number(state.cityLevel)) : 1,
+        worldBaseLotId: typeof state.worldBaseLotId === "string" ? state.worldBaseLotId : null,
+        worldBaseLevel: Number.isFinite(Number(state.worldBaseLevel)) ? Math.max(1, Math.round(Number(state.worldBaseLevel))) : 1,
         updatedAt: row.updated_at,
         createdAt: row.created_at,
       };

@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Player Torles</title>
+  <link rel="stylesheet" href="./player-delete.css">
+</head>
+<body>
+  <main class="player-delete-shell">
+    <header class="player-delete-hero">
+      <div>
+        <p class="player-delete-eyebrow">Adatbazis kezelo</p>
+        <h1>Jatekos torles</h1>
+        <p class="player-delete-copy">
+          Itt tudod vegleg torolni a jatekban letezo playereket. A torles utan a jatekos kikerul
+          az adatbazisbol, a ranglistabol, a vilagterkepes bazisfoglalasbol es a menteslistakbol is.
+        </p>
+      </div>
+      <div class="player-delete-actions">
+        <button id="playerDeleteRefreshBtn" type="button">Frissites</button>
+      </div>
+    </header>
+
+    <section class="player-delete-summary" id="playerDeleteSummary"></section>
+
+    <section class="player-delete-panel">
+      <div class="player-delete-toolbar">
+        <label class="player-delete-search">
+          <span>Kereses</span>
+          <input id="playerDeleteSearchInput" type="search" placeholder="Profilnev vagy telek">
+        </label>
+      </div>
+
+      <div class="player-delete-table-wrap">
+        <table class="player-delete-table">
+          <thead>
+            <tr>
+              <th>Jatekos</th>
+              <th>Szint</th>
+              <th>Hirnev</th>
+              <th>Bazis</th>
+              <th>Frissitve</th>
+              <th>Muvelet</th>
+            </tr>
+          </thead>
+          <tbody id="playerDeleteTableBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="player-delete-log">
+      <strong>Allapot</strong>
+      <div id="playerDeleteFeedback">Valassz egy jatekost a torleshez.</div>
+    </section>
+  </main>
+
+  <script src="./player-delete.js"></script>
+</body>
+</html>
