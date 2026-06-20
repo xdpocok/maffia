@@ -2,12 +2,14 @@
 const LEGACY_STORAGE_KEYS = [STORAGE_KEY, "maffia.birodalom.save.phaser.v2", "maffia.birodalom.save.phaser.v1"];
 const LAST_PROFILE_KEY = "maffia.birodalom.lastProfile";
 const SAVE_API_BASE = "/api/saves";
+const PROFILE_API_BASE = "/api/profile";
 const PROTECTION_COOLDOWN_MS = 5 * 60 * 1000;
 const RECOVERY_DURATION_MS = 20 * 60 * 1000;
 const RECOVERY_AMOUNT = 50;
 const NATURAL_RECOVERY_FULL_MS = 12 * 60 * 60 * 1000;
 const NATURAL_RECOVERY_POINT_MS = NATURAL_RECOVERY_FULL_MS / 100;
 const BUILDING_DIFFICULTY_CYCLE_MS = 4 * 60 * 60 * 1000;
+const BASE_REST_COOLDOWN_MS = 6 * 60 * 60 * 1000;
 const DAILY_HIDE_LIMIT = 3;
 const districtDefs = [
   {
@@ -94,7 +96,7 @@ const rankTable = rankNames.map((name, index) => ({
 
 const WORLD_MAP_EMPTY_SRC = "./t%C3%A9k%C3%A9p/7fe4a123-f5d0-4381-b12f-6b208bff958c.png";
 const WORLD_MAP_SETTLED_SRC = "./t%C3%A9k%C3%A9p/26414562-afef-4966-9f34-1a8eb9fe0a0e.png";
-const WORLD_MAP_CONTINUOUS_SRC = "./assets/world/world-map-expanded-composite.png";
+const WORLD_MAP_CONTINUOUS_SRC = "./assets/world/world-map-expanded-optimized.webp";
 const WORLD_MAP_TILE_WIDTH = 1586;
 const WORLD_MAP_TILE_HEIGHT = 992;
 const WORLD_MAP_TILE_COLS = 6;
@@ -302,7 +304,7 @@ function mapPolygon(points) {
   return points.map(([x, y]) => [x / 1534, y / 1025]);
 }
 
-const clickableBuildingDefs = [
+const cityBuildingDefs = [
   { id: "north-estate", number: "02", districtIndex: 4, name: "Foepulet", mode: "shop", polygon: mapPolygon([[795,39],[827,18],[850,20],[851,1],[901,13],[916,29],[949,38],[964,57],[970,108],[944,134],[896,148],[850,131],[811,108],[798,82]]), plot: mapPolygon([[716,55],[895,0],[1031,70],[1012,142],[870,176],[742,127]]) },
   { id: "west-tenement", number: "04", districtIndex: 0, name: "Belvarosi berhaz", mode: "street", polygon: mapPolygon([[133,256],[155,239],[171,241],[171,225],[198,230],[207,242],[239,249],[254,265],[254,316],[235,335],[188,346],[158,333],[135,313]]), plot: mapPolygon([[57,289],[184,226],[316,289],[307,356],[180,400],[79,352]]) },
   { id: "northwest-block", number: "05", districtIndex: 0, name: "Szurke sarokhaz", mode: "street", polygon: mapPolygon([[312,185],[342,159],[367,162],[369,145],[416,151],[425,164],[466,173],[482,190],[489,249],[465,272],[405,282],[363,269],[324,254]]), plot: mapPolygon([[287,192],[431,128],[573,192],[551,282],[419,328],[311,275]]) },
@@ -321,6 +323,17 @@ const clickableBuildingDefs = [
   { id: "courthouse", number: "23", districtIndex: 5, name: "Feher portikusz", mode: "street", polygon: mapPolygon([[997,665],[1026,632],[1043,633],[1044,615],[1086,606],[1102,617],[1138,624],[1156,644],[1158,709],[1137,731],[1091,748],[1048,736],[1008,716]]), plot: mapPolygon([[962,683],[1091,591],[1237,666],[1210,805],[1081,846],[990,776]]) },
 ];
 
+const purchasableBuildingNumbers = new Set(["06", "11", "13", "16", "21", "23"]);
+const clickableBuildingDefs = cityBuildingDefs.filter((building) => !purchasableBuildingNumbers.has(building.number));
+const purchasableBuildingRestoreDefs = {
+  "market-row": { asset: "./assets/map/purchasable-houses/market-row.png", x: 794, y: 205, width: 298, height: 223 },
+  "west-mid-block": { asset: "./assets/map/purchasable-houses/west-mid-block.png", x: 256, y: 291, width: 278, height: 237 },
+  "east-office": { asset: "./assets/map/purchasable-houses/east-office.png", x: 935, y: 329, width: 292, height: 245 },
+  "central-bank": { asset: "./assets/map/purchasable-houses/central-bank.png", x: 685, y: 481, width: 274, height: 270 },
+  "southwest-tenement": { asset: "./assets/map/purchasable-houses/southwest-tenement.png", x: 227, y: 693, width: 317, height: 290 },
+  "courthouse": { asset: "./assets/map/purchasable-houses/courthouse.png", x: 950, y: 579, width: 299, height: 279 },
+};
+
 const clickableParkDefs = [
   { id: "northwest-park", number: "01", name: "Eszaknyugati park", kind: "park", polygon: mapPolygon([[557,116],[743,15],[897,94],[863,188],[710,231],[586,174]]) },
   { id: "northeast-park", number: "03", name: "Eszakkeleti park", kind: "park", polygon: mapPolygon([[1026,149],[1208,52],[1370,130],[1341,223],[1180,270],[1054,207]]) },
@@ -336,6 +349,21 @@ const clickableLotDefs = [
   { id: "east-empty-lot", number: "14", name: "Keleti ures telek", kind: "lot", polygon: mapPolygon([[1162,554],[1250,488],[1340,540],[1315,616],[1232,641],[1175,603]]) },
   { id: "central-empty-lot", number: "22", name: "Kozponti ures telek", kind: "lot", polygon: mapPolygon([[477,675],[626,578],[776,659],[745,769],[607,812],[507,744]]) },
   { id: "southeast-empty-lot", number: "27", name: "Delkeleti ures telek", kind: "lot", polygon: mapPolygon([[1116,803],[1252,702],[1393,781],[1363,884],[1237,925],[1145,865]]) },
+  ...cityBuildingDefs
+    .filter((building) => purchasableBuildingNumbers.has(building.number))
+    .map((building) => ({
+      ...building,
+      kind: "lot",
+      name: `${building.name} telek`,
+      polygon: building.plot,
+      restoredHouseName: building.name,
+      restoredHouse: true,
+      restoredVisual: purchasableBuildingRestoreDefs[building.id],
+      maxLevel: 1,
+      purchaseCost: 80,
+      income: 80,
+      overlayNumberMarker: building.number === "13",
+    })),
 ];
 
 const lotHouseLevelDefs = {
@@ -439,6 +467,7 @@ const state = {
   nextPolicePressureAt: 0,
   mainBaseClaimDay: 0,
   baseRestDay: 0,
+  baseRestAvailableAt: 0,
   hideUsesToday: 0,
   hideUsesDay: 1,
   day: 1,
@@ -508,6 +537,8 @@ const hudQuickRank = document.getElementById("hudQuickRank");
 const hudQuickMarket = document.getElementById("hudQuickMarket");
 const hudQuickClan = document.getElementById("hudQuickClan");
 const hudQuickWorld = document.getElementById("hudQuickWorld");
+const hudQuickMessages = document.getElementById("hudQuickMessages");
+const hudMessageBadge = document.getElementById("hudMessageBadge");
 const hudAction1 = document.getElementById("hudAction1");
 const hudAction2 = document.getElementById("hudAction2");
 const hudAction3 = document.getElementById("hudAction3");
@@ -687,14 +718,14 @@ function parseWorldMapQuery(rawValue = "") {
     || null;
 }
 
-function buildWorldLotOccupancy(saves = []) {
+function buildWorldLotOccupancy(entries = []) {
   const occupied = {};
-  for (const entry of saves || []) {
-    const lotId = normalizeWorldBaseLotId(entry?.worldBaseLotId);
+  for (const entry of entries || []) {
+    const lotId = normalizeWorldBaseLotId(entry?.worldBaseLotId || entry?.lotId);
     if (!lotId) continue;
     occupied[lotId] = {
-      profileName: entry.profileName || "Ismeretlen",
-      worldBaseLevel: clamp(Math.round(Number(entry?.worldBaseLevel) || 1), 1, 3),
+      profileName: entry.profileName || entry.ownerProfileName || "Ismeretlen",
+      worldBaseLevel: clamp(Math.round(Number(entry?.worldBaseLevel || entry?.baseLevel) || 1), 1, 3),
       updatedAt: entry.updatedAt || 0,
     };
   }
@@ -979,10 +1010,14 @@ function normalizeTerritories(source) {
   clickableLotDefs.forEach((lot) => {
     const level = Number(source[lot.id]?.level);
     if (Number.isFinite(level) && level > 0) {
-      territories[lot.id] = { level: clamp(Math.floor(level), 1, 3) };
+      territories[lot.id] = { level: clamp(Math.floor(level), 1, getLotMaxLevel(lot)) };
     }
   });
   return territories;
+}
+
+function getLotMaxLevel(lot) {
+  return clamp(Math.floor(Number(lot?.maxLevel) || 3), 1, 3);
 }
 
 function getLotLevel(lot) {
@@ -990,6 +1025,13 @@ function getLotLevel(lot) {
 }
 
 function getLotHouseDef(lot) {
+  if (lot?.restoredHouse && getLotLevel(lot) > 0) {
+    return {
+      name: lot.restoredHouseName || "Eredeti haz",
+      income: Number(lot.income) || 80,
+      restoredHouse: true,
+    };
+  }
   return lotHouseLevelDefs[getLotLevel(lot)] || null;
 }
 
@@ -1003,6 +1045,7 @@ function getLotHourlyIncome(lot) {
 
 function getLotInvestmentCost(lot) {
   const level = getLotLevel(lot);
+  if (lot?.restoredHouse) return level === 0 ? (Number(lot.purchaseCost) || 80) : 0;
   if (level === 0) return 80;
   if (level === 1) return 180;
   return 320;
@@ -1066,12 +1109,247 @@ function setAuxPanelContent(title, subtitle, bodyHtml) {
   auxPanel?.setAttribute("aria-hidden", "false");
 }
 
+function updateMessageBadge(unreadCount = 0) {
+  const count = Math.max(0, Math.round(Number(unreadCount) || 0));
+  if (hudMessageBadge) {
+    hudMessageBadge.textContent = count > 99 ? "99+" : String(count);
+    hudMessageBadge.classList.toggle("hidden", count <= 0);
+  }
+}
+
+async function refreshMessageBadge() {
+  if (!state.profileName) {
+    updateMessageBadge(0);
+    return;
+  }
+  try {
+    const response = await fetch(`/api/messages?profileName=${encodeURIComponent(state.profileName)}&limit=1`, {
+      headers: { Accept: "application/json" },
+    });
+    const payload = response.ok ? await response.json() : { unreadCount: 0 };
+    updateMessageBadge(payload.unreadCount);
+  } catch {
+    // The badge is optional while the server is temporarily unavailable.
+  }
+}
+
+function formatInboxDate(timestamp) {
+  const date = new Date(Number(timestamp) || Date.now());
+  return date.toLocaleString("hu-HU", {
+    month: "short",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function getMessageTypeLabel(messageType) {
+  if (messageType === "pvp") return "PvP";
+  if (messageType === "event") return "Esemény";
+  if (messageType === "system") return "Rendszer";
+  return "Játékos";
+}
+
+function renderMessagesPanel(messages = []) {
+  const body = messages.length
+    ? `
+      <section class="messages-panel">
+        <div class="messages-panel__intro">
+          <strong>Családi posta</strong>
+          <span>Játékosüzenetek, események és a bázisodat ért támadások egy helyen.</span>
+        </div>
+        <div class="messages-list">
+          ${messages.map((message) => `
+            <article class="message-card message-card--${escapeHtml(message.messageType || "player")}${message.readAt ? "" : " is-unread"}">
+              <div class="message-card__stamp">${getMessageTypeLabel(message.messageType)}</div>
+              <div class="message-card__copy">
+                <div class="message-card__heading">
+                  <strong>${escapeHtml(message.title || "Üzenet")}</strong>
+                  <time>${formatInboxDate(message.createdAt)}</time>
+                </div>
+                ${message.senderProfileName ? `<span class="message-card__sender">Feladó: ${escapeHtml(message.senderProfileName)}</span>` : ""}
+                <p>${escapeHtml(message.body || "")}</p>
+              </div>
+            </article>
+          `).join("")}
+        </div>
+      </section>
+    `
+    : `
+      <div class="messages-panel__empty">
+        <strong>Még üres a postaláda.</strong>
+        <span>Az események, játékosüzenetek és PvP támadások itt fognak megjelenni.</span>
+      </div>
+    `;
+  setAuxPanelContent("Üzenetek", "Családi posta", body);
+  auxPanel?.setAttribute("data-kind", "messages");
+  activeAuxPanelKind = "messages";
+}
+
+async function openMessagesPanel() {
+  setAuxPanelContent("Üzenetek", "Családi posta", `<div class="aux-panel__carditem"><strong>Posta betöltése...</strong></div>`);
+  auxPanel?.setAttribute("data-kind", "messages");
+  activeAuxPanelKind = "messages";
+  try {
+    const response = await fetch(`/api/messages?profileName=${encodeURIComponent(state.profileName)}&limit=80`, {
+      headers: { Accept: "application/json" },
+    });
+    const payload = response.ok ? await response.json() : { messages: [] };
+    renderMessagesPanel(Array.isArray(payload.messages) ? payload.messages : []);
+    updateMessageBadge(0);
+    void fetch("/api/messages/read", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ profileName: state.profileName }),
+    });
+  } catch {
+    setAuxPanelContent("Üzenetek", "Családi posta", `<div class="aux-panel__carditem"><strong>A posta most nem elérhető.</strong><div class="aux-panel__muted">Próbáld meg néhány pillanat múlva.</div></div>`);
+  }
+}
+
+function renderPublicPlayerProfile(profile, focusMessage = false) {
+  const body = `
+    <section class="public-profile">
+      <article class="public-profile__dossier">
+        <div class="public-profile__monogram">${escapeHtml(profile.profileName.slice(0, 1).toUpperCase())}</div>
+        <div>
+          <span class="public-profile__eyebrow">Világtérképes akta</span>
+          <h3>${escapeHtml(profile.profileName)}</h3>
+          <p>${escapeHtml(profile.rankTitle || "Utcai figura")} · ${profile.level}. szint</p>
+        </div>
+      </article>
+      <div class="public-profile__stats">
+        <div><span>Hírnév</span><strong>${profile.fame}</strong></div>
+        <div><span>Befolyás</span><strong>${profile.influence}%</strong></div>
+        <div><span>Támadás</span><strong>${profile.attack}</strong></div>
+        <div><span>Védelem</span><strong>${profile.defense}</strong></div>
+        <div><span>Bázis</span><strong>${profile.worldBaseLevel}. szint</strong></div>
+        <div><span>Banda</span><strong>${profile.crewCount} fő</strong></div>
+      </div>
+      <div class="public-profile__actions">
+        <button type="button" data-public-action="pvp" data-player="${escapeHtml(profile.profileName)}">PvP támadás</button>
+        <button type="button" data-public-action="world">Vissza a térképhez</button>
+      </div>
+      <form id="playerMessageForm" class="player-message-form" data-recipient="${escapeHtml(profile.profileName)}">
+        <label for="playerMessageText">Titkos üzenet küldése</label>
+        <textarea id="playerMessageText" maxlength="1200" placeholder="Írd ide az üzenetedet..."></textarea>
+        <button type="submit">Üzenet elküldése</button>
+        <div id="playerMessageStatus" class="player-message-form__status"></div>
+      </form>
+    </section>
+  `;
+  setAuxPanelContent(profile.profileName, "Játékos adatlap", body);
+  auxPanel?.setAttribute("data-kind", "public-profile");
+  activeAuxPanelKind = "public-profile";
+
+  auxPanelBody?.querySelector('[data-public-action="world"]')?.addEventListener("click", () => openAuxPanel("world"));
+  auxPanelBody?.querySelector('[data-public-action="pvp"]')?.addEventListener("click", () => runWorldPvpAttack(profile.profileName));
+  const form = document.getElementById("playerMessageForm");
+  form?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const textarea = document.getElementById("playerMessageText");
+    const status = document.getElementById("playerMessageStatus");
+    const text = textarea?.value.trim() || "";
+    if (!text) {
+      if (status) status.textContent = "Írj be egy üzenetet.";
+      return;
+    }
+    try {
+      const response = await fetch("/api/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          senderProfileName: state.profileName,
+          recipientProfileName: profile.profileName,
+          body: text,
+        }),
+      });
+      if (!response.ok) throw new Error("message_failed");
+      if (textarea) textarea.value = "";
+      if (status) status.textContent = "Az üzenetet átadták.";
+    } catch {
+      if (status) status.textContent = "Az üzenetet most nem sikerült elküldeni.";
+    }
+  });
+  if (focusMessage) document.getElementById("playerMessageText")?.focus();
+}
+
+async function openPublicPlayerProfile(profileName, focusMessage = false) {
+  setAuxPanelContent(profileName, "Játékos adatlap", `<div class="aux-panel__carditem"><strong>Akta betöltése...</strong></div>`);
+  try {
+    const response = await fetch(`/api/public-profile/${encodeURIComponent(profileName)}`, {
+      headers: { Accept: "application/json" },
+    });
+    const payload = response.ok ? await response.json() : null;
+    if (!payload?.found) throw new Error("profile_missing");
+    renderPublicPlayerProfile(payload.profile, focusMessage);
+  } catch {
+    setAuxPanelContent("Ismeretlen játékos", "Játékos adatlap", `<div class="aux-panel__carditem"><strong>Az akta nem található.</strong></div>`);
+  }
+}
+
+async function runWorldPvpAttack(defenderProfileName) {
+  setAuxPanelContent("PvP támadás", defenderProfileName, `<div class="pvp-result"><strong>A banda úton van...</strong><p>A szerver kiszámolja a két család erejét és védelmét.</p></div>`);
+  auxPanel?.setAttribute("data-kind", "pvp");
+  activeAuxPanelKind = "pvp";
+  try {
+    const response = await fetch("/api/pvp/attack", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        attackerProfileName: state.profileName,
+        defenderProfileName,
+      }),
+    });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || "PvP hiba");
+    hydrateState(payload.attackerState);
+    sceneRef?.refreshHUD();
+    sceneRef?.refreshMap();
+    const resultText = payload.attackerWon
+      ? `A támadás sikerült. ${payload.stolenMoney} $ zsákmányt szereztél.`
+      : "A védők visszaverték a támadásodat.";
+    setAuxPanelContent("PvP eredmény", defenderProfileName, `
+      <section class="pvp-result ${payload.attackerWon ? "is-win" : "is-loss"}">
+        <div class="pvp-result__stamp">${payload.attackerWon ? "GYŐZELEM" : "KUDARC"}</div>
+        <h3>${resultText}</h3>
+        <div class="pvp-result__stats">
+          <span>Támadó erő <strong>${payload.attackerAttack}</strong></span>
+          <span>Védő erő <strong>${payload.defenderDefense}</strong></span>
+          <span>Sérülés <strong>-${payload.healthLoss} HP</strong></span>
+        </div>
+        <button type="button" id="pvpBackToWorld">Vissza a világtérképhez</button>
+      </section>
+    `);
+    document.getElementById("pvpBackToWorld")?.addEventListener("click", () => openAuxPanel("world"));
+    void refreshMessageBadge();
+  } catch (error) {
+    setAuxPanelContent("PvP támadás", defenderProfileName, `
+      <div class="pvp-result is-loss">
+        <strong>A támadás nem indult el.</strong>
+        <p>${escapeHtml(error.message || "Ismeretlen hiba.")}</p>
+        <button type="button" id="pvpBackToWorld">Vissza a világtérképhez</button>
+      </div>
+    `);
+    document.getElementById("pvpBackToWorld")?.addEventListener("click", () => openAuxPanel("world"));
+  }
+}
+
+function postGameEvent(eventType, title, body, payload = {}) {
+  if (!state.profileName) return;
+  void fetch("/api/events", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ profileName: state.profileName, eventType, title, body, payload }),
+  });
+}
+
 function renderLeaderboardPanel(saves) {
   const entries = [...(saves || [])]
     .map((entry) => ({
       ...entry,
-      level: getRankLevel(entry.fame || 0),
-      rankTitle: getCurrentRankEntry(entry.fame || 0)?.name || "Utcai figura",
+      level: Number.isFinite(Number(entry.level)) ? Number(entry.level) : getRankLevel(entry.fame || 0),
+      rankTitle: entry.rankTitle || getCurrentRankEntry(entry.fame || 0)?.name || "Utcai figura",
     }))
     .sort((left, right) =>
       (right.level - left.level)
@@ -1242,6 +1520,7 @@ function renderWorldMapPanelWithSaves(saves = []) {
             ${worldMapLotDefs.map((lot) => buildWorldMapLotButton(lot, occupiedLots[lot.id], selectionMode)).join("")}
           </div>
         </div>
+        <div id="worldPlayerWheel" class="world-player-wheel hidden" aria-hidden="true"></div>
       </div>
     </section>
   `;
@@ -1263,6 +1542,53 @@ function selectWorldBaseLot(lotId) {
   sceneRef?.refreshHUD();
   sceneRef?.refreshMap();
   void openAuxPanel("world");
+}
+
+function hideWorldPlayerWheel() {
+  const wheel = document.getElementById("worldPlayerWheel");
+  wheel?.classList.add("hidden");
+  wheel?.setAttribute("aria-hidden", "true");
+  if (wheel) wheel.replaceChildren();
+}
+
+function showWorldPlayerWheel(owner, clientX, clientY) {
+  const wheel = document.getElementById("worldPlayerWheel");
+  const stage = document.getElementById("worldMapStage");
+  if (!wheel || !stage || !owner?.profileName || owner.profileName === state.profileName) return;
+  const stageRect = stage.getBoundingClientRect();
+  const x = clamp(clientX - stageRect.left, 112, stageRect.width - 112);
+  const y = clamp(clientY - stageRect.top, 112, stageRect.height - 112);
+  wheel.style.left = `${x}px`;
+  wheel.style.top = `${y}px`;
+  wheel.innerHTML = `
+    <div class="world-player-wheel__ring">
+      <button type="button" class="world-player-wheel__action world-player-wheel__action--profile" data-world-player-action="profile">Adatlap</button>
+      <button type="button" class="world-player-wheel__action world-player-wheel__action--pvp" data-world-player-action="pvp">PvP</button>
+      <button type="button" class="world-player-wheel__action world-player-wheel__action--message" data-world-player-action="message">Üzenet</button>
+      <button type="button" class="world-player-wheel__action world-player-wheel__action--close" data-world-player-action="close">Bezárás</button>
+      <div class="world-player-wheel__core">
+        <strong>${escapeHtml(owner.profileName)}</strong>
+        <span>${getWorldLotHouseLevel(owner)}. szintű bázis</span>
+      </div>
+    </div>
+  `;
+  wheel.classList.remove("hidden");
+  wheel.setAttribute("aria-hidden", "false");
+  wheel.querySelectorAll("[data-world-player-action]").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const action = button.dataset.worldPlayerAction;
+      if (action === "close") {
+        hideWorldPlayerWheel();
+      } else if (action === "profile") {
+        void openPublicPlayerProfile(owner.profileName);
+      } else if (action === "message") {
+        void openPublicPlayerProfile(owner.profileName, true);
+      } else if (action === "pvp") {
+        void runWorldPvpAttack(owner.profileName);
+      }
+    });
+  });
 }
 
 function bindWorldMapInteractions(occupiedLots, selectionMode) {
@@ -1357,6 +1683,8 @@ function bindWorldMapInteractions(occupiedLots, selectionMode) {
 
   stageEl?.addEventListener("pointerdown", (event) => {
     if (event.button !== 0) return;
+    if (event.target.closest?.(".world-player-wheel")) return;
+    hideWorldPlayerWheel();
     dragState.active = true;
     dragState.pointerId = event.pointerId;
     dragState.startX = event.clientX;
@@ -1396,9 +1724,17 @@ function bindWorldMapInteractions(occupiedLots, selectionMode) {
   lotButtons.forEach((button) => {
     button.addEventListener("mouseenter", () => renderSelection(button.dataset.worldLot));
     button.addEventListener("focus", () => renderSelection(button.dataset.worldLot));
-    button.addEventListener("click", () => {
+    button.addEventListener("click", (event) => {
       if (Date.now() < suppressClickUntil) return;
-      renderSelection(button.dataset.worldLot, { center: true });
+      const lotId = button.dataset.worldLot;
+      const owner = occupiedLots[lotId];
+      const isOwn = owner?.profileName === state.profileName;
+      renderSelection(lotId, { center: !owner || isOwn || selectionMode });
+      if (owner && !isOwn && !selectionMode) {
+        showWorldPlayerWheel(owner, event.clientX, event.clientY);
+      } else {
+        hideWorldPlayerWheel();
+      }
     });
   });
 
@@ -1441,9 +1777,9 @@ async function openAuxPanel(kind) {
     setAuxPanelContent("Ranglista", "Csaladi dosszie", `<div class="aux-panel__carditem"><strong>Betoltes...</strong><div class="aux-panel__muted">A regisztralt jatekosok aktait kerem le a szerverrol.</div></div>`);
     activeAuxPanelKind = "rank";
     try {
-      const response = await fetch(`${SAVE_API_BASE}`, { headers: { Accept: "application/json" } });
-      const payload = response.ok ? await response.json() : { saves: [] };
-      renderLeaderboardPanel(Array.isArray(payload.saves) ? payload.saves : []);
+      const response = await fetch(`/api/leaderboard?season=global&limit=20`, { headers: { Accept: "application/json" } });
+      const payload = response.ok ? await response.json() : { entries: [] };
+      renderLeaderboardPanel(Array.isArray(payload.entries) ? payload.entries : []);
     } catch {
       setAuxPanelContent("Ranglista", "Csaladi dosszie", `<div class="aux-panel__carditem"><strong>Nem sikerult betolteni.</strong><div class="aux-panel__muted">A szerver most nem ad vissza ranglistat.</div></div>`);
       activeAuxPanelKind = "rank";
@@ -1451,6 +1787,30 @@ async function openAuxPanel(kind) {
     return;
   }
   if (kind === "market") {
+    try {
+      if (state.profileName) {
+        const response = await fetch(`/api/market-items?profileName=${encodeURIComponent(state.profileName)}&limit=50`, {
+          headers: { Accept: "application/json" },
+        });
+        const payload = response.ok ? await response.json() : { items: [] };
+        if (Array.isArray(payload.items)) {
+          state.marketStock = normalizeMarketStock(payload.items.map((entry) => entry?.payload || {
+            slot: entry.slotKey,
+            price: entry.price,
+            item: {
+              id: entry.itemId,
+              name: entry.itemName,
+              rarity: entry.rarity,
+              power: entry.statValue,
+              stat: entry.statKind === "defense" ? "defense" : "attack",
+              image: entry.payload?.item?.image,
+            },
+          }));
+        }
+      }
+    } catch {
+      // Fall back to local stock if the market endpoint is temporarily unavailable.
+    }
     renderBlackMarketPanel();
     return;
   }
@@ -1458,11 +1818,15 @@ async function openAuxPanel(kind) {
     renderClanPanel();
     return;
   }
+  if (kind === "messages") {
+    await openMessagesPanel();
+    return;
+  }
   if (kind === "world") {
     try {
-      const response = await fetch(`${SAVE_API_BASE}`, { headers: { Accept: "application/json" } });
-      const payload = response.ok ? await response.json() : { saves: [] };
-      renderWorldMapPanelWithSaves(Array.isArray(payload.saves) ? payload.saves : []);
+      const response = await fetch(`/api/world-lots`, { headers: { Accept: "application/json" } });
+      const payload = response.ok ? await response.json() : { lots: [] };
+      renderWorldMapPanelWithSaves(Array.isArray(payload.lots) ? payload.lots : []);
     } catch {
       renderWorldMapPanelWithSaves([]);
     }
@@ -2051,7 +2415,11 @@ function clamp(value, min, max) {
 
 function formatCountdown(milliseconds) {
   const seconds = Math.max(0, Math.ceil(milliseconds / 1000));
+  const hours = Math.floor(seconds / 3600);
   const minutes = Math.floor(seconds / 60);
+  if (hours > 0) {
+    return `${hours}:${String(Math.floor((seconds % 3600) / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
+  }
   return `${String(minutes).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
 }
 
@@ -2103,6 +2471,11 @@ function normalizeTimedActions() {
     ? Number(state.nextPolicePressureAt)
     : 0;
   state.baseRestDay = Number.isFinite(Number(state.baseRestDay)) ? Math.floor(Number(state.baseRestDay)) : 0;
+  state.baseRestAvailableAt = Number.isFinite(Number(state.baseRestAvailableAt))
+    ? Math.max(0, Number(state.baseRestAvailableAt))
+    : state.baseRestDay === state.day
+      ? now + BASE_REST_COOLDOWN_MS
+      : 0;
   state.buildingDifficultyCycle = Number.isFinite(Number(state.buildingDifficultyCycle))
     ? Math.floor(Number(state.buildingDifficultyCycle))
     : getBuildingDifficultyCycle(now);
@@ -2159,6 +2532,12 @@ function processPolicePressure(now = Date.now()) {
       : "A rendorok gyanut fogtak, es egy kisebb sarcot vittek el.",
   );
   showPoliceRaidPanel(loss, summaryText);
+  postGameEvent(
+    "police_raid",
+    "Rendőri razzia",
+    `A rendőrök ${loss} $-t vittek el. A körözésed 3%-kal csökkent.`,
+    { loss, heat: state.heat },
+  );
   return true;
 }
 
@@ -2491,6 +2870,57 @@ function createTerritoryHoverOverlay(area, index, defs) {
   return image;
 }
 
+function createRestoredBuildingOverlay(area) {
+  const visual = area?.restoredVisual;
+  if (!area?.restoredHouse || getLotLevel(area) <= 0 || !visual) return null;
+  const image = document.createElementNS("http://www.w3.org/2000/svg", "image");
+  const assetHref = new URL(visual.asset, window.location.href).href;
+  image.setAttribute("href", assetHref);
+  image.setAttributeNS("http://www.w3.org/1999/xlink", "xlink:href", assetHref);
+  image.setAttribute("x", String(visual.x));
+  image.setAttribute("y", String(visual.y));
+  image.setAttribute("width", String(visual.width));
+  image.setAttribute("height", String(visual.height));
+  image.setAttribute("preserveAspectRatio", "none");
+  image.setAttribute("aria-hidden", "true");
+  image.classList.add("map-svg-restored-building");
+  return image;
+}
+
+function createLotNumberMarker(area) {
+  if (!area?.overlayNumberMarker || getLotLevel(area) > 0) return null;
+  const bounds = getAreaBounds(area);
+  const x = bounds.x * backgroundMapFrame.width;
+  const y = (bounds.y - bounds.h * 0.02) * backgroundMapFrame.height;
+  const group = document.createElementNS("http://www.w3.org/2000/svg", "g");
+  group.classList.add("map-svg-lot-number-marker");
+  group.setAttribute("transform", `translate(${x} ${y})`);
+
+  const shield = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  shield.setAttribute("d", "M -20 -31 L 20 -31 L 20 17 L 0 30 L -20 17 Z");
+  group.appendChild(shield);
+
+  const number = document.createElementNS("http://www.w3.org/2000/svg", "text");
+  number.setAttribute("x", "0");
+  number.setAttribute("y", "-8");
+  number.textContent = area.number;
+  group.appendChild(number);
+
+  const building = document.createElementNS("http://www.w3.org/2000/svg", "g");
+  building.classList.add("map-svg-lot-number-marker__building");
+  building.setAttribute("transform", "translate(-8 2)");
+  const body = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+  body.setAttribute("x", "0");
+  body.setAttribute("y", "4");
+  body.setAttribute("width", "16");
+  body.setAttribute("height", "13");
+  const roof = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  roof.setAttribute("d", "M -1 5 L 8 -1 L 17 5 Z");
+  building.append(roof, body);
+  group.appendChild(building);
+  return group;
+}
+
 function createLotHouseOverlay(area) {
   if (!LOT_HOUSE_VISUALS_ENABLED) return null;
   const level = getLotLevel(area);
@@ -2645,7 +3075,11 @@ function renderSvgMapOverlay() {
   [...clickableParkDefs, ...clickableLotDefs].forEach((area, index) => {
     const group = document.createElementNS("http://www.w3.org/2000/svg", "g");
     group.classList.add("map-svg-territory-group");
+    const restoredBuilding = createRestoredBuildingOverlay(area);
+    if (restoredBuilding) group.appendChild(restoredBuilding);
     group.appendChild(createTerritoryHoverOverlay(area, index, defs));
+    const numberMarker = createLotNumberMarker(area);
+    if (numberMarker) group.appendChild(numberMarker);
 
     const territoryClasses = [
       "map-svg-territory",
@@ -3445,12 +3879,12 @@ function showChoiceWheel(spot) {
     const level = getLotLevel(spot);
     const cost = getLotInvestmentCost(spot);
     const houseDef = getLotHouseDef(spot);
-    const isMaxLevel = level >= 3;
+    const isMaxLevel = level >= getLotMaxLevel(spot);
     setChoiceWheelButtons(isMaxLevel ? ["protection", "close"] : ["robbery", "protection", "close"]);
     if (choiceWheelTitle) choiceWheelTitle.textContent = spot.name;
     if (choiceWheelSubtitle) {
       choiceWheelSubtitle.textContent = houseDef
-        ? `${level}. szintu haz - ${getLotIncome(spot)} $ / nap`
+        ? `${houseDef.name} - ${getLotIncome(spot)} $ / nap`
         : "Megvasarolhato terulet";
     }
     if (choiceWheelCoreLabel) choiceWheelCoreLabel.textContent = houseDef ? `Haz ${level}` : "Ures telek";
@@ -3485,10 +3919,11 @@ function showChoiceWheel(spot) {
     choiceWheelAction2.disabled = cooldown > 0 || !canProtect;
   }
   if (choiceWheelAction3) {
-    const baseRestUsed = state.mainBaseSpotId === spot.id && state.baseRestDay === state.day;
+    const baseRestRemaining = Math.max(0, Number(state.baseRestAvailableAt) - Date.now());
+    const baseRestUsed = state.mainBaseSpotId === spot.id && baseRestRemaining > 0;
     const baseClaimUsed = state.mainBaseSpotId !== spot.id && state.mainBaseClaimDay === state.day;
     choiceWheelAction3.textContent = state.mainBaseSpotId === spot.id
-      ? (baseRestUsed ? "Pihenes (holnap)" : "Pihenes (ingyen)")
+      ? (baseRestUsed ? `Pihenes (${formatCountdown(baseRestRemaining)})` : "Pihenes (ingyen)")
       : (baseClaimUsed ? "Fo bazis (holnap)" : "Fo bazis");
     choiceWheelAction3.disabled = baseRestUsed || baseClaimUsed;
   }
@@ -3526,8 +3961,11 @@ function runTerritoryAction(actionId, territory) {
   if (territory.kind === "lot") {
     if (actionId === "robbery") {
       const level = getLotLevel(territory);
-      if (level >= 3) {
-        sceneRef?.setMessage("Ez a haz mar a legdiszesebb szinten all.");
+      const maxLevel = getLotMaxLevel(territory);
+      if (level >= maxLevel) {
+        sceneRef?.setMessage(territory.restoredHouse
+          ? "Ezt a telket mar megvasaroltad, az eredeti haz ujra all rajta."
+          : "Ez a haz mar a legdiszesebb szinten all.");
         return;
       }
       const cost = getLotInvestmentCost(territory);
@@ -3539,7 +3977,9 @@ function runTerritoryAction(actionId, territory) {
       state.money -= cost;
       state.territories[territory.id] = { level: level + 1 };
       applyFame(level === 0 ? 6 : 4);
-      sceneRef?.pushLog(`${territory.name}: haz ${level + 1}. szint, -${cost} $.`);
+      sceneRef?.pushLog(territory.restoredHouse
+        ? `${territory.restoredHouseName}: telek megvasarolva, -${cost} $.`
+        : `${territory.name}: haz ${level + 1}. szint, -${cost} $.`);
       sceneRef?.setMessage(`${territory.name}: ${getLotHouseDef(territory)?.name || "Haz"} - ${getLotIncome(territory)} $ napi bevetel.`);
     } else if (actionId === "protection") {
       showLotInfoModal(territory);
@@ -3670,6 +4110,7 @@ function createSaveSnapshot() {
     nextPolicePressureAt: state.nextPolicePressureAt,
     mainBaseClaimDay: state.mainBaseClaimDay,
     baseRestDay: state.baseRestDay,
+    baseRestAvailableAt: state.baseRestAvailableAt,
     hideUsesToday: state.hideUsesToday,
     hideUsesDay: state.hideUsesDay,
     day: state.day,
@@ -3802,7 +4243,10 @@ async function loadGame(profileName = "") {
   const normalizedProfileName = profileName.trim().slice(0, 18);
   if (!normalizedProfileName) return false;
   try {
-    const remoteSave = await requestSaveApi(normalizedProfileName, "GET");
+    const response = await fetch(`${PROFILE_API_BASE}/${encodeURIComponent(normalizedProfileName)}`, {
+      headers: { Accept: "application/json" },
+    });
+    const remoteSave = response.ok ? await response.json() : { found: false };
     if (remoteSave?.found && hydrateState(remoteSave.state)) {
       rememberLastProfileName(state.profileName);
       queueSaveSnapshot(createSaveSnapshot(), true);
@@ -3940,8 +4384,9 @@ function restAtBase(spot) {
     sceneRef?.setMessage("Ez nem a fo bazisod.");
     return;
   }
-  if (state.baseRestDay === state.day) {
-    sceneRef?.setMessage("A bazison ma mar pihentel egyszer. Ingyen aludni csak naponta egyszer lehet.");
+  const remaining = Math.max(0, Number(state.baseRestAvailableAt) - Date.now());
+  if (remaining > 0) {
+    sceneRef?.setMessage(`A bazison ${formatCountdown(remaining)} mulva pihenhetsz ujra ingyen.`);
     return;
   }
 
@@ -3952,8 +4397,9 @@ function restAtBase(spot) {
   state.energy = clamp(state.energy + energyGain, 0, 100);
   state.heat = clamp(state.heat - heatLoss, 0, 100);
   state.baseRestDay = state.day;
+  state.baseRestAvailableAt = Date.now() + BASE_REST_COOLDOWN_MS;
   sceneRef?.pushLog(`Pihenes a bazison. +${healthGain} eletero, +${energyGain} akciopont, -${heatLoss} korozes.`);
-  sceneRef?.setMessage("A banda elbujt a bazison.");
+  sceneRef?.setMessage("A banda elbujt a bazison. Hat ora mulva pihenhetsz itt ujra ingyen.");
   saveGame();
 }
 
@@ -4082,9 +4528,15 @@ function triggerBust() {
   const loss = Math.floor(state.money * 0.22);
   state.money = Math.max(0, state.money - loss);
   state.crew = Math.max(1, Math.ceil(state.crew / 2));
-  state.heat = 30;
-  sceneRef?.pushLog(`Rajtautes tortent. -${loss} $, a crew fele lecsokkent.`);
-  sceneRef?.setMessage("A rendorok belekoccoltak az ugybe.");
+  state.heat = clamp(state.heat - 15, 0, 100);
+  sceneRef?.pushLog(`Rajtautes tortent. -${loss} $, a crew fele lecsokkent, -15% korozes.`);
+  sceneRef?.setMessage("A rendorok elkaptak, de a korozesed 15%-kal csokkent.");
+  postGameEvent(
+    "police_bust",
+    "Elkapott a rendőrség",
+    `A rendőrök ${loss} $-t vittek el, a bandád megfeleződött, a körözésed pedig 15%-kal csökkent.`,
+    { loss, heat: state.heat },
+  );
   saveGame();
 }
 
@@ -4231,6 +4683,7 @@ function startNewGame(name) {
   state.nextPolicePressureAt = 0;
   state.mainBaseClaimDay = 0;
   state.baseRestDay = 0;
+  state.baseRestAvailableAt = 0;
   state.hideUsesToday = 0;
   state.hideUsesDay = 1;
   state.day = 1;
@@ -4244,6 +4697,7 @@ function startNewGame(name) {
   saveGame(true);
   overlay.classList.add("hidden");
   setHudVisible(true);
+  void refreshMessageBadge();
   hideChoiceWheel();
   hideQuestCard();
   sceneRef?.resetLogs();
@@ -4295,6 +4749,7 @@ function resetGame() {
   state.nextPolicePressureAt = 0;
   state.mainBaseClaimDay = 0;
   state.baseRestDay = 0;
+  state.baseRestAvailableAt = 0;
   state.hideUsesToday = 0;
   state.hideUsesDay = 1;
   state.day = 1;
@@ -5550,6 +6005,7 @@ function bindHudActions() {
   hudQuickMarket?.addEventListener("click", () => openAuxPanel("market"));
   hudQuickClan?.addEventListener("click", () => openAuxPanel("clan"));
   hudQuickWorld?.addEventListener("click", () => openAuxPanel("world"));
+  hudQuickMessages?.addEventListener("click", () => openAuxPanel("messages"));
 
   auxPanelClose?.addEventListener("click", hideAuxPanel);
   auxPanelBackdrop?.addEventListener("click", hideAuxPanel);
@@ -5697,6 +6153,7 @@ registerForm.addEventListener("submit", async (event) => {
   if (saved && state.profileName === name) {
     overlay.classList.add("hidden");
     setHudVisible(true);
+    void refreshMessageBadge();
     sceneRef?.refreshScene();
     if (state.needsWorldBaseSelection) {
       void openAuxPanel("world");

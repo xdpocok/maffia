@@ -531,6 +531,31 @@ button {
     drop-shadow(0 0 14px rgba(226, 194, 108, 0.22));
 }
 
+.map-svg-restored-building,
+.map-svg-lot-number-marker {
+  pointer-events: none;
+}
+
+.map-svg-lot-number-marker > path {
+  fill: rgba(38, 45, 23, 0.86);
+  stroke: rgba(139, 145, 83, 0.58);
+  stroke-width: 2;
+}
+
+.map-svg-lot-number-marker > text {
+  fill: #d6cda0;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 19px;
+  font-weight: 700;
+  text-anchor: middle;
+}
+
+.map-svg-lot-number-marker__building {
+  fill: none;
+  stroke: #c9c18f;
+  stroke-width: 1.6;
+}
+
 .choice-wheel {
   position: fixed;
   inset: 0;
@@ -3106,7 +3131,7 @@ button.battle-unit {
 
 .hud-bottom-bar__quick-row {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 6px;
 }
 
@@ -3137,6 +3162,28 @@ button.battle-unit {
 
 .hud-quick-btn:active {
   transform: translateY(0);
+}
+
+.hud-quick-btn--messages {
+  position: relative;
+}
+
+.hud-message-badge {
+  position: absolute;
+  top: -7px;
+  right: -6px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255, 212, 151, 0.72);
+  background: #9d352a;
+  color: #fff1d4;
+  font-size: 0.65rem;
+  font-weight: 800;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.48);
 }
 
 .hud-action {
@@ -3352,6 +3399,299 @@ button.battle-unit {
   background:
     linear-gradient(180deg, rgba(48, 31, 20, 0.98), rgba(17, 11, 8, 0.99)),
     radial-gradient(circle at top, rgba(214, 173, 102, 0.14), transparent 38%);
+}
+
+.aux-panel[data-kind="messages"] .aux-panel__card,
+.aux-panel[data-kind="public-profile"] .aux-panel__card,
+.aux-panel[data-kind="pvp"] .aux-panel__card {
+  width: min(820px, calc(100vw - 28px));
+}
+
+.messages-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.messages-panel__intro,
+.messages-panel__empty {
+  display: grid;
+  gap: 5px;
+  padding: 15px 17px;
+  border-radius: 16px;
+  border: 1px solid rgba(214, 173, 102, 0.2);
+  background:
+    linear-gradient(135deg, rgba(72, 48, 31, 0.88), rgba(24, 16, 12, 0.96)),
+    radial-gradient(circle at top left, rgba(255, 224, 162, 0.1), transparent 40%);
+}
+
+.messages-panel__intro strong,
+.messages-panel__empty strong {
+  color: #fff0cf;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 1.12rem;
+}
+
+.messages-panel__intro span,
+.messages-panel__empty span {
+  color: rgba(235, 218, 185, 0.76);
+}
+
+.messages-list {
+  display: grid;
+  gap: 9px;
+}
+
+.message-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: 78px minmax(0, 1fr);
+  gap: 13px;
+  padding: 13px;
+  overflow: hidden;
+  border-radius: 15px;
+  border: 1px solid rgba(214, 173, 102, 0.16);
+  background:
+    linear-gradient(180deg, rgba(31, 22, 16, 0.96), rgba(16, 11, 9, 0.98));
+}
+
+.message-card.is-unread {
+  border-color: rgba(228, 180, 84, 0.5);
+  box-shadow: inset 4px 0 0 #c8943f;
+}
+
+.message-card--pvp {
+  background:
+    linear-gradient(180deg, rgba(52, 22, 18, 0.96), rgba(18, 10, 9, 0.98));
+}
+
+.message-card__stamp {
+  align-self: start;
+  padding: 7px 8px;
+  border: 1px solid rgba(214, 173, 102, 0.3);
+  border-radius: 999px;
+  color: #e7bd72;
+  font-size: 0.67rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.message-card__heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.message-card__heading strong {
+  color: #fff0cf;
+  font-family: Georgia, "Times New Roman", serif;
+}
+
+.message-card__heading time,
+.message-card__sender {
+  color: rgba(222, 199, 157, 0.62);
+  font-size: 0.73rem;
+}
+
+.message-card__sender {
+  display: block;
+  margin-top: 3px;
+}
+
+.message-card p {
+  margin: 7px 0 0;
+  color: #ddccaa;
+  line-height: 1.5;
+}
+
+.public-profile {
+  display: grid;
+  gap: 15px;
+}
+
+.public-profile__dossier {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 17px;
+  border-radius: 18px;
+  border: 1px solid rgba(214, 173, 102, 0.24);
+  background:
+    linear-gradient(135deg, rgba(73, 48, 30, 0.94), rgba(24, 16, 12, 0.98));
+}
+
+.public-profile__monogram {
+  width: 76px;
+  height: 76px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  border: 2px solid rgba(222, 178, 91, 0.52);
+  background: radial-gradient(circle, #6f4a29, #1c120d 72%);
+  color: #ffe9b7;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 2.1rem;
+  font-weight: 700;
+}
+
+.public-profile__eyebrow {
+  color: #d6aa61;
+  font-size: 0.7rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.public-profile__dossier h3 {
+  margin: 3px 0;
+  color: #fff0cd;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 1.55rem;
+}
+
+.public-profile__dossier p {
+  margin: 0;
+  color: #d9c5a1;
+}
+
+.public-profile__stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.public-profile__stats div {
+  padding: 12px;
+  border-radius: 13px;
+  border: 1px solid rgba(214, 173, 102, 0.16);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.public-profile__stats span,
+.public-profile__stats strong {
+  display: block;
+}
+
+.public-profile__stats span {
+  color: #caaa76;
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.public-profile__stats strong {
+  margin-top: 4px;
+  color: #fff0cf;
+  font-size: 1.05rem;
+}
+
+.public-profile__actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.public-profile__actions button,
+.player-message-form button,
+.pvp-result button {
+  min-height: 40px;
+  border-radius: 11px;
+  border: 1px solid rgba(214, 173, 102, 0.32);
+  background: linear-gradient(180deg, #bd8c3d, #75491e);
+  color: #211108;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.player-message-form {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  border-radius: 15px;
+  border: 1px solid rgba(214, 173, 102, 0.18);
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.player-message-form label {
+  color: #f0d9aa;
+  font-weight: 700;
+}
+
+.player-message-form textarea {
+  min-height: 100px;
+  resize: vertical;
+  border-radius: 11px;
+  border: 1px solid rgba(214, 173, 102, 0.2);
+  background: rgba(8, 6, 5, 0.76);
+  color: #f5e5c5;
+  padding: 11px;
+  font: inherit;
+}
+
+.player-message-form__status {
+  min-height: 18px;
+  color: #d9b46f;
+  font-size: 0.8rem;
+}
+
+.pvp-result {
+  display: grid;
+  gap: 14px;
+  padding: 20px;
+  text-align: center;
+  border-radius: 18px;
+  border: 1px solid rgba(214, 173, 102, 0.22);
+  background:
+    linear-gradient(180deg, rgba(47, 30, 20, 0.97), rgba(16, 10, 8, 0.99));
+}
+
+.pvp-result.is-win {
+  border-color: rgba(197, 156, 68, 0.6);
+}
+
+.pvp-result.is-loss {
+  border-color: rgba(172, 67, 50, 0.58);
+}
+
+.pvp-result__stamp {
+  justify-self: center;
+  padding: 8px 16px;
+  border: 2px solid currentColor;
+  border-radius: 999px;
+  color: #e6bd6e;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  transform: rotate(-5deg);
+}
+
+.pvp-result.is-loss .pvp-result__stamp {
+  color: #d87560;
+}
+
+.pvp-result h3 {
+  margin: 0;
+  color: #fff0cf;
+}
+
+.pvp-result__stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.pvp-result__stats span {
+  padding: 11px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #d3bc91;
+}
+
+.pvp-result__stats strong {
+  display: block;
+  margin-top: 4px;
+  color: #fff0cf;
 }
 
 .market-panel {
@@ -3890,6 +4230,78 @@ button.battle-unit {
 .worldmap__stage.is-dragging {
   cursor: grabbing;
 }
+
+.world-player-wheel {
+  position: absolute;
+  z-index: 20;
+  width: 224px;
+  height: 224px;
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
+}
+
+.world-player-wheel__ring {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  border: 1px solid rgba(218, 178, 103, 0.5);
+  background:
+    radial-gradient(circle, rgba(29, 19, 13, 0.98) 0 35%, transparent 36%),
+    radial-gradient(circle, rgba(65, 42, 26, 0.94) 0 68%, rgba(13, 9, 7, 0.98) 69%);
+  box-shadow:
+    0 18px 42px rgba(0, 0, 0, 0.5),
+    inset 0 0 28px rgba(222, 172, 88, 0.08);
+}
+
+.world-player-wheel__core {
+  position: absolute;
+  inset: 66px;
+  display: grid;
+  place-content: center;
+  gap: 3px;
+  text-align: center;
+  color: #f2dbae;
+  pointer-events: none;
+}
+
+.world-player-wheel__core strong {
+  max-width: 92px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 0.82rem;
+}
+
+.world-player-wheel__core span {
+  color: #bda478;
+  font-size: 0.62rem;
+}
+
+.world-player-wheel__action {
+  position: absolute;
+  width: 82px;
+  min-height: 35px;
+  border-radius: 999px;
+  border: 1px solid rgba(225, 185, 111, 0.38);
+  background: linear-gradient(180deg, rgba(104, 72, 37, 0.98), rgba(43, 27, 16, 0.98));
+  color: #f6e3bd;
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.36);
+}
+
+.world-player-wheel__action:hover {
+  border-color: rgba(245, 211, 148, 0.72);
+  transform: scale(1.04);
+}
+
+.world-player-wheel__action--profile { left: 71px; top: 5px; }
+.world-player-wheel__action--pvp { right: 1px; top: 94px; }
+.world-player-wheel__action--message { left: 71px; bottom: 5px; }
+.world-player-wheel__action--close { left: 1px; top: 94px; }
 
 .worldmap__viewport {
   position: relative;
