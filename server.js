@@ -147,6 +147,8 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_clan_members_profile
   ON clan_members(profile_name);
+  DELETE FROM world_lots
+  WHERE owner_profile_name IS NULL AND status <> 'free';
 `);
 
 const selectSaveStmt = db.prepare(`
@@ -495,6 +497,16 @@ const markMessagesReadStmt = db.prepare(`
   UPDATE messages
   SET read_at = ?
   WHERE recipient_profile_name = ? AND read_at IS NULL
+`);
+
+const deleteMessagesByProfileStmt = db.prepare(`
+  DELETE FROM messages
+  WHERE recipient_profile_name = ? OR sender_profile_name = ?
+`);
+
+const deleteClansByBossStmt = db.prepare(`
+  DELETE FROM clans
+  WHERE boss_profile_name = ?
 `);
 
 const contentTypes = {
@@ -926,7 +938,7 @@ function logEvent(profileName, eventType, title, payload = {}, now = Date.now())
   insertEventStmt.run(
     profileName,
     String(eventType || "system").slice(0, 40),
-    String(title || "Esemeny").slice(0, 120),
+    String(title || "Esemény").slice(0, 120),
     JSON.stringify(payload || {}),
     now,
   );
@@ -937,7 +949,7 @@ function createMessage(recipientProfileName, senderProfileName, messageType, tit
     recipientProfileName,
     senderProfileName || null,
     String(messageType || "player").slice(0, 32),
-    String(title || "Uzenet").slice(0, 120),
+    String(title || "Üzenet").slice(0, 120),
     String(body || "").slice(0, 1200),
     JSON.stringify(payload || {}),
     now,
@@ -1177,7 +1189,7 @@ async function handleApiRequest(request, response, pathname) {
       logEvent(
         profileName,
         String(body.eventType || "game_event"),
-        String(body.title || "Esemeny"),
+        String(body.title || "Esemény"),
         { ...(body.payload || {}), body: String(body.body || "").slice(0, 1200) },
       );
       sendJson(response, 201, { ok: true });
@@ -1206,7 +1218,7 @@ async function handleApiRequest(request, response, pathname) {
         senderProfileName: null,
         messageType: "event",
         title: event.title,
-        body: String(event.payload?.body || event.payload?.summary || "Esemeny tortent a birodalmadban."),
+        body: String(event.payload?.body || event.payload?.summary || "Esemény történt a birodalmadban."),
         payload: event.payload,
         readAt: event.createdAt,
         createdAt: event.createdAt,
@@ -1238,7 +1250,7 @@ async function handleApiRequest(request, response, pathname) {
         recipientProfileName,
         senderProfileName,
         "player",
-        `Uzenet erkezett: ${senderProfileName}`,
+        `Üzenet érkezett: ${senderProfileName}`,
         messageBody,
       );
       sendJson(response, 201, { ok: true });
@@ -1286,7 +1298,7 @@ async function handleApiRequest(request, response, pathname) {
       const attackerState = { ...attackerProfile.state };
       const defenderState = { ...defenderProfile.state };
       if (Number(attackerState.health) <= 0 || Number(attackerState.energy) < 12) {
-        sendJson(response, 409, { error: "A tamadashoz legalabb 1 HP es 12 energia kell." });
+        sendJson(response, 409, { error: "A támadáshoz legalább 1 HP és 12 energia kell." });
         return true;
       }
 
@@ -1315,21 +1327,21 @@ async function handleApiRequest(request, response, pathname) {
         persistPvpState(attackerProfileName, attackerState, now);
         persistPvpState(defenderProfileName, defenderState, now);
         const defenderBody = attackerWon
-          ? `${attackerProfileName} megtamadta a bazisodat es ${stolenMoney} $ zsakmanyt vitt el.`
-          : `${attackerProfileName} megtamadta a bazisodat, de az embereid visszavertek.`;
+          ? `${attackerProfileName} megtámadta a bázisodat és ${stolenMoney} $ zsákmányt vitt el.`
+          : `${attackerProfileName} megtámadta a bázisodat, de az embereid visszaverték.`;
         createMessage(
           defenderProfileName,
           attackerProfileName,
           "pvp",
-          attackerWon ? "Tamadas erte a bazisodat" : "Visszavert tamadas",
+          attackerWon ? "Támadás érte a bázisodat" : "Visszavert támadás",
           defenderBody,
           { attackerWon, stolenMoney, attackerAttack: attackerCombat.attack, defenderDefense: defenderCombat.defense },
           now,
         );
-        logEvent(attackerProfileName, "pvp_attack", "PvP tamadas vegrehajtva", {
+        logEvent(attackerProfileName, "pvp_attack", "PvP támadás végrehajtva", {
           body: attackerWon
-            ? `${defenderProfileName} bazisat legyozted, zsakmany: ${stolenMoney} $.`
-            : `${defenderProfileName} bazisa visszaverte a tamadasodat.`,
+            ? `${defenderProfileName} bázisát legyőzted, zsákmány: ${stolenMoney} $.`
+            : `${defenderProfileName} bázisa visszaverte a támadásodat.`,
           defenderProfileName,
           attackerWon,
           stolenMoney,
@@ -1489,10 +1501,19 @@ async function handleApiRequest(request, response, pathname) {
   }
 
   if (request.method === "DELETE") {
-    logEvent(profileName, "player_deleted", "Jatekos torolve", {}, Date.now());
-    deleteSaveStmt.run(profileName);
-    deletePlayerStmt.run(profileName);
-    sendEmpty(response);
+    db.exec("BEGIN IMMEDIATE");
+    try {
+      deleteSaveStmt.run(profileName);
+      deleteMessagesByProfileStmt.run(profileName, profileName);
+      deleteWorldLotsByOwnerStmt.run(profileName);
+      deleteClansByBossStmt.run(profileName);
+      deletePlayerStmt.run(profileName);
+      db.exec("COMMIT");
+      sendEmpty(response);
+    } catch (error) {
+      db.exec("ROLLBACK");
+      sendJson(response, 500, { error: error.message || "Player deletion failed" });
+    }
     return true;
   }
 

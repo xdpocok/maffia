@@ -3923,8 +3923,8 @@ function showChoiceWheel(spot) {
     const baseRestUsed = state.mainBaseSpotId === spot.id && baseRestRemaining > 0;
     const baseClaimUsed = state.mainBaseSpotId !== spot.id && state.mainBaseClaimDay === state.day;
     choiceWheelAction3.textContent = state.mainBaseSpotId === spot.id
-      ? (baseRestUsed ? `Pihenes (${formatCountdown(baseRestRemaining)})` : "Pihenes (ingyen)")
-      : (baseClaimUsed ? "Fo bazis (holnap)" : "Fo bazis");
+      ? (baseRestUsed ? `Pihenés (${formatCountdown(baseRestRemaining)})` : "Pihenés (ingyen)")
+      : (baseClaimUsed ? "Fő bázis (holnap)" : "Fő bázis");
     choiceWheelAction3.disabled = baseRestUsed || baseClaimUsed;
   }
   if (choiceWheelAction4) choiceWheelAction4.textContent = "Bezaras";
@@ -4381,12 +4381,12 @@ function setMainBase(spot) {
 
 function restAtBase(spot) {
   if (!state.mainBaseSpotId || spot.id !== state.mainBaseSpotId) {
-    sceneRef?.setMessage("Ez nem a fo bazisod.");
+    sceneRef?.setMessage("Ez nem a fő bázisod.");
     return;
   }
   const remaining = Math.max(0, Number(state.baseRestAvailableAt) - Date.now());
   if (remaining > 0) {
-    sceneRef?.setMessage(`A bazison ${formatCountdown(remaining)} mulva pihenhetsz ujra ingyen.`);
+    sceneRef?.setMessage(`A bázison ${formatCountdown(remaining)} múlva pihenhetsz újra ingyen.`);
     return;
   }
 
@@ -4398,8 +4398,8 @@ function restAtBase(spot) {
   state.heat = clamp(state.heat - heatLoss, 0, 100);
   state.baseRestDay = state.day;
   state.baseRestAvailableAt = Date.now() + BASE_REST_COOLDOWN_MS;
-  sceneRef?.pushLog(`Pihenes a bazison. +${healthGain} eletero, +${energyGain} akciopont, -${heatLoss} korozes.`);
-  sceneRef?.setMessage("A banda elbujt a bazison. Hat ora mulva pihenhetsz itt ujra ingyen.");
+  sceneRef?.pushLog(`Pihenés a bázison. +${healthGain} életerő, +${energyGain} akciópont, -${heatLoss} körözés.`);
+  sceneRef?.setMessage("A banda elbújt a bázison. Hat óra múlva pihenhetsz itt újra ingyen.");
   saveGame();
 }
 
@@ -4529,8 +4529,8 @@ function triggerBust() {
   state.money = Math.max(0, state.money - loss);
   state.crew = Math.max(1, Math.ceil(state.crew / 2));
   state.heat = clamp(state.heat - 15, 0, 100);
-  sceneRef?.pushLog(`Rajtautes tortent. -${loss} $, a crew fele lecsokkent, -15% korozes.`);
-  sceneRef?.setMessage("A rendorok elkaptak, de a korozesed 15%-kal csokkent.");
+  sceneRef?.pushLog(`Rajtaütés történt. -${loss} $, a banda fele kiesett, -15% körözés.`);
+  sceneRef?.setMessage("A rendőrök elkaptak, de a körözésed 15%-kal csökkent.");
   postGameEvent(
     "police_bust",
     "Elkapott a rendőrség",
@@ -4708,6 +4708,13 @@ function startNewGame(name) {
 
 function resetGame() {
   const profileNameToDelete = state.profileName;
+  const pendingSaveRequest = saveRequestInFlight;
+  state.registered = false;
+  latestQueuedSave = null;
+  if (pendingSaveTimer) {
+    window.clearTimeout(pendingSaveTimer);
+    pendingSaveTimer = null;
+  }
   closeRobberyGame();
   resetMapPan();
   hideAuxPanel();
@@ -4718,7 +4725,16 @@ function resetGame() {
       // Ignore unavailable local storage and continue resetting the game.
     }
   });
-  void deleteRemoteSave(profileNameToDelete);
+  void (async () => {
+    if (pendingSaveRequest) {
+      try {
+        await pendingSaveRequest;
+      } catch {
+        // The delete below remains authoritative even if the preceding save failed.
+      }
+    }
+    await deleteRemoteSave(profileNameToDelete);
+  })();
   state.profileName = "";
   state.money = 120;
   state.fame = 0;
