@@ -3,7 +3,7 @@ const LEGACY_STORAGE_KEYS = [STORAGE_KEY, "maffia.birodalom.save.phaser.v2", "ma
 const LAST_PROFILE_KEY = "maffia.birodalom.lastProfile";
 const SAVE_API_BASE = "/api/saves";
 const PROFILE_API_BASE = "/api/profile";
-const PROTECTION_COOLDOWN_MS = 5 * 60 * 1000;
+const PROTECTION_COOLDOWN_MS = 3 * 60 * 1000;
 const RECOVERY_DURATION_MS = 20 * 60 * 1000;
 const RECOVERY_AMOUNT = 50;
 const NATURAL_RECOVERY_FULL_MS = 12 * 60 * 60 * 1000;
@@ -11,6 +11,12 @@ const NATURAL_RECOVERY_POINT_MS = NATURAL_RECOVERY_FULL_MS / 100;
 const BUILDING_DIFFICULTY_CYCLE_MS = 4 * 60 * 60 * 1000;
 const BASE_REST_COOLDOWN_MS = 6 * 60 * 60 * 1000;
 const DAILY_HIDE_LIMIT = 3;
+const PROTECTION_REWARD_DELAY_MS = 3 * 60 * 1000;
+const MAX_PROCESS_TASKS = 3;
+const HEAT_GAIN_MULTIPLIER = 0.58;
+const RIVAL_SPAWN_MIN_MS = 6 * 60 * 1000;
+const RIVAL_SPAWN_MAX_MS = 11 * 60 * 1000;
+const RIVAL_EVENT_DURATION_MS = 12 * 60 * 1000;
 const districtDefs = [
   {
     id: "center",
@@ -406,15 +412,22 @@ const crewMemberTemplates = [
   { id: "marco", name: "Marco Bellini", role: "Fegyveres", baseAttack: 15, baseDefense: 8, baseHealth: 88 },
   { id: "enzo", name: "Enzo Romano", role: "Megfigyelő", baseAttack: 10, baseDefense: 12, baseHealth: 112 },
 ];
+const crewHireCosts = {
+  luca: 0,
+  marco: 350,
+  enzo: 700,
+};
 
 function makeCrewMembers() {
-  return crewMemberTemplates.map((member) => ({
+  return crewMemberTemplates.map((member, index) => ({
     ...member,
+    hired: index === 0,
     level: 1,
     defenseLevel: 1,
     attackBonus: 0,
     defenseBonus: 0,
     health: member.baseHealth,
+    equipment: getEmptyEquipment(),
   }));
 }
 
@@ -438,7 +451,7 @@ const state = {
   profileName: "",
   money: 120,
   fame: 0,
-  crew: 3,
+  crew: 1,
   heat: 0,
   health: 100,
   energy: 100,
@@ -461,6 +474,15 @@ const state = {
   activeQuests: [],
   selectedQuestSlot: 0,
   questNextSpawnAt: 0,
+  pendingProtectionRewards: [],
+  processTasks: [],
+  smuggledGoods: { counterfeitMoney: 0, drugs: 0, weapons: 0, papers: 0 },
+  smugglerFame: 0,
+  rivalEvent: null,
+  rivalNextSpawnAt: 0,
+  mentorStep: 0,
+  mentorCompleted: false,
+  mentorFlags: { equippedItem: false, sawWorld: false, enteredHarbor: false },
   protectionCooldowns: {},
   recoveryEffects: { health: null, energy: null },
   naturalRecoveryAt: { health: Date.now(), energy: Date.now() },
@@ -483,6 +505,8 @@ let saveRequestInFlight = null;
 let latestQueuedSave = null;
 let questCardQuestId = null;
 let activeEquipmentSlot = null;
+let mentorCardOpen = false;
+let mentorStepCompleting = false;
 let mapPan = { x: 0, y: 0 };
 let mapDragState = {
   active: false,
@@ -508,6 +532,18 @@ const auxPanelTitle = document.getElementById("auxPanelTitle");
 const auxPanelSubtitle = document.getElementById("auxPanelSubtitle");
 const auxPanelBody = document.getElementById("auxPanelBody");
 const auxPanelClose = document.getElementById("auxPanelClose");
+const messagesDialog = document.getElementById("messagesDialog");
+const messagesDialogBackdrop = document.getElementById("messagesDialogBackdrop");
+const messagesDialogTitle = document.getElementById("messagesDialogTitle");
+const messagesDialogSubtitle = document.getElementById("messagesDialogSubtitle");
+const messagesDialogBody = document.getElementById("messagesDialogBody");
+const messagesDialogClose = document.getElementById("messagesDialogClose");
+const publicProfileDialog = document.getElementById("publicProfileDialog");
+const publicProfileDialogBackdrop = document.getElementById("publicProfileDialogBackdrop");
+const publicProfileDialogTitle = document.getElementById("publicProfileDialogTitle");
+const publicProfileDialogSubtitle = document.getElementById("publicProfileDialogSubtitle");
+const publicProfileDialogBody = document.getElementById("publicProfileDialogBody");
+const publicProfileDialogClose = document.getElementById("publicProfileDialogClose");
 const hudAvatarCard = document.querySelector(".hud-avatar-card");
 const hudMoney = document.getElementById("hudMoney");
 const hudFame = document.getElementById("hudFame");
@@ -532,6 +568,13 @@ const hudQuestCard = document.getElementById("hudQuestCard");
 const hudQuestAction = document.getElementById("hudQuestAction");
 const hudQuestClose = document.getElementById("hudQuestClose");
 const hudQuestDelete = document.getElementById("hudQuestDelete");
+const hudMentorToggle = document.getElementById("hudMentorToggle");
+const hudMentorCard = document.getElementById("hudMentorCard");
+const hudMentorClose = document.getElementById("hudMentorClose");
+const hudMentorStepTitle = document.getElementById("hudMentorStepTitle");
+const hudMentorStepText = document.getElementById("hudMentorStepText");
+const hudMentorStepReward = document.getElementById("hudMentorStepReward");
+const hudMentorProgress = document.getElementById("hudMentorProgress");
 const hudLog = document.getElementById("hudLog");
 const hudQuickRank = document.getElementById("hudQuickRank");
 const hudQuickMarket = document.getElementById("hudQuickMarket");
@@ -539,6 +582,13 @@ const hudQuickClan = document.getElementById("hudQuickClan");
 const hudQuickWorld = document.getElementById("hudQuickWorld");
 const hudQuickMessages = document.getElementById("hudQuickMessages");
 const hudMessageBadge = document.getElementById("hudMessageBadge");
+const hudProcessTasks = document.getElementById("hudProcessTasks");
+const harborMapView = document.getElementById("harborMapView");
+const harborMapZones = document.getElementById("harborMapZones");
+const harborOperationPanel = document.getElementById("harborOperationPanel");
+const hudQuickDock = document.getElementById("hudQuickDock");
+const hudQuickDockLabel = document.getElementById("hudQuickDockLabel");
+const hudMainMapButton = document.getElementById("hudMainMapButton");
 const hudAction1 = document.getElementById("hudAction1");
 const hudAction2 = document.getElementById("hudAction2");
 const hudAction3 = document.getElementById("hudAction3");
@@ -621,9 +671,27 @@ const characterHeat = document.getElementById("characterHeat");
 const characterCityLevel = document.getElementById("characterCityLevel");
 const characterXpSummary = document.getElementById("characterXpSummary");
 const characterXpFill = document.getElementById("characterXpFill");
+const crewMemberPanel = document.getElementById("crewMemberPanel");
+const crewMemberPanelBackdrop = document.getElementById("crewMemberPanelBackdrop");
+const crewMemberPanelClose = document.getElementById("crewMemberPanelClose");
+const crewMemberPanelTitle = document.getElementById("crewMemberPanelTitle");
+const crewMemberPanelImage = document.getElementById("crewMemberPanelImage");
+const crewMemberPanelName = document.getElementById("crewMemberPanelName");
+const crewMemberPanelRole = document.getElementById("crewMemberPanelRole");
+const crewMemberPanelLevel = document.getElementById("crewMemberPanelLevel");
+const crewMemberPanelHealth = document.getElementById("crewMemberPanelHealth");
+const crewMemberPanelAttack = document.getElementById("crewMemberPanelAttack");
+const crewMemberPanelDefense = document.getElementById("crewMemberPanelDefense");
+const crewMemberEquipmentGrid = document.getElementById("crewMemberEquipmentGrid");
+const crewEquipmentPicker = document.getElementById("crewEquipmentPicker");
+const crewEquipmentPickerTitle = document.getElementById("crewEquipmentPickerTitle");
+const crewEquipmentPickerList = document.getElementById("crewEquipmentPickerList");
+const crewEquipmentPickerClose = document.getElementById("crewEquipmentPickerClose");
 const crewCards = document.getElementById("crewCards");
 const crewPowerTotal = document.getElementById("crewPowerTotal");
 let crewPanelRenderKey = "";
+let activeCrewSheetMemberId = null;
+let activeCrewEquipmentSlot = null;
 
 let avatarNameEl = null;
 let avatarLevelEl = null;
@@ -743,6 +811,10 @@ function getDefaultEquipment() {
   return Object.fromEntries(
     equipmentSlotOrder.map((slot) => [slot, { ...equipmentCatalog[slot][0] }]),
   );
+}
+
+function getEmptyEquipment() {
+  return Object.fromEntries(equipmentSlotOrder.map((slot) => [slot, null]));
 }
 
 function getDefaultItemInventory() {
@@ -1059,7 +1131,6 @@ function setChoiceWheelButtons(visibleIds) {
   const map = {
     robbery: choiceWheelAction1,
     protection: choiceWheelAction2,
-    baseRest: choiceWheelAction3,
     close: choiceWheelAction4,
     quest: choiceWheelAction5,
   };
@@ -1067,7 +1138,14 @@ function setChoiceWheelButtons(visibleIds) {
     if (!button) return;
     button.classList.toggle("hidden", !visibleIds.includes(id));
     button.disabled = false;
+    if (visibleIds.includes(id)) button.dataset.choiceAction = id;
   });
+  if (choiceWheelAction3) {
+    const thirdAction = visibleIds.includes("rival") ? "rival" : visibleIds.includes("baseRest") ? "baseRest" : "";
+    choiceWheelAction3.classList.toggle("hidden", !thirdAction);
+    choiceWheelAction3.disabled = false;
+    choiceWheelAction3.dataset.choiceAction = thirdAction;
+  }
 }
 
 let activeAuxPanelKind = null;
@@ -1107,6 +1185,34 @@ function setAuxPanelContent(title, subtitle, bodyHtml) {
   if (auxPanelBody) auxPanelBody.innerHTML = bodyHtml;
   auxPanel?.classList.remove("hidden");
   auxPanel?.setAttribute("aria-hidden", "false");
+}
+
+function setSideDialogContent(dialog, titleEl, subtitleEl, bodyEl, title, subtitle, bodyHtml) {
+  if (titleEl) titleEl.textContent = title;
+  if (subtitleEl) subtitleEl.textContent = subtitle;
+  if (bodyEl) bodyEl.innerHTML = bodyHtml;
+  dialog?.classList.remove("hidden");
+  dialog?.setAttribute("aria-hidden", "false");
+}
+
+function hideMessagesDialog() {
+  if (activeAuxPanelKind === "messages") activeAuxPanelKind = null;
+  messagesDialog?.classList.add("hidden");
+  messagesDialog?.setAttribute("aria-hidden", "true");
+}
+
+function hidePublicProfileDialog() {
+  if (activeAuxPanelKind === "public-profile") activeAuxPanelKind = null;
+  publicProfileDialog?.classList.add("hidden");
+  publicProfileDialog?.setAttribute("aria-hidden", "true");
+}
+
+function setMessagesDialogContent(title, subtitle, bodyHtml) {
+  setSideDialogContent(messagesDialog, messagesDialogTitle, messagesDialogSubtitle, messagesDialogBody, title, subtitle, bodyHtml);
+}
+
+function setPublicProfileDialogContent(title, subtitle, bodyHtml) {
+  setSideDialogContent(publicProfileDialog, publicProfileDialogTitle, publicProfileDialogSubtitle, publicProfileDialogBody, title, subtitle, bodyHtml);
 }
 
 function updateMessageBadge(unreadCount = 0) {
@@ -1181,14 +1287,14 @@ function renderMessagesPanel(messages = []) {
         <span>Az események, játékosüzenetek és PvP támadások itt fognak megjelenni.</span>
       </div>
     `;
-  setAuxPanelContent("Üzenetek", "Családi posta", body);
-  auxPanel?.setAttribute("data-kind", "messages");
+  hideAuxPanel();
+  setMessagesDialogContent("Üzenetek", "Családi posta", body);
   activeAuxPanelKind = "messages";
 }
 
 async function openMessagesPanel() {
-  setAuxPanelContent("Üzenetek", "Családi posta", `<div class="aux-panel__carditem"><strong>Posta betöltése...</strong></div>`);
-  auxPanel?.setAttribute("data-kind", "messages");
+  hideAuxPanel();
+  setMessagesDialogContent("Üzenetek", "Családi posta", `<div class="aux-panel__carditem"><strong>Posta betöltése...</strong></div>`);
   activeAuxPanelKind = "messages";
   try {
     const response = await fetch(`/api/messages?profileName=${encodeURIComponent(state.profileName)}&limit=80`, {
@@ -1203,7 +1309,7 @@ async function openMessagesPanel() {
       body: JSON.stringify({ profileName: state.profileName }),
     });
   } catch {
-    setAuxPanelContent("Üzenetek", "Családi posta", `<div class="aux-panel__carditem"><strong>A posta most nem elérhető.</strong><div class="aux-panel__muted">Próbáld meg néhány pillanat múlva.</div></div>`);
+    setMessagesDialogContent("Üzenetek", "Családi posta", `<div class="aux-panel__carditem"><strong>A posta most nem elérhető.</strong><div class="aux-panel__muted">Próbáld meg néhány pillanat múlva.</div></div>`);
   }
 }
 
@@ -1238,12 +1344,18 @@ function renderPublicPlayerProfile(profile, focusMessage = false) {
       </form>
     </section>
   `;
-  setAuxPanelContent(profile.profileName, "Játékos adatlap", body);
-  auxPanel?.setAttribute("data-kind", "public-profile");
+  hideAuxPanel();
+  setPublicProfileDialogContent(profile.profileName, "Játékos adatlap", body);
   activeAuxPanelKind = "public-profile";
 
-  auxPanelBody?.querySelector('[data-public-action="world"]')?.addEventListener("click", () => openAuxPanel("world"));
-  auxPanelBody?.querySelector('[data-public-action="pvp"]')?.addEventListener("click", () => runWorldPvpAttack(profile.profileName));
+  publicProfileDialogBody?.querySelector('[data-public-action="world"]')?.addEventListener("click", () => {
+    hidePublicProfileDialog();
+    openAuxPanel("world");
+  });
+  publicProfileDialogBody?.querySelector('[data-public-action="pvp"]')?.addEventListener("click", () => {
+    hidePublicProfileDialog();
+    runWorldPvpAttack(profile.profileName);
+  });
   const form = document.getElementById("playerMessageForm");
   form?.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -1275,7 +1387,8 @@ function renderPublicPlayerProfile(profile, focusMessage = false) {
 }
 
 async function openPublicPlayerProfile(profileName, focusMessage = false) {
-  setAuxPanelContent(profileName, "Játékos adatlap", `<div class="aux-panel__carditem"><strong>Akta betöltése...</strong></div>`);
+  hideAuxPanel();
+  setPublicProfileDialogContent(profileName, "Játékos adatlap", `<div class="aux-panel__carditem"><strong>Akta betöltése...</strong></div>`);
   try {
     const response = await fetch(`/api/public-profile/${encodeURIComponent(profileName)}`, {
       headers: { Accept: "application/json" },
@@ -1284,7 +1397,7 @@ async function openPublicPlayerProfile(profileName, focusMessage = false) {
     if (!payload?.found) throw new Error("profile_missing");
     renderPublicPlayerProfile(payload.profile, focusMessage);
   } catch {
-    setAuxPanelContent("Ismeretlen játékos", "Játékos adatlap", `<div class="aux-panel__carditem"><strong>Az akta nem található.</strong></div>`);
+    setPublicProfileDialogContent("Ismeretlen játékos", "Játékos adatlap", `<div class="aux-panel__carditem"><strong>Az akta nem található.</strong></div>`);
   }
 }
 
@@ -1385,13 +1498,14 @@ function renderLeaderboardPanel(saves) {
     `
     : `<div class="aux-panel__carditem"><strong>Meg nincs ranglista.</strong><div class="aux-panel__muted">Ments el nehany jatekot, es itt megjelennek a regisztralt jatekosok.</div></div>`;
   setAuxPanelContent("Ranglista", "Csaladi dosszie", body);
+  auxPanel?.setAttribute("data-kind", "rank");
   activeAuxPanelKind = "rank";
 }
 
-function renderBlackMarketPanel() {
+function getMarketPanelHtml() {
   ensureMarketStock();
   const stock = Array.isArray(state.marketStock) ? state.marketStock : [];
-  const body = `
+  return `
     <section class="market-panel">
       <article class="market-panel__hero">
         <div>
@@ -1430,61 +1544,69 @@ function renderBlackMarketPanel() {
       <div class="market-panel__footnote">A megvett item bekerul a felszereleseid koze, es a karakterlapodon tudod felvenni.</div>
     </section>
   `;
-  setAuxPanelContent("Piac", "1930-as arucsarnok", body);
-  auxPanel?.setAttribute("data-kind", "market");
-  auxPanelBody?.querySelectorAll("[data-market-buy]").forEach((button) => {
+}
+
+function bindMarketBuyButtons(rootElement, options = {}) {
+  rootElement?.querySelectorAll("[data-market-buy]").forEach((button) => {
     button.addEventListener("click", () => {
-      buyMarketItem(button.dataset.marketBuy);
+      buyMarketItem(button.dataset.marketBuy, options);
     });
   });
+}
+
+function renderBlackMarketPanel() {
+  const body = getMarketPanelHtml();
+  setAuxPanelContent("Piac", "1930-as arucsarnok", body);
+  auxPanel?.setAttribute("data-kind", "market");
+  bindMarketBuyButtons(auxPanelBody);
   activeAuxPanelKind = "market";
 }
 
 function renderClanPanel() {
-  const members = Array.isArray(state.crewMembers) ? state.crewMembers : [];
   const body = `
     <div class="aux-panel__cardlist">
       <article class="aux-panel__carditem">
-        <strong>${escapeHtml(state.profileName || "A banda")}</strong>
-        <div>Emberek sz?ma: ${state.crew}</div>
-        <div class="aux-panel__muted">Akt?v emberek: ${members.length ? members.map((member) => member.name).join(", ") : "nincs"}</div>
+        <strong>Klánközpont</strong>
+        <div class="aux-panel__muted">Ide kerül majd a családok közötti szövetség, tagfelvétel, közös kassza és klánüzenetek felülete.</div>
       </article>
-      ${members.map((member) => `
-        <article class="aux-panel__carditem">
-          <strong>${member.name}</strong>
-          <div>${member.role} | Szint ${member.level} | Er? ${getCrewMemberAttack(member)} | HP ${member.health}</div>
-        </article>
-      `).join("")}
+      <article class="aux-panel__carditem">
+        <strong>Állapot</strong>
+        <div>Nincs aktív klánod.</div>
+        <div class="aux-panel__muted">A saját embereid kezelése továbbra is a jobb oldali Banda panelen marad.</div>
+      </article>
     </div>
   `;
-  setAuxPanelContent("Kl?n", "Banda tagok", body);
+  setAuxPanelContent("Klán", "Családi ügyek", body);
+  auxPanel?.setAttribute("data-kind", "clan");
   activeAuxPanelKind = "clan";
 }
 
-function buyMarketItem(itemId) {
+function buyMarketItem(itemId, options = {}) {
   ensureMarketStock();
   const offer = (state.marketStock || []).find((entry) => entry.item.id === itemId);
   if (!offer) {
     sceneRef?.setMessage("Ez az aru mar lekerult a piacrol.");
-    return;
+    return false;
   }
   if (state.money < offer.price) {
     sceneRef?.setMessage("Nincs eleg penzed ehhez az aruhoz.");
-    return;
+    return false;
   }
   const alreadyOwned = Array.isArray(state.itemInventory?.[offer.slot])
     && state.itemInventory[offer.slot].some((entry) => entry.id === offer.item.id);
   if (alreadyOwned) {
     sceneRef?.setMessage("Ez a darab mar ott van a cuccaid kozott.");
-    return;
+    return false;
   }
   state.money -= offer.price;
   unlockEquipmentItem(offer.slot, offer.item);
   state.marketStock = state.marketStock.filter((entry) => entry.item.id !== offer.item.id);
-  renderBlackMarketPanel();
+  if (options.rerender !== false) renderBlackMarketPanel();
+  if (typeof options.afterBuy === "function") options.afterBuy();
   saveGame();
   sceneRef?.refreshHUD();
   sceneRef?.setMessage(`${offer.item.name} megveve a piacrol.`);
+  return true;
 }
 
 function renderWorldMapPanel() {
@@ -1683,7 +1805,7 @@ function bindWorldMapInteractions(occupiedLots, selectionMode) {
 
   stageEl?.addEventListener("pointerdown", (event) => {
     if (event.button !== 0) return;
-    if (event.target.closest?.(".world-player-wheel")) return;
+    if (event.target.closest?.("[data-world-lot], .world-player-wheel")) return;
     hideWorldPlayerWheel();
     dragState.active = true;
     dragState.pointerId = event.pointerId;
@@ -1770,6 +1892,390 @@ function bindWorldMapInteractions(occupiedLots, selectionMode) {
   applyCamera(false);
 }
 
+const harborZoneDefs = [
+  { id: "docks", title: "Dokkok", x: 33.5, y: 34.5, w: 21, h: 17, clip: "polygon(9% 35%, 35% 10%, 83% 5%, 98% 37%, 79% 76%, 28% 92%, 0 66%)", note: "Csempesz fuvarok es hajos megbizasok." },
+  { id: "warehouse", title: "Csempeszraktar", x: 75.5, y: 55, w: 20, h: 17, clip: "polygon(18% 22%, 70% 0, 100% 28%, 87% 83%, 32% 100%, 0 70%)", note: "Arukeszlet: hamis penz, drog, fegyver, papirok." },
+  { id: "bar", title: "Speakeasy", x: 41, y: 78.5, w: 20, h: 17, clip: "polygon(9% 38%, 35% 9%, 83% 5%, 100% 43%, 74% 86%, 22% 100%, 0 69%)", note: "Italok, eletero es energia toltes." },
+  { id: "office", title: "Kikotoi iroda", x: 62.5, y: 79, w: 18, h: 15, clip: "polygon(12% 33%, 39% 5%, 86% 15%, 100% 62%, 70% 96%, 18% 82%, 0 52%)", note: "Kapcsolatok es rendori lefizetes." },
+  { id: "market", title: "Feketepiac", x: 75, y: 25.5, w: 19, h: 15, clip: "polygon(16% 29%, 52% 3%, 98% 21%, 88% 78%, 38% 100%, 0 66%)", note: "Ritka aruk es csempesz cuccok." },
+  { id: "customs", title: "Vam", x: 38, y: 59, w: 17, h: 13, clip: "polygon(10% 32%, 44% 5%, 92% 22%, 100% 66%, 59% 96%, 9% 78%, 0 50%)", note: "Hamis penz es hamis papirok beszerzese." },
+  { id: "rail", title: "Vasuti rakodo", x: 59, y: 52.5, w: 22, h: 14, clip: "polygon(6% 39%, 31% 8%, 91% 3%, 100% 47%, 78% 86%, 19% 100%, 0 70%)", note: "Drog es fegyver csempeszet." },
+  { id: "garage", title: "Garazs", x: 51, y: 61.5, w: 18, h: 15, clip: "polygon(7% 34%, 40% 5%, 86% 13%, 100% 54%, 73% 94%, 19% 88%, 0 61%)", note: "Jarmuvek kesobb." },
+  { id: "fish", title: "Halpiac", x: 12, y: 61, w: 22, h: 17, clip: "polygon(4% 42%, 37% 9%, 89% 7%, 100% 53%, 77% 89%, 21% 100%, 0 70%)", note: "Halaskuldetesek: penz, XP, pihenes." },
+  { id: "storage", title: "Raktarsor", x: 55, y: 21.5, w: 22, h: 15, clip: "polygon(6% 39%, 31% 8%, 88% 5%, 100% 46%, 80% 87%, 22% 100%, 0 68%)", note: "Raktar es atadasi pontok." },
+];
+
+const harborCargoDefs = {
+  counterfeitMoney: { label: "Hamis penz", image: "./csempészet/34d87e7a-d0ec-42bc-891e-eff98067be29.png" },
+  drugs: { label: "Drog", image: "./csempészet/0391ff3c-7e67-4b77-91e0-cdb7ac0f0a9a.png" },
+  weapons: { label: "Fegyver", image: "./csempészet/dd25759f-f94a-42dc-8df6-d9fab6211903.png" },
+  papers: { label: "Hamis papirok", image: "./csempészet/f5b63510-d9c7-469c-ac33-71343b294ab1.png" },
+};
+
+const harborMissionCatalog = Array.from({ length: 50 }, (_, index) => {
+  const profiles = [
+    { zone: "docks", title: "Rakparti atadas", requires: { counterfeitMoney: 6 + (index % 4), weapons: 1 + (index % 3) }, rewardMoney: 170 + index * 5, rewardXp: 28 + (index % 8), durationMs: 30 * 60 * 1000 },
+    { zone: "storage", title: "Raktari csere", requires: { papers: 5 + (index % 5), drugs: 2 + (index % 3) }, rewardMoney: 190 + index * 6, rewardXp: 30 + (index % 9), durationMs: 35 * 60 * 1000 },
+    { zone: "customs", title: "Vami boritek", gives: { counterfeitMoney: 6 + (index % 5), papers: 3 + (index % 4) }, rewardMoney: 45 + index, rewardXp: 16 + (index % 5), durationMs: 30 * 60 * 1000 },
+    { zone: "rail", title: "Kodos vagon", gives: { drugs: 4 + (index % 5), weapons: 2 + (index % 4) }, rewardMoney: 60 + index, rewardXp: 18 + (index % 6), durationMs: 45 * 60 * 1000 },
+    { zone: "fish", title: "Hajnali halaszat", gives: {}, rewardMoney: 90 + index * 3, rewardXp: 18 + (index % 10), heal: 20, energy: 20, durationMs: [60, 180, 360][index % 3] * 60 * 1000 },
+  ];
+  const profile = profiles[index % profiles.length];
+  return {
+    id: `harbor-${index + 1}`,
+    ...profile,
+    title: `${profile.title} ${Math.floor(index / profiles.length) + 1}`,
+  };
+});
+
+function normalizeSmuggledGoods(goods) {
+  return Object.fromEntries(Object.keys(harborCargoDefs).map((key) => [
+    key,
+    Math.max(0, Math.round(Number(goods?.[key]) || 0)),
+  ]));
+}
+
+function formatCargoList(cargo = {}) {
+  const entries = Object.entries(cargo)
+    .filter(([, amount]) => Number(amount) > 0)
+    .map(([key, amount]) => `${Math.round(amount)} ${harborCargoDefs[key]?.label || key}`);
+  return entries.length ? entries.join(", ") : "-";
+}
+
+function canPayCargo(cargo = {}) {
+  const goods = normalizeSmuggledGoods(state.smuggledGoods);
+  return Object.entries(cargo).every(([key, amount]) => goods[key] >= Number(amount));
+}
+
+function takeCargo(cargo = {}) {
+  state.smuggledGoods = normalizeSmuggledGoods(state.smuggledGoods);
+  Object.entries(cargo).forEach(([key, amount]) => {
+    state.smuggledGoods[key] = Math.max(0, (state.smuggledGoods[key] || 0) - Math.max(0, Math.round(Number(amount) || 0)));
+  });
+}
+
+function addCargo(cargo = {}) {
+  state.smuggledGoods = normalizeSmuggledGoods(state.smuggledGoods);
+  Object.entries(cargo).forEach(([key, amount]) => {
+    state.smuggledGoods[key] = Math.max(0, (state.smuggledGoods[key] || 0) + Math.max(0, Math.round(Number(amount) || 0)));
+  });
+}
+
+function getHarborMissionsForZone(zoneId) {
+  const matching = harborMissionCatalog.filter((mission) => mission.zone === zoneId || (zoneId === "docks" && mission.zone === "storage"));
+  const offset = Math.abs((state.day * 7 + zoneId.length * 11) % Math.max(1, matching.length));
+  return Array.from({ length: Math.min(6, matching.length) }, (_, index) => matching[(offset + index) % matching.length]);
+}
+
+function setHarborPanelContent(zone, bodyHtml) {
+  if (!harborOperationPanel) return;
+  harborOperationPanel.innerHTML = `
+    <header class="harbor-operation-panel__header">
+      <div>
+        <span>Kikoto negyed</span>
+        <strong>${escapeHtml(zone.title)}</strong>
+      </div>
+      <button class="harbor-operation-panel__close" type="button" aria-label="Bezaras">x</button>
+    </header>
+    ${bodyHtml}
+  `;
+  harborOperationPanel.classList.remove("hidden");
+  harborOperationPanel.setAttribute("aria-hidden", "false");
+  harborOperationPanel.querySelector(".harbor-operation-panel__close")?.addEventListener("click", hideHarborOperationPanel);
+}
+
+function hideHarborOperationPanel() {
+  harborOperationPanel?.classList.add("hidden");
+  harborOperationPanel?.setAttribute("aria-hidden", "true");
+}
+
+function renderHarborBar(zone) {
+  setHarborPanelContent(zone, `
+    <section class="harbor-place">
+      <div class="harbor-bar-scene" aria-hidden="true">
+        <div class="harbor-bar-scene__shelves">
+          ${Array.from({ length: 18 }, (_, index) => `<i style="--bottle:${(index % 5) + 1}"></i>`).join("")}
+        </div>
+        <div class="harbor-bar-scene__counter"></div>
+      </div>
+      <div class="harbor-service-grid">
+        <article class="harbor-service-card">
+          <strong>Orvosi whiskey</strong>
+          <span>+35 eletero</span>
+          <button type="button" data-harbor-buy="health">Megveszem - 45 $</button>
+        </article>
+        <article class="harbor-service-card">
+          <strong>Fekete kave</strong>
+          <span>+35 energia</span>
+          <button type="button" data-harbor-buy="energy">Megveszem - 45 $</button>
+        </article>
+        <article class="harbor-service-card harbor-service-card--locked">
+          <strong>Mentor ital</strong>
+          <span>XP boost kesobb</span>
+          <button type="button" disabled>Hamarosan</button>
+        </article>
+      </div>
+    </section>
+  `);
+}
+
+function renderHarborWarehouse(zone) {
+  const goods = state.smuggledGoods || {};
+  setHarborPanelContent(zone, `
+    <section class="harbor-warehouse harbor-warehouse--minimal">
+      <div class="harbor-warehouse__header harbor-warehouse__header--compact">
+        <span>Csempesz raktar</span>
+        <strong>Osszegyujtott aru</strong>
+      </div>
+      <div class="harbor-warehouse__bubble-grid">
+        ${Object.entries(harborCargoDefs).map(([key, cargo]) => `
+          <article class="harbor-cargo-bubble">
+            <span class="harbor-cargo-bubble__frame"><img class="harbor-cargo-bubble__image" src="${cargo.image}" alt=""></span>
+            <strong>${cargo.label}</strong>
+            <em>${Math.max(0, Math.round(Number(goods[key]) || 0))} db</em>
+          </article>
+        `).join("")}
+      </div>
+    </section>
+  `);
+}
+
+function renderHarborOrders(zone, kind = "mixed") {
+  const orders = getHarborMissionsForZone(zone.id);
+  setHarborPanelContent(zone, `
+    <section class="harbor-orders">
+      <div class="harbor-orders__header">
+        <span>${kind === "fish" ? "Halpiaci megbizasok" : "Csempesz megbizasok"}</span>
+        <strong>${escapeHtml(zone.title)}</strong>
+      </div>
+      <p class="harbor-orders__intro">A munka a felso folyamat korbe kerul. Jutalom csak akkor jar, amikor lejar.</p>
+      <div class="harbor-orders__table">
+        <div class="harbor-orders__row harbor-orders__row--head"><span>Munka</span><span>Igeny / aru</span><span>Ido</span><span>Jutalom</span><span></span></div>
+        ${orders.map((mission) => {
+          const affordable = canPayCargo(mission.requires);
+          const needs = mission.requires ? formatCargoList(mission.requires) : `Szerez: ${formatCargoList(mission.gives)}`;
+          const reward = `+${mission.rewardMoney} $, +${mission.rewardXp} XP${mission.heal ? ", pihenes" : ""}`;
+          return `
+          <div class="harbor-orders__row">
+            <strong>${escapeHtml(mission.title)}</strong>
+            <small>${escapeHtml(needs)}</small>
+            <span>${formatCountdown(mission.durationMs)}</span>
+            <span>${escapeHtml(reward)}</span>
+            <button type="button" data-harbor-mission="${mission.id}" ${affordable ? "" : "disabled"}>${affordable ? "Inditas" : "Nincs aru"}</button>
+          </div>
+        `; }).join("")}
+      </div>
+    </section>
+  `);
+}
+
+function renderHarborOffice(zone) {
+  setHarborPanelContent(zone, `
+    <section class="harbor-place">
+      <p class="harbor-operation-panel__muted">Egy boritek a megfelelo asztalra neha tobbet er, mint egy pisztoly az utcan.</p>
+      <div class="harbor-service-grid">
+        <article class="harbor-service-card">
+          <strong>Kis lefizetes</strong>
+          <span>Esely: 65%, korozes -5%</span>
+          <button type="button" data-harbor-bribe="small">150 $</button>
+        </article>
+        <article class="harbor-service-card">
+          <strong>Nagy lefizetes</strong>
+          <span>Esely: 80%, korozes -10%</span>
+          <button type="button" data-harbor-bribe="large">350 $</button>
+        </article>
+        <article class="harbor-service-card harbor-service-card--locked">
+          <strong>Kapcsolat epites</strong>
+          <span>Kesobb uj opciok</span>
+          <button type="button" disabled>Hamarosan</button>
+        </article>
+      </div>
+    </section>
+  `);
+}
+
+function renderHarborMarket(zone) {
+  setHarborPanelContent(zone, `
+    <section class="harbor-black-market">
+      <div class="harbor-black-market__header">
+        <div>
+          <span>Kikötői piac</span>
+          <h4>Feketepiaci áruk</h4>
+        </div>
+        <span>A megvett item azonnal bekerül a felszereléseid közé.</span>
+      </div>
+      ${getMarketPanelHtml()}
+    </section>
+  `);
+  bindMarketBuyButtons(harborOperationPanel, {
+    rerender: false,
+    afterBuy: () => renderHarborMarket(zone),
+  });
+}
+
+function renderHarborZonePanel(zone) {
+  if (zone.id === "bar") return renderHarborBar(zone);
+  if (zone.id === "warehouse") return renderHarborWarehouse(zone);
+  if (zone.id === "office") return renderHarborOffice(zone);
+  if (zone.id === "market") return renderHarborMarket(zone);
+  if (["docks", "customs", "rail", "fish", "storage"].includes(zone.id)) return renderHarborOrders(zone, zone.id === "fish" ? "fish" : "mixed");
+  setHarborPanelContent(zone, `
+    <section class="harbor-place">
+      <p class="harbor-operation-panel__muted">${escapeHtml(zone.note)}</p>
+      <div class="harbor-garage-card">
+        <strong>Megnyitva</strong>
+        <span>Ez a terulet mar kattinthato, a reszletes funkcio kovetkezo korben finomithato.</span>
+      </div>
+    </section>
+  `);
+}
+
+function startHarborMission(missionId) {
+  const mission = harborMissionCatalog.find((entry) => entry.id === missionId);
+  if (!mission) return false;
+  if (!hasProcessTaskSlot()) {
+    sceneRef?.setMessage("Nincs szabad feladat kor a kikotoi munkahoz.");
+    renderProcessTasks();
+    return false;
+  }
+  if (mission.requires && !canPayCargo(mission.requires)) {
+    sceneRef?.setMessage("Nincs eleg csempesz aru ehhez a munkahoz.");
+    return false;
+  }
+  if (mission.requires) takeCargo(mission.requires);
+  const queued = enqueueProcessTask({
+    type: "harbor",
+    title: mission.zone === "fish" ? "Halaszat" : "Csempeszet",
+    icon: mission.zone === "fish" ? "H" : "C",
+    durationMs: mission.durationMs,
+    payload: {
+      title: mission.title,
+      zone: mission.zone,
+      gives: mission.gives || {},
+      rewardMoney: mission.rewardMoney,
+      rewardXp: mission.rewardXp,
+      heal: mission.heal || 0,
+      energy: mission.energy || 0,
+      successChance: mission.zone === "fish" ? 1 : 0.86,
+    },
+  });
+  if (!queued) return false;
+  sceneRef?.setMessage(`${mission.title} elindult. A jutalom a folyamat lejarata utan jar.`);
+  sceneRef?.pushLog(`Kikoto: ${mission.title} elindult (${formatCountdown(mission.durationMs)}).`);
+  renderHarborZonePanel(harborZoneDefs.find((zone) => zone.id === mission.zone) || harborZoneDefs[0]);
+  saveGame();
+  return true;
+}
+
+function handleHarborPanelClick(event) {
+  const missionButton = event.target.closest("[data-harbor-mission]");
+  if (missionButton) {
+    startHarborMission(missionButton.dataset.harborMission);
+    return;
+  }
+
+  const buyButton = event.target.closest("[data-harbor-buy]");
+  if (buyButton) {
+    const kind = buyButton.dataset.harborBuy;
+    const cost = 45;
+    if (!canAfford(cost)) {
+      sceneRef?.setMessage("Nincs eleg penz az italra.");
+      return;
+    }
+    state.money -= cost;
+    if (kind === "health") state.health = clamp(state.health + 35, 0, 100);
+    if (kind === "energy") state.energy = clamp(state.energy + 35, 0, 100);
+    saveGame();
+    sceneRef?.refreshHUD();
+    sceneRef?.setMessage(kind === "health" ? "Az ital visszahozott egy kis eletet." : "A fekete kave felrazta a bandat.");
+    return;
+  }
+  const bribeButton = event.target.closest("[data-harbor-bribe]");
+  if (bribeButton) {
+    const large = bribeButton.dataset.harborBribe === "large";
+    const cost = large ? 350 : 150;
+    if (!canAfford(cost)) {
+      sceneRef?.setMessage("Nincs eleg penz a boritekra.");
+      return;
+    }
+    state.money -= cost;
+    const success = Math.random() <= (large ? 0.8 : 0.65);
+    if (success) {
+      state.heat = clamp(state.heat - (large ? 10 : 5), 0, 100);
+      sceneRef?.setMessage("A boritek celba ert, a korozes csokkent.");
+    } else {
+      sceneRef?.setMessage("A rendor nem vette at a boritekot.");
+    }
+    saveGame();
+    sceneRef?.refreshHUD();
+  }
+}
+
+function renderHarborMapZones() {
+  if (!harborMapZones) return;
+  harborMapZones.replaceChildren();
+  harborZoneDefs.forEach((zone) => {
+    const wrapper = document.createElement("div");
+    wrapper.className = "harbor-map-zone";
+    wrapper.style.left = `${zone.x}%`;
+    wrapper.style.top = `${zone.y}%`;
+    wrapper.style.width = `${zone.w}%`;
+    wrapper.style.height = `${zone.h}%`;
+    if (zone.clip) wrapper.style.setProperty("--harbor-clip-path", zone.clip);
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "harbor-map-zone__hit";
+    button.dataset.harborZone = zone.id;
+    button.setAttribute("aria-label", zone.title);
+    const label = document.createElement("span");
+    label.className = `harbor-map-zone__label${zone.title.length > 12 ? " harbor-map-zone__label--long" : ""}`;
+    label.textContent = zone.title;
+    const note = document.createElement("span");
+    note.className = "harbor-map-zone__note";
+    note.textContent = zone.note;
+    wrapper.append(button, label, note);
+    harborMapZones.appendChild(wrapper);
+  });
+}
+
+function showHarborMapView() {
+  if (!state.registered || !harborMapView) return;
+  hideAuxPanel();
+  hideQuestCard();
+  hideChoiceWheel();
+  hideLotInfoModal();
+  hideCharacterPanel();
+  hideHarborOperationPanel();
+  document.body.classList.add("is-harbor-map-open");
+  document.getElementById("gameRoot")?.classList.add("is-hidden-by-harbor");
+  harborMapView.classList.remove("hidden");
+  harborMapView.setAttribute("aria-hidden", "false");
+  hudMainMapButton?.classList.remove("hidden");
+  hudMainMapButton?.setAttribute("aria-hidden", "false");
+  if (hudQuickDockLabel) hudQuickDockLabel.textContent = "";
+  renderHarborMapZones();
+  state.mentorFlags.enteredHarbor = true;
+  completeMentorStep("harbor");
+  sceneRef?.setMessage("Kikoto negyed megnyitva.");
+}
+
+function hideHarborMapView() {
+  hideHarborOperationPanel();
+  hideAuxPanel();
+  hideMessagesDialog();
+  hidePublicProfileDialog();
+  hideCharacterPanel();
+  hideCrewMemberPanel();
+  harborMapView?.classList.add("hidden");
+  harborMapView?.setAttribute("aria-hidden", "true");
+  document.body.classList.remove("is-harbor-map-open");
+  document.getElementById("gameRoot")?.classList.remove("is-hidden-by-harbor");
+  hudMainMapButton?.classList.add("hidden");
+  hudMainMapButton?.setAttribute("aria-hidden", "true");
+  sceneRef?.refreshScene();
+  sceneRef?.setMessage("Vissza a varosba.");
+}
+
 async function openAuxPanel(kind) {
   hideChoiceWheel();
   hideQuestCard();
@@ -1823,6 +2329,8 @@ async function openAuxPanel(kind) {
     return;
   }
   if (kind === "world") {
+    state.mentorFlags.sawWorld = true;
+    completeMentorStep("world");
     try {
       const response = await fetch(`/api/world-lots`, { headers: { Accept: "application/json" } });
       const payload = response.ok ? await response.json() : { lots: [] };
@@ -1830,6 +2338,11 @@ async function openAuxPanel(kind) {
     } catch {
       renderWorldMapPanelWithSaves([]);
     }
+    return;
+  }
+  if (kind === "harbor") {
+    showHarborMapView();
+    return;
   }
 }
 
@@ -2030,6 +2543,96 @@ function getQuestAtSpot(spotId) {
   return state.activeQuest?.status === "offered" && state.activeQuest?.spotId === spotId ? state.activeQuest : null;
 }
 
+const mentorSteps = [
+  { id: "base", title: "Elso munka", text: "Valaszd ki a fo bazisod.", reward: { money: 80, xp: 10 } },
+  { id: "crew", title: "Ember a bandaba", text: "Vegyel fel vagy fejlessz egy bandatagot.", reward: { money: 90, xp: 12 } },
+  { id: "equip", title: "Oltozz munkahoz", text: "Szerelj fel egy targyat a karakteredre.", reward: { money: 70, xp: 12, item: true } },
+  { id: "robbery", title: "Zold celpont", text: "Rabolj ki egy konnyu hazat.", reward: { money: 110, xp: 16 } },
+  { id: "protection", title: "Utcai ado", text: "Szedj vedelmi penzt egy hazbol.", reward: { money: 120, xp: 16 } },
+  { id: "quest", title: "Atadas", text: "Fejezz be es adj at egy kuldetest.", reward: { money: 130, xp: 20 } },
+  { id: "rest", title: "Biztos hely", text: "Pihenj a fo bazisodon.", reward: { money: 90, xp: 14 } },
+  { id: "world", title: "Nagyvilag", text: "Nezd meg a vilagterkepet.", reward: { money: 100, xp: 15 } },
+  { id: "level5", title: "Nevet szerzel", text: "Erd el az 5. szintet.", reward: { money: 180, xp: 30, item: true } },
+  { id: "harbor", title: "Kikotoi kapu", text: "Lepj be a kikoto negyedbe.", reward: { money: 220, xp: 35 } },
+];
+
+function getCurrentMentorStep() {
+  if (state.mentorCompleted) return null;
+  return mentorSteps[clamp(Math.round(Number(state.mentorStep) || 0), 0, mentorSteps.length - 1)] || null;
+}
+
+function shouldShowMentorHud() {
+  return Boolean(state.registered)
+    && !state.mentorCompleted
+    && getRankLevel(state.fame) <= 1
+    && Boolean(getCurrentMentorStep());
+}
+
+function getMentorRewardText(step) {
+  if (!step?.reward) return "Jutalom: -";
+  const parts = [];
+  if (step.reward.money) parts.push(`+${step.reward.money} $`);
+  if (step.reward.xp) parts.push(`+${step.reward.xp} XP`);
+  if (step.reward.item) parts.push("szurke targy");
+  return `Jutalom: ${parts.join(", ")}`;
+}
+
+function updateMentorPanel() {
+  const visible = shouldShowMentorHud();
+  const step = getCurrentMentorStep();
+  hudMentorToggle?.classList.toggle("hidden", !visible);
+  hudMentorToggle?.classList.toggle("is-attention", visible && !mentorCardOpen);
+  hudMentorCard?.classList.toggle("hidden", !(visible && mentorCardOpen));
+  hudMentorCard?.setAttribute("aria-hidden", visible && mentorCardOpen ? "false" : "true");
+  if (!visible || !step) return;
+  if (hudMentorStepTitle) hudMentorStepTitle.textContent = step.title;
+  if (hudMentorStepText) hudMentorStepText.textContent = step.text;
+  if (hudMentorStepReward) hudMentorStepReward.textContent = getMentorRewardText(step);
+  if (hudMentorProgress) hudMentorProgress.textContent = `${Math.min(mentorSteps.length, (Number(state.mentorStep) || 0) + 1)} / ${mentorSteps.length}`;
+}
+
+function grantMentorReward(step) {
+  if (!step?.reward) return;
+  if (step.reward.money) state.money += step.reward.money;
+  if (step.reward.xp) applyFame(step.reward.xp);
+  if (step.reward.item) {
+    unlockEquipmentItem("hat", {
+      id: `mentor-fedora-${Date.now()}`,
+      name: "Mentor fedora",
+      power: 2,
+      stat: "defense",
+      rarity: "common",
+      image: "./assets/items/item-hat-gray.png",
+    });
+  }
+}
+
+function completeMentorStep(stepId) {
+  const step = getCurrentMentorStep();
+  if (!step || step.id !== stepId) return false;
+  mentorStepCompleting = true;
+  try {
+    grantMentorReward(step);
+    state.mentorStep = Math.round(Number(state.mentorStep) || 0) + 1;
+  } finally {
+    mentorStepCompleting = false;
+  }
+  if (state.mentorStep >= mentorSteps.length) {
+    state.mentorCompleted = true;
+    mentorCardOpen = false;
+  }
+  sceneRef?.pushLog(`Mentor feladat teljesitve: ${step.title}.`);
+  updateMentorPanel();
+  saveGame();
+  sceneRef?.refreshHUD();
+  return true;
+}
+
+function maybeCompleteMentorLevelGoal() {
+  if (mentorStepCompleting) return;
+  if (getRankLevel(state.fame) >= 5) completeMentorStep("level5");
+}
+
 function createQuestMarker(area) {
   const bounds = getAreaBounds(area);
   const marker = document.createElementNS("http://www.w3.org/2000/svg", "g");
@@ -2044,6 +2647,31 @@ function createQuestMarker(area) {
   text.classList.add("map-svg-quest-marker__text");
   text.textContent = "!";
 
+  marker.appendChild(text);
+  return marker;
+}
+
+function createRivalMarker(area) {
+  const bounds = getAreaBounds(area);
+  const marker = document.createElementNS("http://www.w3.org/2000/svg", "g");
+  marker.classList.add("map-svg-rival-marker");
+  marker.setAttribute("aria-hidden", "true");
+  const x = (bounds.x + bounds.w * 0.5) * backgroundMapFrame.width;
+  const y = (bounds.y - bounds.h * 0.2) * backgroundMapFrame.height;
+
+  const ring = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+  ring.setAttribute("cx", x);
+  ring.setAttribute("cy", y - 4);
+  ring.setAttribute("r", 13);
+  ring.classList.add("map-svg-rival-marker__ring");
+
+  const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+  text.setAttribute("x", x);
+  text.setAttribute("y", y);
+  text.classList.add("map-svg-rival-marker__text");
+  text.textContent = "R";
+
+  marker.appendChild(ring);
   marker.appendChild(text);
   return marker;
 }
@@ -2158,6 +2786,7 @@ function grantQuestReward(quest) {
   state.money += quest.moneyReward;
   applyFame(quest.xpReward);
   applyHeat(4);
+  completeMentorStep("quest");
   state.activeQuests = normalizeQuestList(state.activeQuests).filter((entry) => entry.id !== quest.id);
   state.selectedQuestSlot = clamp(state.selectedQuestSlot, 0, Math.max(0, state.activeQuests.length - 1));
   sceneRef?.pushLog(
@@ -2470,6 +3099,14 @@ function normalizeTimedActions() {
   state.nextPolicePressureAt = Number.isFinite(Number(state.nextPolicePressureAt))
     ? Number(state.nextPolicePressureAt)
     : 0;
+  state.pendingProtectionRewards = normalizePendingProtectionRewards(state.pendingProtectionRewards);
+  state.processTasks = normalizeProcessTasks(state.processTasks);
+  state.smuggledGoods = normalizeSmuggledGoods(state.smuggledGoods);
+  state.smugglerFame = Math.max(0, Math.round(Number(state.smugglerFame) || 0));
+  state.rivalEvent = normalizeRivalEvent(state.rivalEvent, now);
+  state.rivalNextSpawnAt = Number.isFinite(Number(state.rivalNextSpawnAt))
+    ? Number(state.rivalNextSpawnAt)
+    : now + randomInt(RIVAL_SPAWN_MIN_MS, RIVAL_SPAWN_MAX_MS);
   state.baseRestDay = Number.isFinite(Number(state.baseRestDay)) ? Math.floor(Number(state.baseRestDay)) : 0;
   state.baseRestAvailableAt = Number.isFinite(Number(state.baseRestAvailableAt))
     ? Math.max(0, Number(state.baseRestAvailableAt))
@@ -2518,10 +3155,10 @@ function processPolicePressure(now = Date.now()) {
     return false;
   }
 
-  const heatSeverity = state.heat >= 90 ? 1.22 : state.heat >= 75 ? 1.1 : state.heat >= 60 ? 1 : 0.72;
-  const loss = Math.max(1, Math.floor(state.money * 0.03 * heatSeverity));
+  const heatSeverity = state.heat >= 90 ? 1.18 : state.heat >= 75 ? 1.08 : state.heat >= 60 ? 1 : 0.72;
+  const loss = Math.max(1, Math.floor(state.money * 0.05 * heatSeverity));
   state.money = Math.max(0, state.money - loss);
-  state.heat = clamp(state.heat - 3, 0, 100);
+  state.heat = clamp(state.heat - 13, 0, 100);
   sceneRef?.pushLog(`A rendorok razziat tartottak. -${loss} $ sarc a korozes miatt.`);
   const summaryText = state.heat >= 60
     ? "Magas korozes mellett a nyomozok egyre surubben utik rajtad a vasat. Most is sarcot vittek el a kasszabol."
@@ -2535,7 +3172,7 @@ function processPolicePressure(now = Date.now()) {
   postGameEvent(
     "police_raid",
     "Rendőri razzia",
-    `A rendőrök ${loss} $-t vittek el. A körözésed 3%-kal csökkent.`,
+    `A rendőrök ${loss} $-t vittek el. A körözésed 13%-kal csökkent.`,
     { loss, heat: state.heat },
   );
   return true;
@@ -2558,6 +3195,277 @@ function syncNaturalRecovery(now = Date.now()) {
     changed = true;
   });
   return changed;
+}
+
+function normalizePendingProtectionRewards(source) {
+  return (Array.isArray(source) ? source : [])
+    .map((entry) => ({
+      id: String(entry?.id || `protection-${Date.now()}-${Math.random()}`),
+      spotId: typeof entry?.spotId === "string" ? entry.spotId : null,
+      buildingName: String(entry?.buildingName || "Haz"),
+      districtIndex: Number.isFinite(Number(entry?.districtIndex)) ? Math.round(Number(entry.districtIndex)) : 0,
+      gain: Math.max(0, Math.round(Number(entry?.gain) || 0)),
+      fameGain: Math.max(0, Math.round(Number(entry?.fameGain) || 0)),
+      heatGain: Math.max(0, Math.round(Number(entry?.heatGain) || 0)),
+      completesQuest: Boolean(entry?.completesQuest),
+      readyAt: Number(entry?.readyAt) || 0,
+    }))
+    .filter((entry) => entry.readyAt > 0);
+}
+
+function normalizeProcessTasks(source) {
+  return (Array.isArray(source) ? source : [])
+    .map((entry, index) => {
+      const durationMs = Math.max(5000, Math.round(Number(entry?.durationMs) || PROTECTION_REWARD_DELAY_MS));
+      const startedAt = Number.isFinite(Number(entry?.startedAt)) ? Math.max(0, Number(entry.startedAt)) : 0;
+      return {
+        id: String(entry?.id || `process-${Date.now()}-${index}`),
+        type: String(entry?.type || "generic"),
+        title: String(entry?.title || "Munka"),
+        icon: String(entry?.icon || "•").slice(0, 3),
+        durationMs,
+        startedAt,
+        payload: entry?.payload && typeof entry.payload === "object" ? entry.payload : {},
+      };
+    })
+    .filter((entry) => entry.durationMs > 0)
+    .slice(0, MAX_PROCESS_TASKS);
+}
+
+function hasProcessTaskSlot() {
+  state.processTasks = normalizeProcessTasks(state.processTasks);
+  return state.processTasks.length < MAX_PROCESS_TASKS;
+}
+
+function ensureProcessQueueStarted(now = Date.now()) {
+  state.processTasks = normalizeProcessTasks(state.processTasks);
+  if (state.processTasks[0] && !state.processTasks[0].startedAt) {
+    state.processTasks[0].startedAt = now;
+    return true;
+  }
+  return false;
+}
+
+function renderProcessTasks(now = Date.now()) {
+  if (!hudProcessTasks) return;
+  ensureProcessQueueStarted(now);
+  const tasks = normalizeProcessTasks(state.processTasks);
+  const slots = Array.from({ length: MAX_PROCESS_TASKS }, (_, index) => {
+    const task = tasks[index];
+    if (!task) {
+      return `<button class="hud-process-task hud-process-task--empty" type="button" title="Szabad feladat hely"><span>+</span><strong>ures</strong></button>`;
+    }
+    const isActive = index === 0;
+    const elapsed = isActive && task.startedAt ? Math.max(0, now - task.startedAt) : 0;
+    const progress = isActive ? clamp((elapsed / task.durationMs) * 100, 0, 100) : 0;
+    const remaining = isActive ? Math.max(0, task.durationMs - elapsed) : task.durationMs;
+    return `
+      <button class="hud-process-task${isActive ? "" : " hud-process-task--waiting"}" type="button" title="${escapeHtml(task.title)}" style="--process:${progress}%">
+        <span>${escapeHtml(task.icon)}</span>
+        <strong>${isActive ? formatCountdown(remaining) : "var"}</strong>
+        <em>${escapeHtml(task.title)}</em>
+      </button>
+    `;
+  }).join("");
+  hudProcessTasks.innerHTML = `
+    <div class="hud-process-group">
+      <b>Folyamat</b>
+      <div class="hud-process-group__bubbles">${slots}</div>
+    </div>
+  `;
+}
+
+function enqueueProcessTask(task) {
+  syncProcessTasks(Date.now(), { skipRender: true });
+  if (!hasProcessTaskSlot()) {
+    sceneRef?.setMessage("Nincs szabad feladat kor. Varj, amig az egyik munka lejar.");
+    renderProcessTasks();
+    return false;
+  }
+  const normalized = normalizeProcessTasks([{
+    id: task.id || `process-${task.type || "task"}-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+    type: task.type || "generic",
+    title: task.title || "Munka",
+    icon: task.icon || "•",
+    durationMs: task.durationMs || PROTECTION_REWARD_DELAY_MS,
+    startedAt: 0,
+    payload: task.payload || {},
+  }])[0];
+  state.processTasks.push(normalized);
+  ensureProcessQueueStarted();
+  renderProcessTasks();
+  return true;
+}
+
+function applyProtectionReward(reward) {
+  state.money += reward.gain;
+  applyFame(reward.fameGain);
+  const appliedHeat = applyHeat(reward.heatGain);
+  const district = state.districts[reward.districtIndex];
+  if (district) district.loyalty = clamp(district.loyalty + 6, 0, 100);
+  if (reward.completesQuest && reward.spotId) completeQuest("protection", getSpotById(reward.spotId));
+  completeMentorStep("protection");
+  sceneRef?.pushLog(`${reward.buildingName}: vedelmi penz befolyt. +${reward.gain} $, +${reward.fameGain} XP, +${appliedHeat}% korozes.`);
+  sceneRef?.setMessage(`${reward.buildingName}: a vedelmi penz megjott a kasszaba.`);
+}
+
+function applyHarborTaskReward(payload = {}) {
+  const successChance = Number.isFinite(Number(payload.successChance)) ? Number(payload.successChance) : 0.88;
+  const success = Math.random() <= successChance;
+  if (!success) {
+    const fine = Math.min(state.money, Math.max(12, Math.round(Number(payload.rewardMoney || 0) * 0.18)));
+    state.money = Math.max(0, state.money - fine);
+    applyHeat(1);
+    sceneRef?.pushLog(`${payload.title || "Kikotoi munka"} elbukott. -${fine} $ buntetes.`);
+    sceneRef?.setMessage("A kikotoi munka balul sult el. Az aru elveszett, es buntetest fizettel.");
+    return;
+  }
+  addCargo(payload.gives);
+  state.money += Math.max(0, Math.round(Number(payload.rewardMoney) || 0));
+  applyFame(Math.max(0, Math.round(Number(payload.rewardXp) || 0)));
+  state.smugglerFame = Math.max(0, Math.round(Number(state.smugglerFame) || 0) + Math.max(1, Math.round((Number(payload.rewardXp) || 0) / 5)));
+  if (payload.heal) state.health = clamp(state.health + Number(payload.heal), 0, 100);
+  if (payload.energy) state.energy = clamp(state.energy + Number(payload.energy), 0, 100);
+  sceneRef?.pushLog(`${payload.title || "Kikotoi munka"} kesz. +${payload.rewardMoney || 0} $, +${payload.rewardXp || 0} XP.`);
+  sceneRef?.setMessage(`${payload.title || "Kikotoi munka"} sikerult. A jutalom bekerult a kasszaba.`);
+}
+
+function completeProcessTask(task) {
+  if (task.type === "protection") {
+    applyProtectionReward(task.payload);
+    return true;
+  }
+  if (task.type === "harbor") {
+    applyHarborTaskReward(task.payload);
+    return true;
+  }
+  return false;
+}
+
+function syncProcessTasks(now = Date.now(), options = {}) {
+  state.processTasks = normalizeProcessTasks(state.processTasks);
+  let changed = ensureProcessQueueStarted(now);
+  while (state.processTasks.length) {
+    const current = state.processTasks[0];
+    if (!current.startedAt || now - current.startedAt < current.durationMs) break;
+    state.processTasks.shift();
+    completeProcessTask(current);
+    changed = true;
+    if (state.processTasks[0] && !state.processTasks[0].startedAt) {
+      state.processTasks[0].startedAt = now;
+    }
+  }
+  if (!options.skipRender) renderProcessTasks(now);
+  return changed;
+}
+
+function queueProtectionReward(payload) {
+  const reward = {
+    id: `protection-${payload?.spotId || "district"}-${Date.now()}`,
+    spotId: payload?.spotId || null,
+    buildingName: payload?.buildingName || "Haz",
+    districtIndex: Number.isFinite(Number(payload?.districtIndex)) ? Number(payload.districtIndex) : state.selectedDistrictIndex,
+    gain: Math.max(0, Math.round(Number(payload?.gain) || 0)),
+    fameGain: Math.max(0, Math.round(Number(payload?.fameGain) || 0)),
+    heatGain: Math.max(0, Math.round(Number(payload?.heatGain) || 0)),
+    completesQuest: Boolean(payload?.completesQuest),
+  };
+  return enqueueProcessTask({
+    type: "protection",
+    title: "Vedelmi penz",
+    icon: "$",
+    durationMs: PROTECTION_REWARD_DELAY_MS,
+    payload: reward,
+  });
+}
+
+function resolvePendingProtectionRewards(now = Date.now()) {
+  const pending = normalizePendingProtectionRewards(state.pendingProtectionRewards);
+  let changed = pending.length !== (state.pendingProtectionRewards || []).length;
+  const dueRewards = pending.filter((reward) => reward.readyAt <= now);
+  const remaining = pending.filter((reward) => reward.readyAt > now);
+  state.pendingProtectionRewards = remaining;
+  dueRewards.forEach((reward) => {
+    applyProtectionReward(reward);
+    changed = true;
+  });
+  return changed;
+}
+
+function normalizeRivalEvent(event, now = Date.now()) {
+  if (!event || typeof event !== "object") return null;
+  const spotId = typeof event.spotId === "string" ? event.spotId : "";
+  if (!getSpotById(spotId)) return null;
+  const expiresAt = Number(event.expiresAt);
+  if (!Number.isFinite(expiresAt) || expiresAt <= now) return null;
+  return {
+    id: String(event.id || `rival-${spotId}-${Math.round(expiresAt)}`),
+    spotId,
+    strength: clamp(Math.round(Number(event.strength) || 30), 8, 160),
+    rewardMoney: Math.max(60, Math.round(Number(event.rewardMoney) || 160)),
+    rewardXp: Math.max(10, Math.round(Number(event.rewardXp) || 20)),
+    expiresAt,
+  };
+}
+
+function getActiveRivalEvent(now = Date.now()) {
+  state.rivalEvent = normalizeRivalEvent(state.rivalEvent, now);
+  return state.rivalEvent;
+}
+
+function getRivalEventAtSpot(spotId) {
+  const rival = getActiveRivalEvent();
+  return rival?.spotId === spotId ? rival : null;
+}
+
+function scheduleNextRivalEvent(now = Date.now()) {
+  state.rivalNextSpawnAt = now + randomInt(RIVAL_SPAWN_MIN_MS, RIVAL_SPAWN_MAX_MS);
+}
+
+function spawnRivalEvent(now = Date.now()) {
+  const candidates = clickableBuildingDefs.filter((spot) => spot.id !== state.mainBaseSpotId && !getQuestAtSpot(spot.id));
+  if (!candidates.length) {
+    scheduleNextRivalEvent(now);
+    return false;
+  }
+  const spot = candidates[randomInt(0, candidates.length - 1)];
+  const difficulty = getBuildingDifficulty(spot);
+  const strength = clamp(Math.round(difficulty * 0.75 + getRankLevel(state.fame) * 4 + randomInt(8, 22)), 10, 160);
+  state.rivalEvent = {
+    id: `rival-${spot.id}-${now}`,
+    spotId: spot.id,
+    strength,
+    rewardMoney: 120 + strength * 3 + randomInt(20, 80),
+    rewardXp: 14 + Math.round(strength / 7),
+    expiresAt: now + RIVAL_EVENT_DURATION_MS,
+  };
+  sceneRef?.pushLog(`Rivalis banda jelent meg: ${spot.name}.`);
+  sceneRef?.setMessage(`${spot.name} korul rivalis banda mozgolodik.`);
+  return true;
+}
+
+function syncRivalEvent(now = Date.now()) {
+  if (!state.registered) return false;
+  const hadRival = Boolean(state.rivalEvent);
+  const active = getActiveRivalEvent(now);
+  if (hadRival && !active) {
+    const loss = Math.min(state.money, Math.max(15, Math.round(state.money * 0.04)));
+    state.money = Math.max(0, state.money - loss);
+    state.districts.forEach((district) => {
+      district.loyalty = clamp(district.loyalty - 2, 0, 100);
+    });
+    scheduleNextRivalEvent(now);
+    sceneRef?.pushLog(`A rivalis banda elvitt ${loss} $-t, mert tul sokaig vartal.`);
+    sceneRef?.setMessage(`Rivalis banda eltunt: -${loss} $, -2% befolyas.`);
+    return true;
+  }
+  if (active) return false;
+  if (!Number.isFinite(Number(state.rivalNextSpawnAt)) || Number(state.rivalNextSpawnAt) <= 0) {
+    scheduleNextRivalEvent(now);
+    return true;
+  }
+  if (now >= Number(state.rivalNextSpawnAt)) return spawnRivalEvent(now);
+  return false;
 }
 
 function syncTimedActions(now = Date.now()) {
@@ -2594,6 +3502,9 @@ function syncTimedActions(now = Date.now()) {
     }
   });
 
+  if (syncProcessTasks(now)) changed = true;
+  if (resolvePendingProtectionRewards(now)) changed = true;
+  if (syncRivalEvent(now)) changed = true;
   if (processPolicePressure(now)) changed = true;
 
   return changed;
@@ -3100,6 +4011,8 @@ function renderSvgMapOverlay() {
   });
 
   clickableBuildingDefs.forEach((area, index) => {
+    const quest = getQuestAtSpot(area.id);
+    const rival = getRivalEventAtSpot(area.id);
     const plot = createSvgPolygon(
       { polygon: area.plot },
       ["map-svg-plot", "map-svg-plot--building", getPlotDifficultyClass(area)],
@@ -3115,8 +4028,11 @@ function renderSvgMapOverlay() {
     const polygon = createSvgPolygon(area, ["map-svg-area", "map-svg-area--building"]);
     polygon.setAttribute("aria-label", area.name);
     polygon.dataset.areaId = area.id;
-    if (getQuestAtSpot(area.id)) {
+    if (quest) {
       polygon.classList.add("map-svg-area--quest");
+    }
+    if (rival) {
+      polygon.classList.add("map-svg-area--rival");
     }
     if (activeChoiceSpot?.id === area.id) {
       polygon.classList.add("is-selected");
@@ -3127,8 +4043,11 @@ function renderSvgMapOverlay() {
     polygon.addEventListener("click", () => handleSvgMapAreaClick(area, frameLeft, frameTop, frameWidth, frameHeight));
     group.appendChild(polygon);
     group.appendChild(createSvgAreaLabel(area, "building"));
-    if (getQuestAtSpot(area.id)) {
+    if (quest) {
       group.appendChild(createQuestMarker(area));
+    }
+    if (rival) {
+      group.appendChild(createRivalMarker(area));
     }
     mapSvgOverlay.appendChild(group);
   });
@@ -3150,27 +4069,75 @@ function escapeHtml(value) {
 
 function normalizeCrewMembers(members) {
   const savedMembers = Array.isArray(members) ? members : [];
-  return crewMemberTemplates.map((template) => {
+  return crewMemberTemplates.map((template, index) => {
     const saved = savedMembers.find((member) => member?.id === template.id) || {};
     const level = clamp(Number.isFinite(saved.level) ? Math.round(saved.level) : 1, 1, 20);
     const defenseLevel = clamp(Number.isFinite(saved.defenseLevel) ? Math.round(saved.defenseLevel) : 1, 1, 20);
+    const legacyOwned = index === 0
+      || saved.hired === true
+      || level > 1
+      || defenseLevel > 1
+      || Number(saved.attackBonus) > 0
+      || Number(saved.defenseBonus) > 0
+      || Number.isFinite(saved.health);
     return {
       ...template,
+      hired: Boolean(legacyOwned),
       level,
       defenseLevel,
       attackBonus: Math.max(0, Math.round(Number(saved.attackBonus) || 0)),
       defenseBonus: Math.max(0, Math.round(Number(saved.defenseBonus) || 0)),
       health: clamp(Number.isFinite(saved.health) ? saved.health : template.baseHealth, 0, template.baseHealth),
+      equipment: normalizeCrewEquipment(saved.equipment),
     };
   });
 }
 
+function normalizeCrewEquipment(source) {
+  const output = getEmptyEquipment();
+  equipmentSlotOrder.forEach((slot) => {
+    const item = source && typeof source === "object" ? source[slot] : null;
+    output[slot] = item ? normalizeEquipmentItem(slot, item) : null;
+  });
+  return output;
+}
+
+function getHiredCrewMembers() {
+  return (Array.isArray(state.crewMembers) ? state.crewMembers : []).filter((member) => member.hired);
+}
+
+function getCrewHireCost(member) {
+  if (!member) return 0;
+  return Math.max(0, Math.round(Number(crewHireCosts[member.id]) || 0));
+}
+
+function getCrewEquipmentPower(member, stat = null) {
+  if (!member?.equipment) return 0;
+  return equipmentSlotOrder.reduce((sum, slot) => {
+    const item = member.equipment?.[slot];
+    if (!item) return sum;
+    const itemStat = item.stat || equipmentSlotDefs[slot]?.stat;
+    if (stat && itemStat !== stat) return sum;
+    return sum + (Number(item.power) || 0);
+  }, 0);
+}
+
+function isItemEquippedAnywhere(itemId, except = {}) {
+  if (!itemId) return false;
+  const playerUses = Object.values(state.equipment || {}).some((item) => item?.id === itemId);
+  if (playerUses && except.owner !== "player") return true;
+  return (Array.isArray(state.crewMembers) ? state.crewMembers : []).some((member) => {
+    if (except.owner === "crew" && except.memberId === member.id) return false;
+    return Object.values(member.equipment || {}).some((item) => item?.id === itemId);
+  });
+}
+
 function getCrewMemberAttack(member) {
-  return member ? member.baseAttack + (member.attackBonus || 0) : 0;
+  return member ? member.baseAttack + (member.attackBonus || 0) + getCrewEquipmentPower(member, "attack") : 0;
 }
 
 function getCrewMemberDefense(member) {
-  return member ? member.baseDefense + (member.defenseBonus || 0) : 0;
+  return member ? member.baseDefense + (member.defenseBonus || 0) + getCrewEquipmentPower(member, "defense") : 0;
 }
 
 function getCrewMemberUpgradeCost(member) {
@@ -3189,7 +4156,8 @@ function getCrewMemberHealCost(member) {
 }
 
 function getActiveCrewMember() {
-  return state.crewMembers.find((member) => member.id === state.activeCrewMemberId) || state.crewMembers[0] || null;
+  const hired = getHiredCrewMembers();
+  return hired.find((member) => member.id === state.activeCrewMemberId) || hired[0] || null;
 }
 
 function getCrewReadiness(member) {
@@ -3198,7 +4166,7 @@ function getCrewReadiness(member) {
 }
 
 function getBandPowerProfile() {
-  const members = Array.isArray(state.crewMembers) ? state.crewMembers : [];
+  const members = getHiredCrewMembers();
   const activeMember = getActiveCrewMember();
   const crewAttackTotal = members.reduce((sum, member) => sum + getCrewMemberAttack(member), 0);
   const crewDefenseTotal = members.reduce((sum, member) => sum + getCrewMemberDefense(member), 0);
@@ -3262,8 +4230,9 @@ function renderCrewPanel() {
     state.crewMembers = makeCrewMembers();
   }
   const members = Array.isArray(state.crewMembers) ? state.crewMembers : makeCrewMembers();
-  const totalPower = members.reduce((sum, member) => sum + getCrewMemberAttack(member), 0);
-  const renderKey = `${state.money}|${state.activeCrewMemberId}|${members.map((member) => `${member.id}:${member.level}:${member.defenseLevel}:${member.health}`).join("|")}`;
+  const hiredMembers = getHiredCrewMembers();
+  const totalPower = hiredMembers.reduce((sum, member) => sum + getCrewMemberAttack(member), 0);
+  const renderKey = `${state.money}|${state.activeCrewMemberId}|${members.map((member) => `${member.id}:${member.hired ? 1 : 0}:${member.level}:${member.defenseLevel}:${member.health}:${equipmentSlotOrder.map((slot) => member.equipment?.[slot]?.id || "-").join(",")}`).join("|")}`;
   if (renderKey === crewPanelRenderKey) return;
   crewPanelRenderKey = renderKey;
   if (crewPowerTotal) crewPowerTotal.textContent = `${totalPower} ero`;
@@ -3275,18 +4244,20 @@ function renderCrewPanel() {
     const defenseCost = getCrewMemberDefenseUpgradeCost(member);
     const healCost = getCrewMemberHealCost(member);
     const isActive = member.id === state.activeCrewMemberId;
+    const hired = Boolean(member.hired);
+    const hireCost = getCrewHireCost(member);
     return `
-      <article class="crew-card${isActive ? " is-active" : ""}" data-member-id="${member.id}">
+      <article class="crew-card${isActive ? " is-active" : ""}${hired ? "" : " is-locked"}" data-member-id="${member.id}">
         <div class="crew-card__portrait">
           <img src="./assets/character/gangster-character.png" alt="${member.name}">
-          <div class="crew-card__level">${member.level}. szint</div>
+          <div class="crew-card__level">${hired ? `${member.level}. szint` : "Nincs felbérelve"}</div>
         </div>
         <div class="crew-card__body">
           <div class="crew-card__header">
             <strong class="crew-card__name">${member.name}</strong>
             <div class="crew-card__role">${member.role}</div>
           </div>
-          <div class="crew-card__stats">
+          ${hired ? `<div class="crew-card__stats">
             <div class="crew-card__stat">
               <div class="crew-card__stat-copy">
                 <small>Ero</small>
@@ -3308,16 +4279,59 @@ function renderCrewPanel() {
               </div>
               <button class="crew-card__mini-action" data-crew-action="defense" type="button"${state.money < defenseCost || member.defenseLevel >= 20 ? " disabled" : ""}>${member.defenseLevel >= 20 ? "Max" : `${defenseCost}$`}</button>
             </div>
-          </div>
+          </div>` : `<div class="crew-card__stats">
+            <div class="crew-card__stat crew-card__stat--hire">
+              <div class="crew-card__stat-copy">
+                <small>Felbérlés</small>
+                <strong>${hireCost} $</strong>
+              </div>
+              <button class="crew-card__mini-action" data-crew-action="hire" type="button"${state.money < hireCost ? " disabled" : ""}>Felbérel</button>
+            </div>
+          </div>`}
         </div>
       </article>
     `;
   }).join("");
 }
 
+function hireCrewMember(memberId) {
+  const member = state.crewMembers.find((entry) => entry.id === memberId);
+  if (!member) return;
+  if (member.hired) {
+    state.activeCrewMemberId = member.id;
+    sceneRef?.setMessage(`${member.name} mar a bandad tagja.`);
+    return;
+  }
+  const cost = getCrewHireCost(member);
+  if (!canAfford(cost)) {
+    sceneRef?.setMessage(`Nincs eleg penz ${member.name} felberlesere.`);
+    return;
+  }
+  state.money -= cost;
+  member.hired = true;
+  member.level = 1;
+  member.defenseLevel = 1;
+  member.attackBonus = 0;
+  member.defenseBonus = 0;
+  member.health = member.baseHealth;
+  member.equipment = normalizeCrewEquipment(member.equipment);
+  state.crew = getHiredCrewMembers().length;
+  state.activeCrewMemberId = member.id;
+  completeMentorStep("crew");
+  crewPanelRenderKey = "";
+  sceneRef?.pushLog(`${member.name} csatlakozott a bandahoz. -${cost} $.`);
+  sceneRef?.setMessage(`${member.name} mostantol bevetheto.`);
+  saveGame();
+  sceneRef?.refreshHUD();
+}
+
 function upgradeCrewMember(memberId) {
   const member = state.crewMembers.find((entry) => entry.id === memberId);
   if (!member) return;
+  if (!member.hired) {
+    sceneRef?.setMessage("Elobb fel kell berelned ezt az embert.");
+    return;
+  }
   if (member.level >= 20) {
     sceneRef?.setMessage(`${member.name} elerte a maximalis szintet.`);
     return;
@@ -3333,6 +4347,7 @@ function upgradeCrewMember(memberId) {
   member.level += 1;
   member.attackBonus = Math.max(0, Math.round(Number(member.attackBonus) || 0)) + gainedPoints;
   state.activeCrewMemberId = member.id;
+  completeMentorStep("crew");
   sceneRef?.pushLog(`${member.name} fejlodott. +${gainedPoints} ero, most ${member.level}. szintu.`);
   sceneRef?.setMessage(`${member.name} ereje +${gainedPoints} ponttal nott.`);
   saveGame();
@@ -3342,6 +4357,10 @@ function upgradeCrewMember(memberId) {
 function upgradeCrewMemberDefense(memberId) {
   const member = state.crewMembers.find((entry) => entry.id === memberId);
   if (!member) return;
+  if (!member.hired) {
+    sceneRef?.setMessage("Elobb fel kell berelned ezt az embert.");
+    return;
+  }
   if (member.defenseLevel >= 20) {
     sceneRef?.setMessage(`${member.name} elerte a maximalis vedelmi szintet.`);
     return;
@@ -3357,6 +4376,7 @@ function upgradeCrewMemberDefense(memberId) {
   member.defenseLevel += 1;
   member.defenseBonus = Math.max(0, Math.round(Number(member.defenseBonus) || 0)) + gainedPoints;
   state.activeCrewMemberId = member.id;
+  completeMentorStep("crew");
   sceneRef?.pushLog(`${member.name} vedelme megerosodott. +${gainedPoints} pajzs.`);
   sceneRef?.setMessage(`${member.name} vedelme +${gainedPoints} ponttal nott.`);
   saveGame();
@@ -3366,6 +4386,10 @@ function upgradeCrewMemberDefense(memberId) {
 function healCrewMember(memberId) {
   const member = state.crewMembers.find((entry) => entry.id === memberId);
   if (!member) return;
+  if (!member.hired) {
+    sceneRef?.setMessage("Elobb fel kell berelned ezt az embert.");
+    return;
+  }
   const healCost = getCrewMemberHealCost(member);
   if (!healCost) {
     sceneRef?.setMessage(`${member.name} mar maximum eleteroen van.`);
@@ -3381,6 +4405,108 @@ function healCrewMember(memberId) {
   sceneRef?.setMessage(`${member.name} ujra maximum eleteron van.`);
   saveGame();
   sceneRef?.refreshHUD();
+}
+
+function hideCrewEquipmentPicker() {
+  activeCrewEquipmentSlot = null;
+  crewEquipmentPicker?.classList.add("hidden");
+  crewEquipmentPicker?.setAttribute("aria-hidden", "true");
+  refreshCrewMemberPanel();
+}
+
+function getCrewMemberById(memberId) {
+  return (Array.isArray(state.crewMembers) ? state.crewMembers : []).find((member) => member.id === memberId) || null;
+}
+
+function equipCrewInventoryItem(memberId, slot, itemId) {
+  const member = getCrewMemberById(memberId);
+  if (!member?.hired) return;
+  const item = state.itemInventory?.[slot]?.find((entry) => entry.id === itemId);
+  if (!item) return;
+  if (isItemEquippedAnywhere(item.id, { owner: "crew", memberId })) {
+    sceneRef?.setMessage("Ezt a targyat mar mas viseli.");
+    return;
+  }
+  member.equipment = normalizeCrewEquipment(member.equipment);
+  member.equipment[slot] = { ...item };
+  state.activeCrewMemberId = member.id;
+  crewPanelRenderKey = "";
+  sceneRef?.setMessage(`${member.name} felszerelte: ${item.name}.`);
+  refreshCrewMemberPanel();
+  saveGame();
+  sceneRef?.refreshHUD();
+}
+
+function showCrewEquipmentPicker(slot) {
+  const member = getCrewMemberById(activeCrewSheetMemberId);
+  const slotDef = equipmentSlotDefs[slot];
+  const items = state.itemInventory?.[slot] || [];
+  if (!member?.hired || !slotDef || !crewEquipmentPicker || !crewEquipmentPickerList) return;
+  activeCrewEquipmentSlot = slot;
+  if (crewEquipmentPickerTitle) crewEquipmentPickerTitle.textContent = `${member.name}: ${slotDef.label}`;
+  crewEquipmentPickerList.innerHTML = items.map((item) => {
+    const equipped = member.equipment?.[slot]?.id === item.id;
+    const used = !equipped && isItemEquippedAnywhere(item.id, { owner: "crew", memberId: member.id });
+    return `
+      <button class="equipment-picker__item${equipped ? " is-equipped" : ""}" type="button" data-crew-equip-slot="${slot}" data-item-id="${item.id}"${used ? " disabled" : ""}>
+        <img class="equipment-picker__art equipment-picker__art--${slot}" src="${item.image || getEquipmentArt(slot)}" alt="">
+        <span class="equipment-picker__copy">
+          <strong>${item.name}</strong>
+          <small>${used ? "Mar hasznalatban" : getEquipmentBonusText(slot, item.power, item.stat)}</small>
+        </span>
+        <em>${equipped ? "Felveve" : used ? "Foglalt" : "Felveszem"}</em>
+      </button>
+    `;
+  }).join("");
+  crewEquipmentPicker.classList.remove("hidden");
+  crewEquipmentPicker.setAttribute("aria-hidden", "false");
+  refreshCrewMemberPanel();
+}
+
+function refreshCrewMemberPanel() {
+  const member = getCrewMemberById(activeCrewSheetMemberId);
+  if (!member?.hired || !crewMemberPanel) return;
+  member.equipment = normalizeCrewEquipment(member.equipment);
+  if (crewMemberPanelTitle) crewMemberPanelTitle.textContent = member.name;
+  if (crewMemberPanelImage) crewMemberPanelImage.src = "./assets/character/gangster-character.png";
+  if (crewMemberPanelName) crewMemberPanelName.textContent = member.name;
+  if (crewMemberPanelRole) crewMemberPanelRole.textContent = member.role;
+  if (crewMemberPanelLevel) crewMemberPanelLevel.textContent = String(member.level);
+  if (crewMemberPanelHealth) crewMemberPanelHealth.textContent = `${member.health} / ${member.baseHealth}`;
+  if (crewMemberPanelAttack) crewMemberPanelAttack.textContent = String(getCrewMemberAttack(member));
+  if (crewMemberPanelDefense) crewMemberPanelDefense.textContent = String(getCrewMemberDefense(member));
+  if (crewMemberEquipmentGrid) {
+    crewMemberEquipmentGrid.innerHTML = equipmentSlotOrder.map((slot) => {
+      const item = member.equipment?.[slot];
+      const active = activeCrewEquipmentSlot === slot;
+      return `
+        <button class="crew-member-equipment-slot${active ? " is-active" : ""}" type="button" data-crew-slot="${slot}">
+          <img src="${item?.image || getEquipmentArt(slot)}" alt="">
+          <span>${equipmentSlotDefs[slot]?.label || slot}</span>
+          <strong>${item?.name || "Ures"}</strong>
+          <small>${item ? getEquipmentBonusText(slot, item.power, item.stat) : "Valassz targyat"}</small>
+        </button>
+      `;
+    }).join("");
+  }
+}
+
+function showCrewMemberPanel(memberId) {
+  const member = getCrewMemberById(memberId);
+  if (!member?.hired || !crewMemberPanel) return;
+  activeCrewSheetMemberId = member.id;
+  activeCrewEquipmentSlot = null;
+  hideChoiceWheel();
+  crewMemberPanel.classList.remove("hidden");
+  crewMemberPanel.setAttribute("aria-hidden", "false");
+  refreshCrewMemberPanel();
+}
+
+function hideCrewMemberPanel() {
+  hideCrewEquipmentPicker();
+  activeCrewSheetMemberId = null;
+  crewMemberPanel?.classList.add("hidden");
+  crewMemberPanel?.setAttribute("aria-hidden", "true");
 }
 
 function hash2(x, y, salt = 0) {
@@ -3403,6 +4529,7 @@ function setHudVisible(visible) {
   if (!visible) {
     clearRobberyAutoPlay();
     hideCharacterPanel();
+    hideCrewMemberPanel();
     robberyGame?.classList.add("hidden");
     robberyGame?.setAttribute("aria-hidden", "true");
     activeRobberyGame = null;
@@ -3557,7 +4684,7 @@ function finishRobberySuccess() {
 
   state.money += gain;
   applyFame(fameGain);
-  applyHeat(heatGain);
+  const appliedHeat = applyHeat(heatGain);
   if (target) {
     target.loyalty = clamp(target.loyalty + (encounter.mode === "shop" ? 9 : 5), 0, 100);
     if (!target.controlled && target.loyalty >= 65) {
@@ -3566,6 +4693,7 @@ function finishRobberySuccess() {
     }
   }
   completeQuest("robbery", encounter.spot);
+  completeMentorStep("robbery");
   sceneRef?.pushLog(`${encounter.spot.name} kirabolva a mini-játékban: +${gain} $.`);
   sceneRef?.setMessage(`${encounter.spot.name} kirablása sikerült.`);
   saveGame();
@@ -3574,7 +4702,7 @@ function finishRobberySuccess() {
   showRobberyResult(
     true,
     "A rajtaütés sikerült",
-    `Zsákmány: +${gain} $ · Hírnév: +${fameGain} · Sérülés: -${healthLost} · Körözés: +${heatGain}%`,
+    `Zsákmány: +${gain} $ · Hírnév: +${fameGain} · Sérülés: -${healthLost} · Körözés: +${appliedHeat}%`,
   );
 }
 
@@ -3585,7 +4713,7 @@ function finishRobberyFailure(reason) {
   state.health = Math.max(state.health, 12);
   state.naturalRecoveryAt.health = Date.now();
   const healthLost = Math.max(0, encounter.healthAtStart - state.health);
-  applyHeat(heatGain);
+  const appliedHeat = applyHeat(heatGain);
   sceneRef?.pushLog(`${encounter.spot.name}: a rablás kudarcba fulladt.`);
   sceneRef?.setMessage(reason);
   saveGame();
@@ -3594,7 +4722,7 @@ function finishRobberyFailure(reason) {
   showRobberyResult(
     false,
     "A rajtaütés kudarcba fulladt",
-    `${reason} Sérülés: -${healthLost} · Körözés: +${heatGain}%`,
+    `${reason} Sérülés: -${healthLost} · Körözés: +${appliedHeat}%`,
   );
 }
 
@@ -3730,8 +4858,14 @@ function hideEquipmentPicker() {
 function equipInventoryItem(slot, itemId) {
   const item = state.itemInventory?.[slot]?.find((entry) => entry.id === itemId);
   if (!item) return;
+  if (isItemEquippedAnywhere(item.id, { owner: "player" })) {
+    sceneRef?.setMessage("Ezt a targyat mar mas viseli.");
+    return;
+  }
   state.equipment[slot] = { ...item };
   recalculateGearPower();
+  state.mentorFlags.equippedItem = true;
+  completeMentorStep("equip");
   sceneRef?.setMessage(`${item.name} felveve a(z) ${equipmentSlotDefs[slot]?.label?.toLowerCase() || "felszereles"} helyere.`);
   refreshCharacterPanel();
   saveGame();
@@ -3745,14 +4879,15 @@ function showEquipmentPicker(slot) {
   if (equipmentPickerTitle) equipmentPickerTitle.textContent = slotDef.label;
   equipmentPickerList.innerHTML = items.map((item) => {
     const equipped = state.equipment?.[slot]?.id === item.id;
+    const used = !equipped && isItemEquippedAnywhere(item.id, { owner: "player" });
     return `
-      <button class="equipment-picker__item${equipped ? " is-equipped" : ""}" type="button" data-equip-slot="${slot}" data-item-id="${item.id}">
+      <button class="equipment-picker__item${equipped ? " is-equipped" : ""}" type="button" data-equip-slot="${slot}" data-item-id="${item.id}"${used ? " disabled" : ""}>
         <img class="equipment-picker__art equipment-picker__art--${slot}" src="${item.image || getEquipmentArt(slot)}" alt="">
         <span class="equipment-picker__copy">
           <strong>${item.name}</strong>
-          <small>${getEquipmentBonusText(slot, item.power, item.stat)}</small>
+          <small>${used ? "Mar hasznalatban" : getEquipmentBonusText(slot, item.power, item.stat)}</small>
         </span>
-        <em>${equipped ? "Felveve" : "Felveszem"}</em>
+        <em>${equipped ? "Felveve" : used ? "Foglalt" : "Felveszem"}</em>
       </button>
     `;
   }).join("");
@@ -3880,7 +5015,15 @@ function showChoiceWheel(spot) {
     const cost = getLotInvestmentCost(spot);
     const houseDef = getLotHouseDef(spot);
     const isMaxLevel = level >= getLotMaxLevel(spot);
-    setChoiceWheelButtons(isMaxLevel ? ["protection", "close"] : ["robbery", "protection", "close"]);
+    setChoiceWheelButtons(level > 0
+      ? [
+          ...(isMaxLevel ? [] : ["robbery"]),
+          "protection",
+          "baseRest",
+          "close",
+          "quest",
+        ]
+      : ["robbery", "protection", "close"]);
     if (choiceWheelTitle) choiceWheelTitle.textContent = spot.name;
     if (choiceWheelSubtitle) {
       choiceWheelSubtitle.textContent = houseDef
@@ -3889,19 +5032,36 @@ function showChoiceWheel(spot) {
     }
     if (choiceWheelCoreLabel) choiceWheelCoreLabel.textContent = houseDef ? `Haz ${level}` : "Ures telek";
     if (choiceWheelAction1) choiceWheelAction1.textContent = level ? `Fejlesztes (${cost} $)` : `Vasarlas (${cost} $)`;
-    if (choiceWheelAction2) choiceWheelAction2.textContent = "Telek info";
-    if (choiceWheelAction3) choiceWheelAction3.textContent = "";
+    if (choiceWheelAction2) choiceWheelAction2.textContent = level ? "Vedelmi penz" : "Telek info";
+    if (choiceWheelAction3) {
+      choiceWheelAction3.textContent = level ? "Telek info" : "";
+      choiceWheelAction3.dataset.choiceAction = "lotInfo";
+    }
     if (choiceWheelAction4) choiceWheelAction4.textContent = "Bezaras";
+    if (choiceWheelAction5) {
+      choiceWheelAction5.textContent = level ? "Kirablas" : "";
+      choiceWheelAction5.dataset.choiceAction = "lotRobbery";
+    }
     return;
   }
   const quest = getQuestAtSpot(spot.id);
+  const rival = getRivalEventAtSpot(spot.id);
   const difficulty = getBuildingDifficulty(spot);
   const difficultyInfo = getDifficultyInfo(difficulty);
   const robberyCost = spot.mode === "shop" ? 18 : 12;
   const protectionCost = 8;
-  setChoiceWheelButtons(quest ? ["robbery", "protection", "baseRest", "close", "quest"] : ["robbery", "protection", "baseRest", "close"]);
+  const baseActionAvailable = !state.mainBaseSpotId || state.mainBaseSpotId === spot.id;
+  const thirdAction = rival ? "rival" : (baseActionAvailable ? "baseRest" : null);
+  const visibleActions = [
+    "robbery",
+    "protection",
+    ...(thirdAction ? [thirdAction] : []),
+    "close",
+    ...(quest ? ["quest"] : []),
+  ];
+  setChoiceWheelButtons(visibleActions);
   if (choiceWheelTitle) choiceWheelTitle.textContent = `${spot.name} - ${difficultyInfo.label}`;
-  if (choiceWheelSubtitle) choiceWheelSubtitle.textContent = "";
+  if (choiceWheelSubtitle) choiceWheelSubtitle.textContent = rival ? `Rivalis banda: ero ${rival.strength}` : "";
   if (choiceWheelCoreLabel) choiceWheelCoreLabel.textContent = spot.name;
   if (choiceWheelAction1) {
     const canRob = state.health > 0 && state.energy >= robberyCost;
@@ -3919,13 +5079,17 @@ function showChoiceWheel(spot) {
     choiceWheelAction2.disabled = cooldown > 0 || !canProtect;
   }
   if (choiceWheelAction3) {
-    const baseRestRemaining = Math.max(0, Number(state.baseRestAvailableAt) - Date.now());
-    const baseRestUsed = state.mainBaseSpotId === spot.id && baseRestRemaining > 0;
-    const baseClaimUsed = state.mainBaseSpotId !== spot.id && state.mainBaseClaimDay === state.day;
-    choiceWheelAction3.textContent = state.mainBaseSpotId === spot.id
-      ? (baseRestUsed ? `Pihenés (${formatCountdown(baseRestRemaining)})` : "Pihenés (ingyen)")
-      : (baseClaimUsed ? "Fő bázis (holnap)" : "Fő bázis");
-    choiceWheelAction3.disabled = baseRestUsed || baseClaimUsed;
+    if (rival) {
+      choiceWheelAction3.textContent = "Rivalis banda";
+      choiceWheelAction3.disabled = state.health <= 0 || state.energy < 14;
+    } else {
+      const baseRestRemaining = Math.max(0, Number(state.baseRestAvailableAt) - Date.now());
+      const baseRestUsed = state.mainBaseSpotId === spot.id && baseRestRemaining > 0;
+      choiceWheelAction3.textContent = state.mainBaseSpotId === spot.id
+        ? (baseRestUsed ? `Pihenés (${formatCountdown(baseRestRemaining)})` : "Pihenés (ingyen)")
+        : "Fő bázis";
+      choiceWheelAction3.disabled = baseRestUsed;
+    }
   }
   if (choiceWheelAction4) choiceWheelAction4.textContent = "Bezaras";
   if (choiceWheelAction5) choiceWheelAction5.textContent = quest ? "Kuldetes" : "";
@@ -3959,8 +5123,8 @@ function runTerritoryAction(actionId, territory) {
   }
 
   if (territory.kind === "lot") {
+    const level = getLotLevel(territory);
     if (actionId === "robbery") {
-      const level = getLotLevel(territory);
       const maxLevel = getLotMaxLevel(territory);
       if (level >= maxLevel) {
         sceneRef?.setMessage(territory.restoredHouse
@@ -3982,7 +5146,23 @@ function runTerritoryAction(actionId, territory) {
         : `${territory.name}: haz ${level + 1}. szint, -${cost} $.`);
       sceneRef?.setMessage(`${territory.name}: ${getLotHouseDef(territory)?.name || "Haz"} - ${getLotIncome(territory)} $ napi bevetel.`);
     } else if (actionId === "protection") {
+      if (level <= 0) {
+        showLotInfoModal(territory);
+        return;
+      }
+      collectProtectionMoney(getSelectedDistrict(), territory.name, territory);
+    } else if (actionId === "lotInfo") {
       showLotInfoModal(territory);
+    } else if (actionId === "lotRobbery") {
+      if (level <= 0) {
+        sceneRef?.setMessage("Ezt a telket elobb meg kell vasarolni.");
+        return;
+      }
+      startRobberyMinigame({
+        ...territory,
+        mode: "shop",
+        districtIndex: Number.isFinite(Number(territory.districtIndex)) ? territory.districtIndex : state.selectedDistrictIndex,
+      });
     }
   }
 }
@@ -4012,14 +5192,16 @@ function runChoiceAction(actionId) {
     saveGame();
     sceneRef?.refreshHUD();
     sceneRef?.refreshScene();
-    if (spot.kind !== "lot" || actionId !== "protection") {
+    if (spot.kind !== "lot" || !["protection", "lotInfo", "lotRobbery"].includes(actionId)) {
       hideChoiceWheel();
     }
     return;
   }
 
   state.selectedDistrictIndex = clamp(spot.districtIndex, 0, state.districts.length - 1);
-  if (actionId === "robbery") {
+  if (actionId === "rival") {
+    resolveRivalBattle(spot);
+  } else if (actionId === "robbery") {
     startRobberyMinigame(spot);
     return;
   } else if (actionId === "protection") {
@@ -4104,6 +5286,15 @@ function createSaveSnapshot() {
     activeQuests: state.activeQuests,
     selectedQuestSlot: state.selectedQuestSlot,
     questNextSpawnAt: state.questNextSpawnAt,
+    pendingProtectionRewards: state.pendingProtectionRewards,
+    processTasks: state.processTasks,
+    smuggledGoods: state.smuggledGoods,
+    smugglerFame: state.smugglerFame,
+    rivalEvent: state.rivalEvent,
+    rivalNextSpawnAt: state.rivalNextSpawnAt,
+    mentorStep: state.mentorStep,
+    mentorCompleted: state.mentorCompleted,
+    mentorFlags: state.mentorFlags,
     protectionCooldowns: state.protectionCooldowns,
     recoveryEffects: state.recoveryEffects,
     naturalRecoveryAt: state.naturalRecoveryAt,
@@ -4128,7 +5319,6 @@ function hydrateState(saved) {
     state.districts = makeDistricts();
   }
   state.day = Number.isFinite(state.day) ? state.day : 1;
-  state.crew = Number.isFinite(state.crew) ? Math.max(3, Math.round(state.crew)) : 3;
   state.health = Number.isFinite(state.health) ? clamp(state.health, 0, 100) : 100;
   state.energy = Number.isFinite(state.energy) ? clamp(state.energy, 0, 100) : 100;
   state.gearPower = Number.isFinite(state.gearPower) ? Math.max(0, state.gearPower) : 0;
@@ -4136,9 +5326,10 @@ function hydrateState(saved) {
   state.itemInventory = normalizeItemInventory(state.itemInventory, state.equipment);
   recalculateGearPower();
   state.crewMembers = normalizeCrewMembers(state.crewMembers);
-  state.activeCrewMemberId = state.crewMembers.some((member) => member.id === state.activeCrewMemberId)
+  state.crew = getHiredCrewMembers().length;
+  state.activeCrewMemberId = state.crewMembers.some((member) => member.hired && member.id === state.activeCrewMemberId)
     ? state.activeCrewMemberId
-    : state.crewMembers[0].id;
+    : (getHiredCrewMembers()[0]?.id || state.crewMembers[0]?.id || "luca");
   state.territories = normalizeTerritories(state.territories);
   state.buildingDifficulties = normalizeBuildingDifficulties(state.buildingDifficulties, state.buildingDifficultyCycle);
   state.marketStock = normalizeMarketStock(state.marketStock);
@@ -4170,6 +5361,24 @@ function hydrateState(saved) {
   state.questNextSpawnAt = Number.isFinite(state.questNextSpawnAt)
     ? state.questNextSpawnAt
     : Date.now() + randomInt(12000, 24000);
+  state.pendingProtectionRewards = normalizePendingProtectionRewards(state.pendingProtectionRewards);
+  state.processTasks = normalizeProcessTasks(state.processTasks);
+  state.smuggledGoods = normalizeSmuggledGoods(state.smuggledGoods);
+  state.smugglerFame = Math.max(0, Math.round(Number(state.smugglerFame) || 0));
+  state.rivalEvent = normalizeRivalEvent(state.rivalEvent);
+  state.rivalNextSpawnAt = Number.isFinite(Number(state.rivalNextSpawnAt))
+    ? Number(state.rivalNextSpawnAt)
+    : Date.now() + randomInt(RIVAL_SPAWN_MIN_MS, RIVAL_SPAWN_MAX_MS);
+  state.mentorStep = clamp(Math.round(Number(state.mentorStep) || 0), 0, mentorSteps.length);
+  state.mentorCompleted = Boolean(state.mentorCompleted || state.mentorStep >= mentorSteps.length);
+  if (getRankLevel(state.fame) > 1) {
+    state.mentorCompleted = true;
+  }
+  state.mentorFlags = {
+    equippedItem: Boolean(state.mentorFlags?.equippedItem),
+    sawWorld: Boolean(state.mentorFlags?.sawWorld),
+    enteredHarbor: Boolean(state.mentorFlags?.enteredHarbor),
+  };
   state.selectedDistrictIndex = clamp(
     Number.isInteger(state.selectedDistrictIndex) ? state.selectedDistrictIndex : 0,
     0,
@@ -4282,11 +5491,18 @@ function getSelectedDistrict() {
 }
 
 function applyHeat(amount) {
-  state.heat = clamp(state.heat + amount, 0, 100);
+  const previousHeat = state.heat;
+  const rawAmount = Number(amount) || 0;
+  const effectiveAmount = rawAmount > 0
+    ? Math.max(1, Math.round(rawAmount * HEAT_GAIN_MULTIPLIER))
+    : rawAmount;
+  state.heat = clamp(state.heat + effectiveAmount, 0, 100);
+  return Math.max(0, state.heat - previousHeat);
 }
 
 function applyFame(amount) {
   state.fame = Math.max(0, state.fame + amount);
+  maybeCompleteMentorLevelGoal();
 }
 
 function applyActionDamage(min = 3, max = 15) {
@@ -4374,6 +5590,7 @@ function setMainBase(spot) {
   state.mainBaseSpotId = spot.id;
   state.mainBaseClaimDay = state.day;
   state.selectedDistrictIndex = clamp(spot.districtIndex, 0, state.districts.length - 1);
+  completeMentorStep("base");
   sceneRef?.pushLog(`${spot.name} lett a fo bazisod.`);
   sceneRef?.setMessage(`Fő bázis beállítva: ${spot.name}.`);
   saveGame();
@@ -4398,6 +5615,7 @@ function restAtBase(spot) {
   state.heat = clamp(state.heat - heatLoss, 0, 100);
   state.baseRestDay = state.day;
   state.baseRestAvailableAt = Date.now() + BASE_REST_COOLDOWN_MS;
+  completeMentorStep("rest");
   sceneRef?.pushLog(`Pihenés a bázison. +${healthGain} életerő, +${energyGain} akciópont, -${heatLoss} körözés.`);
   sceneRef?.setMessage("A banda elbújt a bázison. Hat óra múlva pihenhetsz itt újra ingyen.");
   saveGame();
@@ -4453,6 +5671,7 @@ function raidDistrict(targetDistrict, mode = "street", targetSpot = null) {
   if (targetSpot) {
     completeQuest("robbery", targetSpot);
   }
+  completeMentorStep("robbery");
   saveGame();
 }
 
@@ -4462,6 +5681,11 @@ function collectProtectionMoney(targetDistrict, buildingName = "Haz", targetSpot
     return false;
   }
   if (!canStartCombat("A vedelmi penz beszedest")) return false;
+  if (!hasProcessTaskSlot()) {
+    sceneRef?.setMessage("Nincs szabad feladat kor a vedelmi penzhez.");
+    renderProcessTasks();
+    return false;
+  }
   if (targetSpot && getProtectionCooldownRemaining(targetSpot.id) > 0) {
     sceneRef?.setMessage(`Innen meg nem szedhetsz vedelmi penzt. Hatralevo ido: ${formatCountdown(getProtectionCooldownRemaining(targetSpot.id))}.`);
     return false;
@@ -4492,9 +5716,8 @@ function collectProtectionMoney(targetDistrict, buildingName = "Haz", targetSpot
     Math.round(gainBase * (0.84 + difficultyInfo.successChance * 0.42) - lowReadinessPenalty),
   );
 
-  state.money += gain;
-  applyFame(difficultyInfo.label === "Veszelyes" ? 5 : difficultyInfo.label === "Kockazatos" ? 4 : 3);
-  applyHeat(difficultyInfo.label === "Veszelyes" ? 8 : difficultyInfo.label === "Kockazatos" ? 6 : 4);
+  const fameGain = difficultyInfo.label === "Veszelyes" ? 5 : difficultyInfo.label === "Kockazatos" ? 4 : 3;
+  const heatGain = difficultyInfo.label === "Veszelyes" ? 8 : difficultyInfo.label === "Kockazatos" ? 6 : 4;
 
   if (target) {
     target.loyalty = clamp(target.loyalty + (difficultyInfo.label === "Veszelyes" ? 10 : 8), 0, 100);
@@ -4504,14 +5727,60 @@ function collectProtectionMoney(targetDistrict, buildingName = "Haz", targetSpot
     }
   }
 
-  sceneRef?.pushLog(`${buildingName}: +${gain} $ vedelmi penz.`);
-  sceneRef?.setMessage(`${buildingName} kifizette a vedelmi penzt. Nehezseg: ${difficultyInfo.label}.`);
+  const queued = queueProtectionReward({
+    spotId: targetSpot?.id || null,
+    buildingName,
+    districtIndex: state.selectedDistrictIndex,
+    gain,
+    fameGain,
+    heatGain,
+    completesQuest: Boolean(targetSpot),
+  });
+  if (!queued) return false;
+  sceneRef?.pushLog(`${buildingName}: vedelmi penz beszedese elindult, ${formatCountdown(PROTECTION_REWARD_DELAY_MS)} mulva erkezik.`);
+  sceneRef?.setMessage(`${buildingName}: a vedelmi penz utban van. Nehezseg: ${difficultyInfo.label}.`);
   if (targetSpot) {
     state.protectionCooldowns[targetSpot.id] = Date.now() + PROTECTION_COOLDOWN_MS;
-    completeQuest("protection", targetSpot);
   }
   saveGame();
   return true;
+}
+
+function resolveRivalBattle(spot) {
+  const rival = getRivalEventAtSpot(spot?.id);
+  if (!rival) {
+    sceneRef?.setMessage("Itt most nincs rivalis banda.");
+    return false;
+  }
+  if (!canStartCombat("A rivalis banda elleni harcot")) return false;
+  if (!spendEnergy(14)) return false;
+
+  const playerPower = getActionPower("map");
+  const targetPower = rival.strength * 2.1;
+  const successChance = clamp(0.46 + (playerPower - targetPower) / 220, 0.24, 0.86);
+  const success = Math.random() <= successChance;
+  const healthLoss = applyActionDamage(success ? 5 : 12, success ? 18 : 28);
+
+  if (success) {
+    state.money += rival.rewardMoney;
+    applyFame(rival.rewardXp);
+    const heatGain = applyHeat(5);
+    state.rivalEvent = null;
+    scheduleNextRivalEvent();
+    sceneRef?.pushLog(`${spot.name}: rivalis banda leverve. +${rival.rewardMoney} $, +${rival.rewardXp} XP.`);
+    sceneRef?.setMessage(`Rivalis banda leverve. Jutalom: +${rival.rewardMoney} $, +${rival.rewardXp} XP, korozes +${heatGain}%.`);
+  } else {
+    const loss = Math.min(state.money, Math.max(20, Math.round(rival.rewardMoney * 0.22)));
+    state.money = Math.max(0, state.money - loss);
+    applyHeat(6);
+    state.rivalEvent = { ...rival, expiresAt: Date.now() + Math.max(2 * 60 * 1000, Math.round((rival.expiresAt - Date.now()) * 0.55)) };
+    sceneRef?.pushLog(`${spot.name}: a rivalis banda visszavert. -${loss} $, -${healthLoss} eletero.`);
+    sceneRef?.setMessage(`A rivalis banda tul eros volt. -${loss} $, -${healthLoss} eletero.`);
+  }
+  saveGame();
+  sceneRef?.refreshHUD();
+  sceneRef?.refreshMap();
+  return success;
 }
 
 function advanceDistrictLoyalty() {
@@ -4558,7 +5827,7 @@ function handleRecruit() {
   state.money -= cost;
   state.crew += 1;
   applyFame(6);
-  applyHeat(4);
+  completeMentorStep("crew");
   sceneRef?.pushLog(`Uj ember csatlakozott. -${cost} $, crew +1.`);
   sceneRef?.setMessage("A banda erosodik.");
 }
@@ -4657,7 +5926,7 @@ function startNewGame(name) {
   state.profileName = name.trim().slice(0, 18);
   state.money = 120;
   state.fame = 0;
-  state.crew = 3;
+  state.crew = 1;
   state.heat = 0;
   state.health = 100;
   state.energy = 100;
@@ -4666,6 +5935,7 @@ function startNewGame(name) {
   state.itemInventory = getDefaultItemInventory();
   recalculateGearPower();
   state.crewMembers = makeCrewMembers();
+  state.crew = getHiredCrewMembers().length || 1;
   state.activeCrewMemberId = "luca";
   state.mainBaseSpotId = null;
   state.worldBaseLotId = null;
@@ -4677,6 +5947,15 @@ function startNewGame(name) {
   state.activeQuests = [];
   state.selectedQuestSlot = 0;
   state.questNextSpawnAt = Date.now() + randomInt(12000, 24000);
+  state.pendingProtectionRewards = [];
+  state.processTasks = [];
+  state.smuggledGoods = normalizeSmuggledGoods();
+  state.smugglerFame = 0;
+  state.rivalEvent = null;
+  state.rivalNextSpawnAt = Date.now() + randomInt(RIVAL_SPAWN_MIN_MS, RIVAL_SPAWN_MAX_MS);
+  state.mentorStep = 0;
+  state.mentorCompleted = false;
+  state.mentorFlags = { equippedItem: false, sawWorld: false, enteredHarbor: false };
   state.protectionCooldowns = {};
   state.recoveryEffects = { health: null, energy: null };
   state.naturalRecoveryAt = { health: Date.now(), energy: Date.now() };
@@ -4700,6 +5979,8 @@ function startNewGame(name) {
   void refreshMessageBadge();
   hideChoiceWheel();
   hideQuestCard();
+  mentorCardOpen = true;
+  updateMentorPanel();
   sceneRef?.resetLogs();
   sceneRef?.refreshScene();
   sceneRef?.setMessage("Valaszd ki a vilagterkepen, hol induljon a bazisod.");
@@ -4738,7 +6019,7 @@ function resetGame() {
   state.profileName = "";
   state.money = 120;
   state.fame = 0;
-  state.crew = 3;
+  state.crew = 1;
   state.heat = 0;
   state.health = 100;
   state.energy = 100;
@@ -4747,6 +6028,7 @@ function resetGame() {
   state.itemInventory = getDefaultItemInventory();
   recalculateGearPower();
   state.crewMembers = makeCrewMembers();
+  state.crew = getHiredCrewMembers().length || 1;
   state.activeCrewMemberId = "luca";
   state.mainBaseSpotId = null;
   state.worldBaseLotId = null;
@@ -4759,6 +6041,15 @@ function resetGame() {
   state.activeQuests = [];
   state.selectedQuestSlot = 0;
   state.questNextSpawnAt = Date.now() + randomInt(12000, 24000);
+  state.pendingProtectionRewards = [];
+  state.processTasks = [];
+  state.smuggledGoods = normalizeSmuggledGoods();
+  state.smugglerFame = 0;
+  state.rivalEvent = null;
+  state.rivalNextSpawnAt = 0;
+  state.mentorStep = 0;
+  state.mentorCompleted = false;
+  state.mentorFlags = { equippedItem: false, sawWorld: false, enteredHarbor: false };
   state.protectionCooldowns = {};
   state.recoveryEffects = { health: null, energy: null };
   state.naturalRecoveryAt = { health: Date.now(), energy: Date.now() };
@@ -4778,6 +6069,8 @@ function resetGame() {
   setHudVisible(false);
   hideChoiceWheel();
   hideQuestCard();
+  mentorCardOpen = false;
+  updateMentorPanel();
   playerNameInput.value = "";
   sceneRef?.resetLogs();
   sceneRef?.refreshScene();
@@ -4932,6 +6225,8 @@ class CityScene extends Phaser.Scene {
     renderCrewPanel();
 
     updateQuestHud();
+    updateMentorPanel();
+    renderProcessTasks();
     if (hudQuestTab1) hudQuestTab1.classList.toggle("is-active", Boolean(state.activeQuests?.[0]));
     if (hudQuestTab2) hudQuestTab2.classList.toggle("is-active", Boolean(state.activeQuests?.[1]));
 
@@ -5794,7 +7089,7 @@ refreshRobberyGame = function refreshThreeVsThreeBattle() {
 
   robberyTeamPicker?.classList.toggle("is-hidden", encounter.battleStarted);
   robberyTeamPicker?.replaceChildren();
-  state.crewMembers.forEach((member) => {
+  getHiredCrewMembers().forEach((member) => {
     const selected = encounter.selectedMemberIds.includes(member.id);
     const locked = encounter.battleStarted || (!selected && encounter.selectedMemberIds.length >= 2);
     const attack = getCrewMemberAttack(member);
@@ -6022,9 +7317,29 @@ function bindHudActions() {
   hudQuickClan?.addEventListener("click", () => openAuxPanel("clan"));
   hudQuickWorld?.addEventListener("click", () => openAuxPanel("world"));
   hudQuickMessages?.addEventListener("click", () => openAuxPanel("messages"));
+  hudQuickDock?.addEventListener("click", () => openAuxPanel("harbor"));
+  hudMainMapButton?.addEventListener("click", hideHarborMapView);
+  harborMapZones?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-harbor-zone]");
+    if (!button) {
+      hideHarborOperationPanel();
+      return;
+    }
+    const zone = harborZoneDefs.find((entry) => entry.id === button.dataset.harborZone);
+    if (zone) renderHarborZonePanel(zone);
+  });
+  harborMapView?.addEventListener("click", (event) => {
+    if (event.target.closest?.(".harbor-operation-panel, [data-harbor-zone]")) return;
+    hideHarborOperationPanel();
+  });
+  harborOperationPanel?.addEventListener("click", handleHarborPanelClick);
 
   auxPanelClose?.addEventListener("click", hideAuxPanel);
   auxPanelBackdrop?.addEventListener("click", hideAuxPanel);
+  messagesDialogClose?.addEventListener("click", hideMessagesDialog);
+  messagesDialogBackdrop?.addEventListener("click", hideMessagesDialog);
+  publicProfileDialogClose?.addEventListener("click", hidePublicProfileDialog);
+  publicProfileDialogBackdrop?.addEventListener("click", hidePublicProfileDialog);
   policeRaidClose?.addEventListener("click", hidePoliceRaidPanel);
   policeRaidBackdrop?.addEventListener("click", hidePoliceRaidPanel);
 
@@ -6054,6 +7369,15 @@ function bindHudActions() {
     deleteQuest(quest);
   });
   hudQuestClose?.addEventListener("click", hideQuestCard);
+  hudMentorToggle?.addEventListener("click", () => {
+    mentorCardOpen = true;
+    updateMentorPanel();
+  });
+  hudMentorClose?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    mentorCardOpen = false;
+    updateMentorPanel();
+  });
   characterPanelClose?.addEventListener("click", hideCharacterPanel);
   characterPanelBackdrop?.addEventListener("click", hideCharacterPanel);
   equipmentPickerClose?.addEventListener("click", hideEquipmentPicker);
@@ -6085,15 +7409,39 @@ function bindHudActions() {
   crewCards?.addEventListener("click", (event) => {
     const button = event.target.closest("[data-crew-action]");
     const card = event.target.closest("[data-member-id]");
-    if (!button || !card) return;
+    if (!card) return;
     const memberId = card.dataset.memberId;
-    if (button.dataset.crewAction === "upgrade") {
+    if (!button) {
+      const member = getCrewMemberById(memberId);
+      if (member?.hired) {
+        showCrewMemberPanel(memberId);
+      }
+      return;
+    }
+    if (button.dataset.crewAction === "hire") {
+      hireCrewMember(memberId);
+    } else if (button.dataset.crewAction === "upgrade") {
       upgradeCrewMember(memberId);
     } else if (button.dataset.crewAction === "heal") {
       healCrewMember(memberId);
     } else if (button.dataset.crewAction === "defense") {
       upgradeCrewMemberDefense(memberId);
     }
+  });
+  crewMemberPanelClose?.addEventListener("click", hideCrewMemberPanel);
+  crewMemberPanelBackdrop?.addEventListener("click", hideCrewMemberPanel);
+  crewMemberEquipmentGrid?.addEventListener("click", (event) => {
+    const slot = event.target.closest("[data-crew-slot]");
+    if (!slot) return;
+    const slotId = slot.dataset.crewSlot;
+    if (activeCrewEquipmentSlot === slotId) hideCrewEquipmentPicker();
+    else showCrewEquipmentPicker(slotId);
+  });
+  crewEquipmentPickerClose?.addEventListener("click", hideCrewEquipmentPicker);
+  crewEquipmentPickerList?.addEventListener("click", (event) => {
+    const itemButton = event.target.closest("[data-crew-equip-slot][data-item-id]");
+    if (!itemButton || itemButton.disabled) return;
+    equipCrewInventoryItem(activeCrewSheetMemberId, itemButton.dataset.crewEquipSlot, itemButton.dataset.itemId);
   });
 
   choiceWheelBackdrop?.addEventListener("click", () => {
@@ -6102,9 +7450,9 @@ function bindHudActions() {
 
   choiceWheelAction1?.addEventListener("click", () => runChoiceAction("robbery"));
   choiceWheelAction2?.addEventListener("click", () => runChoiceAction("protection"));
-  choiceWheelAction3?.addEventListener("click", () => runChoiceAction("baseRest"));
+  choiceWheelAction3?.addEventListener("click", () => runChoiceAction(choiceWheelAction3.dataset.choiceAction || "baseRest"));
   choiceWheelAction4?.addEventListener("click", () => runChoiceAction("close"));
-  choiceWheelAction5?.addEventListener("click", () => runChoiceAction("quest"));
+  choiceWheelAction5?.addEventListener("click", () => runChoiceAction(choiceWheelAction5.dataset.choiceAction || "quest"));
   lotInfoClose?.addEventListener("click", hideLotInfoModal);
   lotInfoBackdrop?.addEventListener("click", hideLotInfoModal);
 
@@ -6141,11 +7489,14 @@ window.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
     hideLotInfoModal();
     hideAuxPanel();
+    hideMessagesDialog();
+    hidePublicProfileDialog();
     if (activeRobberyGame) {
       retreatFromRobbery();
       return;
     }
     hideCharacterPanel();
+    hideCrewMemberPanel();
     hideChoiceWheel();
   }
 });

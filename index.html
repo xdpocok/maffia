@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Maffia: Birodalomépítő</title>
-    <link rel="stylesheet" href="./style.css?v=battle-3v3-2" />
+    <link rel="stylesheet" href="./style.css?v=ui-repair-2026-07-02-1" />
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.90.0/dist/phaser.min.js"></script>
   </head>
   <body>
@@ -35,6 +35,12 @@
 
     <img id="mapBackgroundLayer" class="map-background-layer" src="./assets/map/map-background-clean.png" alt="" aria-hidden="true">
     <div id="gameRoot" class="game-root"></div>
+
+    <section id="harborMapView" class="harbor-map-view hidden" aria-hidden="true">
+      <img id="harborMapImage" class="harbor-map-view__image" src="./assets/world/harbor-map-clean-v3.png" alt="Kikoto terkep">
+      <div id="harborMapZones" class="harbor-map-view__zones"></div>
+      <aside id="harborOperationPanel" class="harbor-operation-panel hidden" aria-hidden="true"></aside>
+    </section>
     <div id="mapAtmosphere" class="map-atmosphere" aria-hidden="true"></div>
     <div id="lotHouseLayer" class="lot-house-layer hidden" aria-hidden="true"></div>
     <svg id="mapSvgOverlay" class="map-svg-overlay hidden" viewBox="0 0 1534 1025" preserveAspectRatio="none" aria-label="Interaktiv varosterkep"></svg>
@@ -68,6 +74,34 @@
       </article>
     </section>
 
+    <section id="messagesDialog" class="side-dialog side-dialog--messages hidden" aria-hidden="true">
+      <div id="messagesDialogBackdrop" class="side-dialog__backdrop"></div>
+      <article class="side-dialog__card" role="dialog" aria-modal="true" aria-labelledby="messagesDialogTitle">
+        <header class="side-dialog__header">
+          <div>
+            <div id="messagesDialogSubtitle" class="side-dialog__eyebrow">Csaladi posta</div>
+            <h2 id="messagesDialogTitle">Uzenetek</h2>
+          </div>
+          <button id="messagesDialogClose" class="side-dialog__close" type="button" aria-label="Uzenetek bezarasa">x</button>
+        </header>
+        <div id="messagesDialogBody" class="side-dialog__body"></div>
+      </article>
+    </section>
+
+    <section id="publicProfileDialog" class="side-dialog side-dialog--profile hidden" aria-hidden="true">
+      <div id="publicProfileDialogBackdrop" class="side-dialog__backdrop"></div>
+      <article class="side-dialog__card" role="dialog" aria-modal="true" aria-labelledby="publicProfileDialogTitle">
+        <header class="side-dialog__header">
+          <div>
+            <div id="publicProfileDialogSubtitle" class="side-dialog__eyebrow">Jatekos adatlap</div>
+            <h2 id="publicProfileDialogTitle">Adatlap</h2>
+          </div>
+          <button id="publicProfileDialogClose" class="side-dialog__close" type="button" aria-label="Adatlap bezarasa">x</button>
+        </header>
+        <div id="publicProfileDialogBody" class="side-dialog__body"></div>
+      </article>
+    </section>
+
     <section id="policeRaidPanel" class="police-raid hidden" aria-hidden="true">
       <div id="policeRaidBackdrop" class="police-raid__backdrop"></div>
       <article class="police-raid__card" role="dialog" aria-modal="true" aria-labelledby="policeRaidTitle">
@@ -86,6 +120,18 @@
           </div>
         </div>
         <button id="policeRaidClose" class="police-raid__close" type="button">Vissza az utcara</button>
+      </article>
+    </section>
+
+    <section id="rewardModal" class="reward-modal hidden" aria-hidden="true">
+      <div id="rewardModalBackdrop" class="reward-modal__backdrop"></div>
+      <article class="reward-modal__card" role="dialog" aria-modal="true" aria-labelledby="rewardModalTitle">
+        <div class="reward-modal__seal">Jutalom</div>
+        <div class="reward-modal__eyebrow">Atado boritek</div>
+        <h2 id="rewardModalTitle">Munka elvegezve</h2>
+        <p id="rewardModalText">A kassza rendezve, a jutalom atveheto.</p>
+        <div id="rewardModalList" class="reward-modal__list"></div>
+        <button id="rewardModalClose" class="reward-modal__button" type="button">Atveszem</button>
       </article>
     </section>
 
@@ -304,13 +350,59 @@
       </div>
     </section>
 
+    <section id="crewMemberPanel" class="crew-member-panel hidden" aria-hidden="true">
+      <div id="crewMemberPanelBackdrop" class="crew-member-panel__backdrop"></div>
+      <div class="crew-member-sheet" role="dialog" aria-modal="true" aria-labelledby="crewMemberPanelTitle">
+        <header class="crew-member-sheet__header">
+          <button id="crewMemberPanelClose" class="crew-member-sheet__close" type="button" aria-label="Bandatag lap bezarasa">&lt;</button>
+          <div>
+            <div class="crew-member-sheet__eyebrow">Bandatag karton</div>
+            <h2 id="crewMemberPanelTitle">Bandatag</h2>
+          </div>
+        </header>
+
+        <div class="crew-member-sheet__body">
+          <div class="crew-member-sheet__portrait">
+            <img id="crewMemberPanelImage" src="./assets/character/gangster-character.png" alt="Bandatag">
+          </div>
+
+          <div class="crew-member-sheet__content">
+            <div class="crew-member-sheet__identity">
+              <strong id="crewMemberPanelName">Luca Moretti</strong>
+              <span id="crewMemberPanelRole">Vegrehajto</span>
+            </div>
+
+            <div class="crew-member-sheet__stats">
+              <div class="crew-member-sheet__stat"><span>Szint</span><strong id="crewMemberPanelLevel">1</strong></div>
+              <div class="crew-member-sheet__stat"><span>HP</span><strong id="crewMemberPanelHealth">100 / 100</strong></div>
+              <div class="crew-member-sheet__stat"><span>Ero</span><strong id="crewMemberPanelAttack">12</strong></div>
+              <div class="crew-member-sheet__stat"><span>Vedelem</span><strong id="crewMemberPanelDefense">9</strong></div>
+            </div>
+
+            <div id="crewMemberEquipmentGrid" class="crew-member-equipment-grid" aria-label="Bandatag felszerelese"></div>
+          </div>
+        </div>
+
+        <section id="crewEquipmentPicker" class="equipment-picker equipment-picker--crew hidden" aria-hidden="true">
+          <header class="equipment-picker__header">
+            <div>
+              <div class="equipment-picker__eyebrow">Bandatag felszereles</div>
+              <strong id="crewEquipmentPickerTitle">Valassz targyat</strong>
+            </div>
+            <button id="crewEquipmentPickerClose" class="equipment-picker__close" type="button" aria-label="Bandatag felszereles bezarasa">x</button>
+          </header>
+          <div id="crewEquipmentPickerList" class="equipment-picker__list"></div>
+        </section>
+      </div>
+    </section>
+
     <div id="hudRoot" class="hud-root hidden">
       <header class="hud-topbar">
         <div class="hud-resources">
           <div class="hud-pill hud-pill--money"><span>Pénz</span><strong id="hudMoney">120 $</strong></div>
-          <div class="hud-pill hud-pill--fame"><span>Hírnév</span><strong id="hudFame">0</strong></div>
           <div class="hud-pill hud-pill--influence"><span>Befolyás</span><strong id="hudInfluence">0%</strong></div>
           <div class="hud-pill hud-pill--heat"><span>Körözés</span><strong id="hudHeat">12%</strong></div>
+          <section id="hudProcessTasks" class="hud-process-tasks" aria-label="Folyamatban levo feladatok"></section>
         </div>
       </header>
 
@@ -342,6 +434,29 @@
       <section class="hud-quest-tabs hud-panel" aria-label="Küldetés fülek">
         <button id="hudQuestTab1" class="hud-quest-tab" type="button">Fő küldetés</button>
         <button id="hudQuestTab2" class="hud-quest-tab" type="button">Mellék küldetés</button>
+      </section>
+
+      <button id="hudMentorToggle" class="hud-mentor-envelope" type="button" aria-label="Mentor kuldetes megnyitasa">
+        <img src="./mentor-envelope-cutout.png" alt="">
+      </button>
+
+      <section id="hudMentorCard" class="hud-mentor-card hud-panel" aria-label="Mentor kuldetes">
+        <button id="hudMentorClose" class="hud-mentor-card__close" type="button" aria-label="Mentor bezarasa">x</button>
+        <div class="hud-mini-title">Mentor</div>
+        <strong id="hudMentorStepTitle">Elso munka</strong>
+        <p id="hudMentorStepText">Valaszd ki a fo bazisod.</p>
+        <div id="hudMentorStepReward" class="hud-mentor-card__reward">Jutalom: +80 $, +10 XP</div>
+        <div id="hudMentorProgress" class="hud-mentor-card__progress">1 / 10</div>
+      </section>
+
+      <section class="hud-harbor-shortcut hud-panel" aria-label="Kikoto negyed">
+        <button class="hud-harbor-button" id="hudQuickDock" type="button">
+          <img src="./assets/world/harbor-button.png" alt="Kikoto" />
+          <span id="hudQuickDockLabel" class="hud-harbor-button__label"></span>
+        </button>
+        <button class="hud-main-map-button hidden" id="hudMainMapButton" type="button" aria-label="Vissza a varosba">
+          <span>Vissza</span>
+        </button>
       </section>
 
       <section id="hudQuestCard" class="hud-quest-card hud-panel hidden" aria-hidden="true">
@@ -384,7 +499,6 @@
       <nav class="hud-bottom-bar hud-panel">
         <div class="hud-bottom-bar__quick-row">
           <button class="hud-quick-btn" id="hudQuickRank" type="button">Ranglista</button>
-          <button class="hud-quick-btn" id="hudQuickMarket" type="button">Piac</button>
           <button class="hud-quick-btn" id="hudQuickClan" type="button">Klán</button>
           <button class="hud-quick-btn" id="hudQuickWorld" type="button">Világtérkép</button>
           <button class="hud-quick-btn hud-quick-btn--messages" id="hudQuickMessages" type="button">
@@ -395,7 +509,46 @@
       </nav>
     </div>
 
+    <script>
+      (() => {
+        const ensureHidden = [
+          "harborMapView",
+          "harborOperationPanel",
+          "choiceWheel",
+          "auxPanel",
+          "messagesDialog",
+          "publicProfileDialog",
+          "policeRaidPanel",
+          "rewardModal",
+          "lotInfoModal",
+          "robberyGame",
+          "characterPanel",
+          "equipmentPicker",
+          "crewMemberPanel",
+          "crewEquipmentPicker",
+          "robberyResult",
+          "hudRoot",
+          "hudMentorToggle",
+          "hudQuestCard",
+          "mapSvgOverlay",
+          "lotHouseLayer",
+          "worldPlayerWheel",
+          "hudMainMapButton",
+        ];
+        ensureHidden.forEach((id) => {
+          const el = document.getElementById(id);
+          if (!el) return;
+          el.classList.add("hidden");
+          el.setAttribute("aria-hidden", "true");
+        });
+        const overlay = document.getElementById("bootOverlay");
+        if (overlay) {
+          overlay.classList.remove("hidden");
+          overlay.style.display = "";
+        }
+      })();
+    </script>
     <script src="./assets-inline.js"></script>
-    <script src="./game.js?v=timed-actions-1"></script>
+    <script src="./game.js?v=ui-repair-2026-07-02-1"></script>
   </body>
 </html>

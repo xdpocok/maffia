@@ -1,0 +1,38 @@
+{
+  "market-row": {
+    "x": 803,
+    "y": 214,
+    "width": 281,
+    "height": 206
+  },
+  "west-mid-block": {
+    "x": 265,
+    "y": 300,
+    "width": 261,
+    "height": 220
+  },
+  "east-office": {
+    "x": 944,
+    "y": 338,
+    "width": 275,
+    "height": 228
+  },
+  "central-bank": {
+    "x": 694,
+    "y": 490,
+    "width": 257,
+    "height": 253
+  },
+  "southwest-tenement": {
+    "x": 236,
+    "y": 702,
+    "width": 300,
+    "height": 273
+  },
+  "courthouse": {
+    "x": 959,
+    "y": 588,
+    "width": 282,
+    "height": 262
+  }
+}

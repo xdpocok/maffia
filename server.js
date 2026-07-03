@@ -2,154 +2,13 @@ const http = require("node:http");
 const path = require("node:path");
 const fs = require("node:fs");
 const fsp = require("node:fs/promises");
-const { DatabaseSync } = require("node:sqlite");
+const { createMysqlDatabase } = require("./mysql-database");
 
 const HOST = "127.0.0.1";
 const PORT = Number(process.env.PORT || 8766);
 const ROOT_DIR = __dirname;
-const DATA_DIR = path.join(ROOT_DIR, "data");
-const DB_PATH = path.join(DATA_DIR, "maffia-online.sqlite");
-
-fs.mkdirSync(DATA_DIR, { recursive: true });
-
-const db = new DatabaseSync(DB_PATH);
-db.exec(`
-  PRAGMA foreign_keys = ON;
-  PRAGMA journal_mode = MEMORY;
-  PRAGMA synchronous = NORMAL;
-  CREATE TABLE IF NOT EXISTS player_saves (
-    profile_name TEXT PRIMARY KEY,
-    state_json TEXT NOT NULL,
-    created_at INTEGER NOT NULL,
-    updated_at INTEGER NOT NULL
-  );
-  CREATE TABLE IF NOT EXISTS players (
-    profile_name TEXT PRIMARY KEY,
-    display_name TEXT NOT NULL,
-    rank_title TEXT NOT NULL DEFAULT 'Utcai figura',
-    level INTEGER NOT NULL DEFAULT 1,
-    fame INTEGER NOT NULL DEFAULT 0,
-    money INTEGER NOT NULL DEFAULT 0,
-    heat INTEGER NOT NULL DEFAULT 0,
-    influence INTEGER NOT NULL DEFAULT 0,
-    city_level INTEGER NOT NULL DEFAULT 1,
-    crew_count INTEGER NOT NULL DEFAULT 3,
-    health INTEGER NOT NULL DEFAULT 100,
-    energy INTEGER NOT NULL DEFAULT 100,
-    world_base_lot_id TEXT,
-    world_base_level INTEGER NOT NULL DEFAULT 1,
-    registered_at INTEGER NOT NULL,
-    updated_at INTEGER NOT NULL,
-    last_seen_at INTEGER NOT NULL
-  );
-  CREATE TABLE IF NOT EXISTS events (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    profile_name TEXT NOT NULL,
-    event_type TEXT NOT NULL,
-    title TEXT NOT NULL,
-    payload_json TEXT NOT NULL,
-    created_at INTEGER NOT NULL,
-    FOREIGN KEY(profile_name) REFERENCES players(profile_name) ON DELETE CASCADE
-  );
-  CREATE INDEX IF NOT EXISTS idx_events_profile_created_at
-  ON events(profile_name, created_at DESC);
-  CREATE TABLE IF NOT EXISTS messages (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    recipient_profile_name TEXT NOT NULL,
-    sender_profile_name TEXT,
-    message_type TEXT NOT NULL DEFAULT 'player',
-    title TEXT NOT NULL,
-    body TEXT NOT NULL,
-    payload_json TEXT NOT NULL DEFAULT '{}',
-    read_at INTEGER,
-    created_at INTEGER NOT NULL,
-    FOREIGN KEY(recipient_profile_name) REFERENCES players(profile_name) ON DELETE CASCADE,
-    FOREIGN KEY(sender_profile_name) REFERENCES players(profile_name) ON DELETE SET NULL
-  );
-  CREATE INDEX IF NOT EXISTS idx_messages_recipient_created
-  ON messages(recipient_profile_name, created_at DESC);
-  CREATE INDEX IF NOT EXISTS idx_messages_recipient_unread
-  ON messages(recipient_profile_name, read_at, created_at DESC);
-  CREATE INDEX IF NOT EXISTS idx_players_fame_updated
-  ON players(fame DESC, updated_at DESC);
-  CREATE TABLE IF NOT EXISTS player_state (
-    profile_name TEXT PRIMARY KEY,
-    snapshot_json TEXT NOT NULL,
-    inventory_json TEXT NOT NULL,
-    crew_json TEXT NOT NULL,
-    quests_json TEXT NOT NULL,
-    updated_at INTEGER NOT NULL,
-    FOREIGN KEY(profile_name) REFERENCES players(profile_name) ON DELETE CASCADE
-  );
-  CREATE TABLE IF NOT EXISTS world_lots (
-    lot_id TEXT PRIMARY KEY,
-    coord TEXT NOT NULL,
-    owner_profile_name TEXT,
-    base_level INTEGER NOT NULL DEFAULT 1,
-    district TEXT NOT NULL DEFAULT 'vilagterkep',
-    status TEXT NOT NULL DEFAULT 'free',
-    claimed_at INTEGER,
-    updated_at INTEGER NOT NULL,
-    FOREIGN KEY(owner_profile_name) REFERENCES players(profile_name) ON DELETE SET NULL
-  );
-  CREATE INDEX IF NOT EXISTS idx_world_lots_owner
-  ON world_lots(owner_profile_name);
-  CREATE TABLE IF NOT EXISTS leaderboard_entries (
-    profile_name TEXT PRIMARY KEY,
-    season_key TEXT NOT NULL DEFAULT 'global',
-    level INTEGER NOT NULL DEFAULT 1,
-    fame INTEGER NOT NULL DEFAULT 0,
-    city_level INTEGER NOT NULL DEFAULT 1,
-    rank_title TEXT NOT NULL DEFAULT 'Utcai figura',
-    updated_at INTEGER NOT NULL,
-    FOREIGN KEY(profile_name) REFERENCES players(profile_name) ON DELETE CASCADE
-  );
-  CREATE INDEX IF NOT EXISTS idx_leaderboard_global
-  ON leaderboard_entries(season_key, level DESC, fame DESC, city_level DESC, updated_at DESC);
-  CREATE TABLE IF NOT EXISTS market_items (
-    item_id TEXT PRIMARY KEY,
-    market_scope TEXT NOT NULL DEFAULT 'global',
-    owner_profile_name TEXT,
-    slot_key TEXT NOT NULL,
-    item_name TEXT NOT NULL,
-    rarity TEXT NOT NULL DEFAULT 'common',
-    stat_kind TEXT NOT NULL DEFAULT 'power',
-    stat_value INTEGER NOT NULL DEFAULT 0,
-    price INTEGER NOT NULL DEFAULT 0,
-    stock INTEGER NOT NULL DEFAULT 1,
-    expires_at INTEGER,
-    payload_json TEXT NOT NULL,
-    updated_at INTEGER NOT NULL,
-    FOREIGN KEY(owner_profile_name) REFERENCES players(profile_name) ON DELETE CASCADE
-  );
-  CREATE INDEX IF NOT EXISTS idx_market_scope_owner
-  ON market_items(market_scope, owner_profile_name, updated_at DESC);
-  CREATE TABLE IF NOT EXISTS clans (
-    clan_id TEXT PRIMARY KEY,
-    clan_name TEXT NOT NULL UNIQUE,
-    boss_profile_name TEXT,
-    description TEXT NOT NULL DEFAULT '',
-    notoriety INTEGER NOT NULL DEFAULT 0,
-    treasury INTEGER NOT NULL DEFAULT 0,
-    created_at INTEGER NOT NULL,
-    updated_at INTEGER NOT NULL,
-    FOREIGN KEY(boss_profile_name) REFERENCES players(profile_name) ON DELETE SET NULL
-  );
-  CREATE TABLE IF NOT EXISTS clan_members (
-    clan_id TEXT NOT NULL,
-    profile_name TEXT NOT NULL,
-    member_role TEXT NOT NULL DEFAULT 'katona',
-    contribution INTEGER NOT NULL DEFAULT 0,
-    joined_at INTEGER NOT NULL,
-    PRIMARY KEY (clan_id, profile_name),
-    FOREIGN KEY(clan_id) REFERENCES clans(clan_id) ON DELETE CASCADE,
-    FOREIGN KEY(profile_name) REFERENCES players(profile_name) ON DELETE CASCADE
-  );
-  CREATE INDEX IF NOT EXISTS idx_clan_members_profile
-  ON clan_members(profile_name);
-  DELETE FROM world_lots
-  WHERE owner_profile_name IS NULL AND status <> 'free';
-`);
+async function main() {
+  const db = await createMysqlDatabase();
 
 const selectSaveStmt = db.prepare(`
   SELECT profile_name, state_json, created_at, updated_at
@@ -162,12 +21,31 @@ const listSavesStmt = db.prepare(`
   FROM player_saves
 `);
 
+const countSavesStmt = db.prepare(`
+  SELECT COUNT(*) AS profile_count
+  FROM player_saves
+`);
+
+const selectMetaStmt = db.prepare(`
+  SELECT meta_value
+  FROM app_meta
+  WHERE meta_key = ?
+`);
+
+const upsertMetaStmt = db.prepare(`
+  INSERT INTO app_meta (meta_key, meta_value, updated_at)
+  VALUES (?, ?, ?)
+  ON DUPLICATE KEY UPDATE
+    meta_value = VALUES(meta_value),
+    updated_at = VALUES(updated_at)
+`);
+
 const upsertSaveStmt = db.prepare(`
   INSERT INTO player_saves (profile_name, state_json, created_at, updated_at)
   VALUES (?, ?, ?, ?)
-  ON CONFLICT(profile_name) DO UPDATE SET
-    state_json = excluded.state_json,
-    updated_at = excluded.updated_at
+  ON DUPLICATE KEY UPDATE
+    state_json = VALUES(state_json),
+    updated_at = VALUES(updated_at)
 `);
 
 const deleteSaveStmt = db.prepare("DELETE FROM player_saves WHERE profile_name = ?");
@@ -239,22 +117,22 @@ const upsertPlayerStmt = db.prepare(`
     last_seen_at
   )
   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  ON CONFLICT(profile_name) DO UPDATE SET
-    display_name = excluded.display_name,
-    rank_title = excluded.rank_title,
-    level = excluded.level,
-    fame = excluded.fame,
-    money = excluded.money,
-    heat = excluded.heat,
-    influence = excluded.influence,
-    city_level = excluded.city_level,
-    crew_count = excluded.crew_count,
-    health = excluded.health,
-    energy = excluded.energy,
-    world_base_lot_id = excluded.world_base_lot_id,
-    world_base_level = excluded.world_base_level,
-    updated_at = excluded.updated_at,
-    last_seen_at = excluded.last_seen_at
+  ON DUPLICATE KEY UPDATE
+    display_name = VALUES(display_name),
+    rank_title = VALUES(rank_title),
+    level = VALUES(level),
+    fame = VALUES(fame),
+    money = VALUES(money),
+    heat = VALUES(heat),
+    influence = VALUES(influence),
+    city_level = VALUES(city_level),
+    crew_count = VALUES(crew_count),
+    health = VALUES(health),
+    energy = VALUES(energy),
+    world_base_lot_id = VALUES(world_base_lot_id),
+    world_base_level = VALUES(world_base_level),
+    updated_at = VALUES(updated_at),
+    last_seen_at = VALUES(last_seen_at)
 `);
 
 const deletePlayerStmt = db.prepare("DELETE FROM players WHERE profile_name = ?");
@@ -269,12 +147,12 @@ const upsertPlayerStateStmt = db.prepare(`
     updated_at
   )
   VALUES (?, ?, ?, ?, ?, ?)
-  ON CONFLICT(profile_name) DO UPDATE SET
-    snapshot_json = excluded.snapshot_json,
-    inventory_json = excluded.inventory_json,
-    crew_json = excluded.crew_json,
-    quests_json = excluded.quests_json,
-    updated_at = excluded.updated_at
+  ON DUPLICATE KEY UPDATE
+    snapshot_json = VALUES(snapshot_json),
+    inventory_json = VALUES(inventory_json),
+    crew_json = VALUES(crew_json),
+    quests_json = VALUES(quests_json),
+    updated_at = VALUES(updated_at)
 `);
 
 const selectPlayerStateStmt = db.prepare(`
@@ -307,14 +185,14 @@ const upsertWorldLotStmt = db.prepare(`
     updated_at
   )
   VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  ON CONFLICT(lot_id) DO UPDATE SET
-    coord = excluded.coord,
-    owner_profile_name = excluded.owner_profile_name,
-    base_level = excluded.base_level,
-    district = excluded.district,
-    status = excluded.status,
-    claimed_at = excluded.claimed_at,
-    updated_at = excluded.updated_at
+  ON DUPLICATE KEY UPDATE
+    coord = VALUES(coord),
+    owner_profile_name = VALUES(owner_profile_name),
+    base_level = VALUES(base_level),
+    district = VALUES(district),
+    status = VALUES(status),
+    claimed_at = VALUES(claimed_at),
+    updated_at = VALUES(updated_at)
 `);
 
 const listWorldLotsStmt = db.prepare(`
@@ -334,13 +212,13 @@ const upsertLeaderboardEntryStmt = db.prepare(`
     updated_at
   )
   VALUES (?, ?, ?, ?, ?, ?, ?)
-  ON CONFLICT(profile_name) DO UPDATE SET
-    season_key = excluded.season_key,
-    level = excluded.level,
-    fame = excluded.fame,
-    city_level = excluded.city_level,
-    rank_title = excluded.rank_title,
-    updated_at = excluded.updated_at
+  ON DUPLICATE KEY UPDATE
+    season_key = VALUES(season_key),
+    level = VALUES(level),
+    fame = VALUES(fame),
+    city_level = VALUES(city_level),
+    rank_title = VALUES(rank_title),
+    updated_at = VALUES(updated_at)
 `);
 
 const listLeaderboardEntriesStmt = db.prepare(`
@@ -373,19 +251,19 @@ const upsertMarketItemStmt = db.prepare(`
     updated_at
   )
   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  ON CONFLICT(item_id) DO UPDATE SET
-    market_scope = excluded.market_scope,
-    owner_profile_name = excluded.owner_profile_name,
-    slot_key = excluded.slot_key,
-    item_name = excluded.item_name,
-    rarity = excluded.rarity,
-    stat_kind = excluded.stat_kind,
-    stat_value = excluded.stat_value,
-    price = excluded.price,
-    stock = excluded.stock,
-    expires_at = excluded.expires_at,
-    payload_json = excluded.payload_json,
-    updated_at = excluded.updated_at
+  ON DUPLICATE KEY UPDATE
+    market_scope = VALUES(market_scope),
+    owner_profile_name = VALUES(owner_profile_name),
+    slot_key = VALUES(slot_key),
+    item_name = VALUES(item_name),
+    rarity = VALUES(rarity),
+    stat_kind = VALUES(stat_kind),
+    stat_value = VALUES(stat_value),
+    price = VALUES(price),
+    stock = VALUES(stock),
+    expires_at = VALUES(expires_at),
+    payload_json = VALUES(payload_json),
+    updated_at = VALUES(updated_at)
 `);
 
 const listMarketItemsStmt = db.prepare(`
@@ -408,13 +286,13 @@ const upsertClanStmt = db.prepare(`
     updated_at
   )
   VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  ON CONFLICT(clan_id) DO UPDATE SET
-    clan_name = excluded.clan_name,
-    boss_profile_name = excluded.boss_profile_name,
-    description = excluded.description,
-    notoriety = excluded.notoriety,
-    treasury = excluded.treasury,
-    updated_at = excluded.updated_at
+  ON DUPLICATE KEY UPDATE
+    clan_name = VALUES(clan_name),
+    boss_profile_name = VALUES(boss_profile_name),
+    description = VALUES(description),
+    notoriety = VALUES(notoriety),
+    treasury = VALUES(treasury),
+    updated_at = VALUES(updated_at)
 `);
 
 const deleteClanMembersByClanStmt = db.prepare(`
@@ -423,7 +301,7 @@ const deleteClanMembersByClanStmt = db.prepare(`
 `);
 
 const insertClanMemberStmt = db.prepare(`
-  INSERT OR REPLACE INTO clan_members (
+  INSERT INTO clan_members (
     clan_id,
     profile_name,
     member_role,
@@ -431,6 +309,10 @@ const insertClanMemberStmt = db.prepare(`
     joined_at
   )
   VALUES (?, ?, ?, ?, ?)
+  ON DUPLICATE KEY UPDATE
+    member_role = VALUES(member_role),
+    contribution = VALUES(contribution),
+    joined_at = VALUES(joined_at)
 `);
 
 const listClansStmt = db.prepare(`
@@ -561,6 +443,10 @@ function rankForFame(fame) {
 
 function summarizeState(profileName, state = {}, now = Date.now()) {
   const fame = Math.max(0, toSafeInt(state.fame, 0, 0));
+  const crewMembers = Array.isArray(state.crewMembers) ? state.crewMembers : [];
+  const hasCrewMembers = crewMembers.length > 0;
+  const hiredCrewCount = crewMembers.filter((member) => member?.hired).length;
+  const storedCrewCount = toSafeInt(state.crew, hiredCrewCount, 0);
   return {
     profileName,
     displayName: profileName,
@@ -571,7 +457,7 @@ function summarizeState(profileName, state = {}, now = Date.now()) {
     heat: Math.max(0, toSafeInt(state.heat, 0, 0)),
     influence: Math.max(0, toSafeInt(state.influence, 0, 0)),
     cityLevel: Math.max(1, toSafeInt(state.cityLevel, 1, 1)),
-    crewCount: Math.max(1, toSafeInt(state.crew, 3, 1)),
+    crewCount: Math.max(0, hasCrewMembers ? hiredCrewCount : storedCrewCount),
     health: Math.max(0, toSafeInt(state.health, 100, 0)),
     energy: Math.max(0, toSafeInt(state.energy, 100, 0)),
     worldBaseLotId: typeof state.worldBaseLotId === "string" ? state.worldBaseLotId : null,
@@ -725,10 +611,14 @@ function buildMarketStockFromRows(rows = []) {
   });
 }
 
-function buildProfileState(profileName) {
-  const saveRow = selectSaveStmt.get(profileName);
-  const playerRow = selectPlayerStmt.get(profileName);
-  const stateRow = selectPlayerStateStmt.get(profileName);
+async function buildProfileState(profileName) {
+  const [saveRow, playerRow, stateRow, marketRows, ownedLot] = await Promise.all([
+    selectSaveStmt.get(profileName),
+    selectPlayerStmt.get(profileName),
+    selectPlayerStateStmt.get(profileName),
+    listMarketItemsStmt.all(profileName, profileName, 100),
+    selectOwnedWorldLotStmt.get(profileName),
+  ]);
   if (!saveRow && !playerRow && !stateRow) return null;
 
   const baseState = parseJsonSafely(saveRow?.state_json, {});
@@ -736,9 +626,6 @@ function buildProfileState(profileName) {
   const inventory = parseJsonSafely(stateRow?.inventory_json, {});
   const crew = parseJsonSafely(stateRow?.crew_json, []);
   const quests = parseJsonSafely(stateRow?.quests_json, {});
-  const marketRows = listMarketItemsStmt.all(profileName, profileName, 100);
-  const ownedLot = selectOwnedWorldLotStmt.get(profileName);
-
   const merged = {
     ...baseState,
     ...snapshot,
@@ -777,11 +664,20 @@ function buildProfileState(profileName) {
   };
 }
 
-function writePlayerSnapshot(profileName, state, now, existingSaveRow = null) {
-  const summary = summarizeState(profileName, state, now);
-  const existingPlayer = selectPlayerStmt.get(profileName);
+async function writePlayerSnapshot(profileName, state, now, existingSaveRow = null) {
+  const existingPlayer = await selectPlayerStmt.get(profileName);
+  const preservedFame = Math.max(
+    0,
+    toSafeInt(state?.fame, 0, 0),
+    toSafeInt(existingPlayer?.fame, 0, 0),
+  );
+  const normalizedState = {
+    ...state,
+    fame: preservedFame,
+  };
+  const summary = summarizeState(profileName, normalizedState, now);
   const registeredAt = existingPlayer?.registered_at ?? existingSaveRow?.created_at ?? now;
-  upsertPlayerStmt.run(
+  await upsertPlayerStmt.run(
     summary.profileName,
     summary.displayName,
     summary.rankTitle,
@@ -803,11 +699,17 @@ function writePlayerSnapshot(profileName, state, now, existingSaveRow = null) {
   return { summary, existed: Boolean(existingPlayer || existingSaveRow) };
 }
 
-function writePlayerState(profileName, state, now) {
+async function writePlayerState(profileName, state, now) {
+  const existingPlayer = await selectPlayerStmt.get(profileName);
+  const preservedFame = Math.max(
+    0,
+    toSafeInt(state?.fame, 0, 0),
+    toSafeInt(existingPlayer?.fame, 0, 0),
+  );
   const snapshot = {
     profileName,
     money: state.money ?? 0,
-    fame: state.fame ?? 0,
+    fame: preservedFame,
     heat: state.heat ?? 0,
     influence: state.influence ?? 0,
     health: state.health ?? 100,
@@ -825,7 +727,7 @@ function writePlayerState(profileName, state, now) {
     activeQuests: state.activeQuests ?? [],
     offeredQuests: state.offeredQuests ?? [],
   };
-  upsertPlayerStateStmt.run(
+  await upsertPlayerStateStmt.run(
     profileName,
     JSON.stringify(snapshot),
     JSON.stringify(inventory),
@@ -835,12 +737,12 @@ function writePlayerState(profileName, state, now) {
   );
 }
 
-function writeWorldLotOwnership(profileName, state, now) {
-  deleteWorldLotsByOwnerStmt.run(profileName);
+async function writeWorldLotOwnership(profileName, state, now) {
+  await deleteWorldLotsByOwnerStmt.run(profileName);
   const lotId = typeof state.worldBaseLotId === "string" ? state.worldBaseLotId : "";
   if (!lotId) return;
   const coord = lotId.replace(/^world-lot-/, "").toUpperCase();
-  upsertWorldLotStmt.run(
+  await upsertWorldLotStmt.run(
     lotId,
     coord,
     profileName,
@@ -860,8 +762,8 @@ function existingClaimTimestamp(state, fallbackNow) {
       : fallbackNow;
 }
 
-function writeLeaderboardEntry(summary, now) {
-  upsertLeaderboardEntryStmt.run(
+async function writeLeaderboardEntry(summary, now) {
+  await upsertLeaderboardEntryStmt.run(
     summary.profileName,
     "global",
     summary.level,
@@ -881,14 +783,14 @@ function deriveMarketStat(item = {}) {
   return { kind: "defense", value: defense };
 }
 
-function writeMarketStock(profileName, state, now) {
-  deleteMarketItemsByOwnerStmt.run(profileName);
+async function writeMarketStock(profileName, state, now) {
+  await deleteMarketItemsByOwnerStmt.run(profileName);
   const stock = Array.isArray(state.marketStock) ? state.marketStock : [];
   for (const offer of stock) {
     const item = offer?.item || {};
     const stat = deriveMarketStat(item);
     const itemId = String(item.id || `market-${profileName}-${Math.random().toString(36).slice(2, 8)}`);
-    upsertMarketItemStmt.run(
+    await upsertMarketItemStmt.run(
       itemId,
       "personal",
       profileName,
@@ -906,11 +808,11 @@ function writeMarketStock(profileName, state, now) {
   }
 }
 
-function writeClanData(profileName, state, now) {
+async function writeClanData(profileName, state, now) {
   const clanName = typeof state.clanName === "string" ? state.clanName.trim() : "";
   if (!clanName) return;
   const clanId = `clan-${clanName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "ismeretlen"}`;
-  upsertClanStmt.run(
+  await upsertClanStmt.run(
     clanId,
     clanName.slice(0, 40),
     profileName,
@@ -920,22 +822,50 @@ function writeClanData(profileName, state, now) {
     now,
     now,
   );
-  deleteClanMembersByClanStmt.run(clanId);
-  insertClanMemberStmt.run(clanId, profileName, "fonok", 0, now);
+  await deleteClanMembersByClanStmt.run(clanId);
+  await insertClanMemberStmt.run(clanId, profileName, "fonok", 0, now);
 }
 
-function syncStructuredTables(profileName, state, now, existingSaveRow = null) {
-  const { summary, existed } = writePlayerSnapshot(profileName, state, now, existingSaveRow);
-  writePlayerState(profileName, state, now);
-  writeWorldLotOwnership(profileName, state, now);
-  writeLeaderboardEntry(summary, now);
-  writeMarketStock(profileName, state, now);
-  writeClanData(profileName, state, now);
+async function syncStructuredTables(profileName, state, now, existingSaveRow = null) {
+  const { summary, existed } = await writePlayerSnapshot(profileName, state, now, existingSaveRow);
+  await Promise.all([
+    writePlayerState(profileName, state, now),
+    writeWorldLotOwnership(profileName, state, now),
+    writeLeaderboardEntry(summary, now),
+    writeMarketStock(profileName, state, now),
+    writeClanData(profileName, state, now),
+  ]);
   return { summary, existed };
 }
 
-function logEvent(profileName, eventType, title, payload = {}, now = Date.now()) {
-  insertEventStmt.run(
+async function persistGameState(profileName, state, now = Date.now()) {
+  return db.transaction(async () => {
+    const existingSave = await selectSaveStmt.get(profileName);
+    await upsertSaveStmt.run(
+      profileName,
+      JSON.stringify({ ...state, profileName }),
+      existingSave?.created_at ?? now,
+      now,
+    );
+    const result = await syncStructuredTables(profileName, state, now, existingSave);
+    await logEvent(
+      profileName,
+      result.existed ? "save_update" : "player_created",
+      result.existed ? "Játékosmentés frissítve" : "Új játékos rögzítve",
+      {
+        level: result.summary.level,
+        fame: result.summary.fame,
+        cityLevel: result.summary.cityLevel,
+        worldBaseLotId: result.summary.worldBaseLotId,
+      },
+      now,
+    );
+    return result;
+  });
+}
+
+async function logEvent(profileName, eventType, title, payload = {}, now = Date.now()) {
+  await insertEventStmt.run(
     profileName,
     String(eventType || "system").slice(0, 40),
     String(title || "Esemény").slice(0, 120),
@@ -944,8 +874,8 @@ function logEvent(profileName, eventType, title, payload = {}, now = Date.now())
   );
 }
 
-function createMessage(recipientProfileName, senderProfileName, messageType, title, body, payload = {}, now = Date.now()) {
-  insertMessageStmt.run(
+async function createMessage(recipientProfileName, senderProfileName, messageType, title, body, payload = {}, now = Date.now()) {
+  await insertMessageStmt.run(
     recipientProfileName,
     senderProfileName || null,
     String(messageType || "player").slice(0, 32),
@@ -959,7 +889,9 @@ function createMessage(recipientProfileName, senderProfileName, messageType, tit
 function getEquipmentCombatStats(state = {}) {
   let attack = 0;
   let defense = 0;
-  const equipment = state.equipment && typeof state.equipment === "object" ? state.equipment : {};
+  const equipment = state && typeof state === "object" && !Array.isArray(state)
+    ? (state.equipment && typeof state.equipment === "object" ? state.equipment : state)
+    : {};
   for (const item of Object.values(equipment)) {
     const power = Math.max(0, toSafeInt(item?.power, 0, 0));
     if (item?.stat === "defense") defense += power;
@@ -968,24 +900,108 @@ function getEquipmentCombatStats(state = {}) {
   return { attack, defense };
 }
 
+function getCrewCombatStats(member = {}) {
+  const equipment = getEquipmentCombatStats(member.equipment || {});
+  const level = Math.max(1, toSafeInt(member.level, 1, 1));
+  const defenseLevel = Math.max(1, toSafeInt(member.defenseLevel, level, 1));
+  const maxHealth = Math.max(1, toSafeInt(member.baseHealth, 100, 1));
+  const health = Math.max(0, Math.min(maxHealth, toSafeInt(member.health, maxHealth, 0)));
+  return {
+    attack: Math.max(
+      0,
+      toSafeInt(member.baseAttack, 0, 0)
+        + toSafeInt(member.attackBonus, 0, 0)
+        + equipment.attack
+        + Math.floor(level * 0.45),
+    ),
+    defense: Math.max(
+      0,
+      toSafeInt(member.baseDefense, 0, 0)
+        + toSafeInt(member.defenseBonus, 0, 0)
+        + equipment.defense
+        + Math.floor(defenseLevel * 0.4),
+    ),
+    level,
+    readiness: health / maxHealth,
+  };
+}
+
 function getPvpCombatStats(state = {}) {
   const gear = getEquipmentCombatStats(state);
-  const crew = Array.isArray(state.crewMembers) ? state.crewMembers : [];
-  const crewAttack = crew.reduce((sum, member) =>
-    sum + Math.max(0, toSafeInt(member?.baseAttack, 0, 0) + toSafeInt(member?.attackBonus, 0, 0)), 0);
-  const crewDefense = crew.reduce((sum, member) =>
-    sum + Math.max(0, toSafeInt(member?.baseDefense, 0, 0) + toSafeInt(member?.defenseBonus, 0, 0)), 0);
+  const crew = Array.isArray(state.crewMembers)
+    ? state.crewMembers.filter((member) => member?.hired)
+    : [];
+  const memberStats = crew.map(getCrewCombatStats);
+  const requestedActiveIndex = crew.findIndex((member) => member?.id === state.activeCrewMemberId);
+  const active = memberStats[requestedActiveIndex >= 0 ? requestedActiveIndex : 0] || {
+    attack: 0,
+    defense: 0,
+    level: 1,
+    readiness: 1,
+  };
+  const crewAttack = memberStats.reduce((sum, member) => sum + member.attack, 0);
+  const crewDefense = memberStats.reduce((sum, member) => sum + member.defense, 0);
+  const crewLevelTotal = memberStats.reduce((sum, member) => sum + member.level, 0);
+  const readiness = memberStats.length
+    ? memberStats.reduce((sum, member) => sum + member.readiness, 0) / memberStats.length
+    : 1;
   const level = getRankLevel(state.fame || 0);
+  const playerAttack = gear.attack + Math.max(0, Math.floor(level * 0.6));
+  const playerDefense = gear.defense + Math.max(0, Math.floor(level * 0.55));
+  const baseProfilePower = (
+    gear.attack
+    + gear.defense
+    + level * 8
+    + Math.max(1, toSafeInt(state.cityLevel, 1, 1)) * 5
+    + Math.max(0, Number(state.fame) || 0) * 0.1
+    + crew.length * 4
+  );
+  const assault = Math.max(1, Math.round(
+    baseProfilePower
+      + active.attack
+      + crewAttack * 0.72
+      + crewDefense * 0.18
+      + crewLevelTotal * 0.8
+      + readiness * 14,
+  ));
+  const pressure = Math.max(1, Math.round(
+    baseProfilePower
+      + active.attack * 0.55
+      + active.defense * 0.6
+      + crewAttack * 0.42
+      + crewDefense * 0.48
+      + crewLevelTotal * 0.65
+      + readiness * 18,
+  ));
+  const resilience = Math.max(1, Math.round(
+    baseProfilePower
+      + active.defense
+      + crewDefense * 0.72
+      + crewAttack * 0.16
+      + crewLevelTotal * 0.7
+      + readiness * 22,
+  ));
   return {
-    attack: Math.max(1, 8 + gear.attack + crewAttack + level * 2),
-    defense: Math.max(1, 8 + gear.defense + crewDefense + level * 2),
+    attack: assault,
+    defense: resilience,
+    assault,
+    pressure,
+    resilience,
+    readiness,
+    playerAttack,
+    playerDefense,
+    crewAttack,
+    crewDefense,
+    crewLevelTotal,
     level,
   };
 }
 
-function buildPublicProfile(profileName) {
-  const player = selectPlayerStmt.get(profileName);
-  const profile = buildProfileState(profileName);
+async function buildPublicProfile(profileName) {
+  const [player, profile] = await Promise.all([
+    selectPlayerStmt.get(profileName),
+    buildProfileState(profileName),
+  ]);
   if (!player || !profile) return null;
   const combat = getPvpCombatStats(profile.state);
   return {
@@ -999,23 +1015,32 @@ function buildPublicProfile(profileName) {
     worldBaseLevel: player.world_base_level,
     attack: combat.attack,
     defense: combat.defense,
+    pressure: combat.pressure,
+    readiness: Math.round(combat.readiness * 100),
+    playerAttack: combat.playerAttack,
+    playerDefense: combat.playerDefense,
+    crewAttack: combat.crewAttack,
+    crewDefense: combat.crewDefense,
+    crewLevelTotal: combat.crewLevelTotal,
+    health: Math.max(0, toSafeInt(profile.state.health, player.health, 0)),
+    energy: Math.max(0, toSafeInt(profile.state.energy, player.energy, 0)),
     lastSeenAt: player.last_seen_at,
   };
 }
 
-function persistPvpState(profileName, state, now) {
-  const existingSave = selectSaveStmt.get(profileName);
-  upsertSaveStmt.run(
+async function persistPvpState(profileName, state, now) {
+  const existingSave = await selectSaveStmt.get(profileName);
+  await upsertSaveStmt.run(
     profileName,
     JSON.stringify({ ...state, profileName }),
     existingSave?.created_at ?? now,
     now,
   );
-  syncStructuredTables(profileName, state, now, existingSave);
+  await syncStructuredTables(profileName, state, now, existingSave);
 }
 
-function backfillPlayersFromSaves() {
-  const rows = listSavesStmt.all();
+async function backfillPlayersFromSaves() {
+  const rows = await listSavesStmt.all();
   for (const row of rows) {
     let state = {};
     try {
@@ -1025,8 +1050,10 @@ function backfillPlayersFromSaves() {
     }
     const profileName = normalizeProfileName(row.profile_name || state.profileName);
     if (!profileName) continue;
-    const existingPlayer = selectPlayerStmt.get(profileName);
-    const existingState = selectPlayerStateStmt.get(profileName);
+    const [existingPlayer, existingState] = await Promise.all([
+      selectPlayerStmt.get(profileName),
+      selectPlayerStateStmt.get(profileName),
+    ]);
     const freshestStructuredAt = Math.max(
       Number(existingPlayer?.updated_at || 0),
       Number(existingState?.updated_at || 0),
@@ -1034,11 +1061,43 @@ function backfillPlayersFromSaves() {
     if (freshestStructuredAt > Number(row.updated_at || 0)) {
       continue;
     }
-    syncStructuredTables(profileName, state, row.updated_at, row);
+    await syncStructuredTables(profileName, state, row.updated_at, row);
   }
 }
 
-backfillPlayersFromSaves();
+async function importBootstrapSavesIfNeeded() {
+  const importMeta = await selectMetaStmt.get("legacy_sqlite_import");
+  if (importMeta?.meta_value === "complete") return;
+  const existingRows = await listSavesStmt.all();
+  if (existingRows.length) {
+    await upsertMetaStmt.run("legacy_sqlite_import", "complete", Date.now());
+    return;
+  }
+
+  const bootstrapPath = path.join(ROOT_DIR, "data", "mysql-bootstrap-saves.json");
+  let rows;
+  try {
+    rows = JSON.parse(await fsp.readFile(bootstrapPath, "utf8"));
+  } catch (error) {
+    if (error?.code === "ENOENT") return;
+    throw error;
+  }
+  if (!Array.isArray(rows)) return;
+
+  for (const row of rows) {
+    const profileName = normalizeProfileName(row?.profile_name);
+    if (!profileName || typeof row?.state_json !== "string") continue;
+    const existingSave = await selectSaveStmt.get(profileName);
+    if (existingSave) continue;
+    const createdAt = Number.isFinite(Number(row.created_at)) ? Number(row.created_at) : Date.now();
+    const updatedAt = Number.isFinite(Number(row.updated_at)) ? Number(row.updated_at) : createdAt;
+    await upsertSaveStmt.run(profileName, row.state_json, createdAt, updatedAt);
+  }
+  await upsertMetaStmt.run("legacy_sqlite_import", "complete", Date.now());
+}
+
+await importBootstrapSavesIfNeeded();
+await backfillPlayersFromSaves();
 
 function sendJson(response, statusCode, payload) {
   response.writeHead(statusCode, {
@@ -1071,12 +1130,19 @@ function readRequestBody(request) {
 
 async function handleApiRequest(request, response, pathname) {
   if (pathname === "/api/health") {
-    sendJson(response, 200, { ok: true, database: DB_PATH });
+    await db.ping();
+    const counts = await countSavesStmt.get();
+    sendJson(response, 200, {
+      ok: true,
+      databaseType: "mysql",
+      database: db.info,
+      profiles: Number(counts?.profile_count || 0),
+    });
     return true;
   }
 
   if (pathname === "/api/players" && request.method === "GET") {
-    const players = listPlayersStmt.all().map(mapPlayerRow);
+    const players = (await listPlayersStmt.all()).map(mapPlayerRow);
     sendJson(response, 200, { players });
     return true;
   }
@@ -1088,7 +1154,7 @@ async function handleApiRequest(request, response, pathname) {
       sendJson(response, 400, { error: "Missing profile name" });
       return true;
     }
-    const profile = buildProfileState(profileName);
+    const profile = await buildProfileState(profileName);
     if (!profile) {
       sendJson(response, 200, { found: false });
       return true;
@@ -1100,7 +1166,7 @@ async function handleApiRequest(request, response, pathname) {
   if (pathname.startsWith("/api/public-profile/") && request.method === "GET") {
     const encodedName = pathname.slice("/api/public-profile/".length);
     const profileName = normalizeProfileName(decodeURIComponent(encodedName));
-    const profile = profileName ? buildPublicProfile(profileName) : null;
+    const profile = profileName ? await buildPublicProfile(profileName) : null;
     if (!profile) {
       sendJson(response, 404, { found: false, error: "Player not found" });
       return true;
@@ -1110,7 +1176,7 @@ async function handleApiRequest(request, response, pathname) {
   }
 
   if (pathname === "/api/player-state" && request.method === "GET") {
-    const rows = listSavesStmt.all().map((row) => {
+    const rows = (await listSavesStmt.all()).map((row) => {
       let state = {};
       try {
         state = JSON.parse(row.state_json);
@@ -1136,7 +1202,7 @@ async function handleApiRequest(request, response, pathname) {
   }
 
   if (pathname === "/api/world-lots" && request.method === "GET") {
-    const lots = listWorldLotsStmt.all().map(mapWorldLotRow);
+    const lots = (await listWorldLotsStmt.all()).map(mapWorldLotRow);
     sendJson(response, 200, { lots });
     return true;
   }
@@ -1145,7 +1211,7 @@ async function handleApiRequest(request, response, pathname) {
     const url = new URL(request.url || "/", `http://${request.headers.host || `${HOST}:${PORT}`}`);
     const seasonKey = String(url.searchParams.get("season") || "global").slice(0, 32);
     const limit = Math.min(200, Math.max(1, toSafeInt(url.searchParams.get("limit"), 50, 1)));
-    const entries = listLeaderboardEntriesStmt.all(seasonKey, limit).map(mapLeaderboardRow);
+    const entries = (await listLeaderboardEntriesStmt.all(seasonKey, limit)).map(mapLeaderboardRow);
     sendJson(response, 200, { entries });
     return true;
   }
@@ -1155,13 +1221,13 @@ async function handleApiRequest(request, response, pathname) {
     const profileName = normalizeProfileName(url.searchParams.get("profileName") || "");
     const limit = Math.min(500, Math.max(1, toSafeInt(url.searchParams.get("limit"), 100, 1)));
     const ownerFilter = profileName || null;
-    const items = listMarketItemsStmt.all(ownerFilter, ownerFilter, limit).map(mapMarketItemRow);
+    const items = (await listMarketItemsStmt.all(ownerFilter, ownerFilter, limit)).map(mapMarketItemRow);
     sendJson(response, 200, { items });
     return true;
   }
 
   if (pathname === "/api/clans" && request.method === "GET") {
-    const clans = listClansStmt.all().map(mapClanRow);
+    const clans = (await listClansStmt.all()).map(mapClanRow);
     sendJson(response, 200, { clans });
     return true;
   }
@@ -1171,8 +1237,8 @@ async function handleApiRequest(request, response, pathname) {
     const profileName = normalizeProfileName(url.searchParams.get("profileName") || "");
     const limit = Math.min(200, Math.max(1, toSafeInt(url.searchParams.get("limit"), 40, 1)));
     const rows = profileName
-      ? listEventsByProfileStmt.all(profileName, limit)
-      : listEventsStmt.all(limit);
+      ? await listEventsByProfileStmt.all(profileName, limit)
+      : await listEventsStmt.all(limit);
     sendJson(response, 200, { events: rows.map(mapEventRow) });
     return true;
   }
@@ -1182,11 +1248,11 @@ async function handleApiRequest(request, response, pathname) {
       const rawBody = await readRequestBody(request);
       const body = rawBody ? JSON.parse(rawBody) : {};
       const profileName = normalizeProfileName(body.profileName);
-      if (!profileName || !selectPlayerStmt.get(profileName)) {
+      if (!profileName || !await selectPlayerStmt.get(profileName)) {
         sendJson(response, 404, { error: "Player not found" });
         return true;
       }
-      logEvent(
+      await logEvent(
         profileName,
         String(body.eventType || "game_event"),
         String(body.title || "Esemény"),
@@ -1208,8 +1274,8 @@ async function handleApiRequest(request, response, pathname) {
       sendJson(response, 400, { error: "Missing profile name" });
       return true;
     }
-    const messages = listMessagesByRecipientStmt.all(profileName, limit).map(mapMessageRow);
-    const events = listEventsByProfileStmt.all(profileName, limit)
+    const messages = (await listMessagesByRecipientStmt.all(profileName, limit)).map(mapMessageRow);
+    const events = (await listEventsByProfileStmt.all(profileName, limit))
       .map(mapEventRow)
       .filter((event) => !["save_update", "player_created"].includes(event.eventType))
       .map((event) => ({
@@ -1226,7 +1292,7 @@ async function handleApiRequest(request, response, pathname) {
     const inbox = [...messages, ...events]
       .sort((left, right) => right.createdAt - left.createdAt)
       .slice(0, limit);
-    const unreadCount = Number(countUnreadMessagesStmt.get(profileName)?.unread_count || 0);
+    const unreadCount = Number((await countUnreadMessagesStmt.get(profileName))?.unread_count || 0);
     sendJson(response, 200, { messages: inbox, unreadCount });
     return true;
   }
@@ -1242,11 +1308,15 @@ async function handleApiRequest(request, response, pathname) {
         sendJson(response, 400, { error: "Missing sender, recipient or message" });
         return true;
       }
-      if (!selectPlayerStmt.get(senderProfileName) || !selectPlayerStmt.get(recipientProfileName)) {
+      const [sender, recipient] = await Promise.all([
+        selectPlayerStmt.get(senderProfileName),
+        selectPlayerStmt.get(recipientProfileName),
+      ]);
+      if (!sender || !recipient) {
         sendJson(response, 404, { error: "Player not found" });
         return true;
       }
-      createMessage(
+      await createMessage(
         recipientProfileName,
         senderProfileName,
         "player",
@@ -1270,7 +1340,7 @@ async function handleApiRequest(request, response, pathname) {
         sendJson(response, 400, { error: "Missing profile name" });
         return true;
       }
-      markMessagesReadStmt.run(Date.now(), profileName);
+      await markMessagesReadStmt.run(Date.now(), profileName);
       sendJson(response, 200, { ok: true, unreadCount: 0 });
       return true;
     } catch (error) {
@@ -1289,8 +1359,10 @@ async function handleApiRequest(request, response, pathname) {
         sendJson(response, 400, { error: "Invalid PvP participants" });
         return true;
       }
-      const attackerProfile = buildProfileState(attackerProfileName);
-      const defenderProfile = buildProfileState(defenderProfileName);
+      const [attackerProfile, defenderProfile] = await Promise.all([
+        buildProfileState(attackerProfileName),
+        buildProfileState(defenderProfileName),
+      ]);
       if (!attackerProfile || !defenderProfile) {
         sendJson(response, 404, { error: "Player not found" });
         return true;
@@ -1322,14 +1394,13 @@ async function handleApiRequest(request, response, pathname) {
         defenderState.money = Math.max(0, toSafeInt(defenderState.money, 0, 0) - stolenMoney);
       }
 
-      db.exec("BEGIN IMMEDIATE");
-      try {
-        persistPvpState(attackerProfileName, attackerState, now);
-        persistPvpState(defenderProfileName, defenderState, now);
+      await db.transaction(async () => {
+        await persistPvpState(attackerProfileName, attackerState, now);
+        await persistPvpState(defenderProfileName, defenderState, now);
         const defenderBody = attackerWon
           ? `${attackerProfileName} megtámadta a bázisodat és ${stolenMoney} $ zsákmányt vitt el.`
           : `${attackerProfileName} megtámadta a bázisodat, de az embereid visszaverték.`;
-        createMessage(
+        await createMessage(
           defenderProfileName,
           attackerProfileName,
           "pvp",
@@ -1338,7 +1409,7 @@ async function handleApiRequest(request, response, pathname) {
           { attackerWon, stolenMoney, attackerAttack: attackerCombat.attack, defenderDefense: defenderCombat.defense },
           now,
         );
-        logEvent(attackerProfileName, "pvp_attack", "PvP támadás végrehajtva", {
+        await logEvent(attackerProfileName, "pvp_attack", "PvP támadás végrehajtva", {
           body: attackerWon
             ? `${defenderProfileName} bázisát legyőzted, zsákmány: ${stolenMoney} $.`
             : `${defenderProfileName} bázisa visszaverte a támadásodat.`,
@@ -1346,11 +1417,7 @@ async function handleApiRequest(request, response, pathname) {
           attackerWon,
           stolenMoney,
         }, now);
-        db.exec("COMMIT");
-      } catch (error) {
-        db.exec("ROLLBACK");
-        throw error;
-      }
+      });
 
       sendJson(response, 200, {
         ok: true,
@@ -1369,7 +1436,7 @@ async function handleApiRequest(request, response, pathname) {
   }
 
   if (pathname === "/api/saves" && request.method === "GET") {
-    const rows = listSavesStmt.all();
+    const rows = await listSavesStmt.all();
     const saves = rows.map((row) => {
       let state = {};
       try {
@@ -1409,26 +1476,7 @@ async function handleApiRequest(request, response, pathname) {
       }
       const now = Date.now();
       const state = { ...body.state, profileName };
-      const existingSave = selectSaveStmt.get(profileName);
-      upsertSaveStmt.run(
-        profileName,
-        JSON.stringify(state),
-        existingSave?.created_at ?? now,
-        now,
-      );
-      const { summary, existed } = syncStructuredTables(profileName, state, now, existingSave);
-      logEvent(
-        profileName,
-        existed ? "save_update" : "player_created",
-        existed ? "Jatekosmentes frissitve" : "Uj jatekos rogzitve",
-        {
-          level: summary.level,
-          fame: summary.fame,
-          cityLevel: summary.cityLevel,
-          worldBaseLotId: summary.worldBaseLotId,
-        },
-        now,
-      );
+      await persistGameState(profileName, state, now);
       sendJson(response, 200, { ok: true, profileName, updatedAt: now });
       return true;
     } catch (error) {
@@ -1447,7 +1495,7 @@ async function handleApiRequest(request, response, pathname) {
   }
 
   if (request.method === "GET") {
-    const row = selectSaveStmt.get(profileName);
+    const row = await selectSaveStmt.get(profileName);
     if (!row) {
       sendJson(response, 200, { found: false });
       return true;
@@ -1471,27 +1519,8 @@ async function handleApiRequest(request, response, pathname) {
         return true;
       }
       const now = Date.now();
-      const existingSave = selectSaveStmt.get(profileName);
       const state = { ...body.state, profileName };
-      upsertSaveStmt.run(
-        profileName,
-        JSON.stringify(state),
-        existingSave?.created_at ?? now,
-        now,
-      );
-      const { summary, existed } = syncStructuredTables(profileName, state, now, existingSave);
-      logEvent(
-        profileName,
-        existed ? "save_update" : "player_created",
-        existed ? "Jatekosmentes frissitve" : "Uj jatekos rogzitve",
-        {
-          level: summary.level,
-          fame: summary.fame,
-          cityLevel: summary.cityLevel,
-          worldBaseLotId: summary.worldBaseLotId,
-        },
-        now,
-      );
+      await persistGameState(profileName, state, now);
       sendJson(response, 200, { ok: true, profileName, updatedAt: now });
       return true;
     } catch (error) {
@@ -1501,17 +1530,16 @@ async function handleApiRequest(request, response, pathname) {
   }
 
   if (request.method === "DELETE") {
-    db.exec("BEGIN IMMEDIATE");
     try {
-      deleteSaveStmt.run(profileName);
-      deleteMessagesByProfileStmt.run(profileName, profileName);
-      deleteWorldLotsByOwnerStmt.run(profileName);
-      deleteClansByBossStmt.run(profileName);
-      deletePlayerStmt.run(profileName);
-      db.exec("COMMIT");
+      await db.transaction(async () => {
+        await deleteMessagesByProfileStmt.run(profileName, profileName);
+        await deleteWorldLotsByOwnerStmt.run(profileName);
+        await deleteClansByBossStmt.run(profileName);
+        await deleteSaveStmt.run(profileName);
+        await deletePlayerStmt.run(profileName);
+      });
       sendEmpty(response);
     } catch (error) {
-      db.exec("ROLLBACK");
       sendJson(response, 500, { error: error.message || "Player deletion failed" });
     }
     return true;
@@ -1548,7 +1576,7 @@ async function handleStaticRequest(response, pathname) {
     const ext = path.extname(filePath).toLowerCase();
     response.writeHead(200, {
       "Content-Type": contentTypes[ext] || "application/octet-stream",
-      "Cache-Control": ext === ".html" || ext === ".js" || ext === ".css" ? "no-cache" : "public, max-age=86400",
+      "Cache-Control": ext === ".html" || ext === ".js" || ext === ".css" ? "no-store, max-age=0" : "public, max-age=86400",
     });
     fs.createReadStream(filePath).pipe(response);
   } catch {
@@ -1570,5 +1598,13 @@ const server = http.createServer(async (request, response) => {
 
 server.listen(PORT, HOST, () => {
   console.log(`Maffia server fut: http://${HOST}:${PORT}`);
-  console.log(`SQLite adatbazis: ${DB_PATH}`);
+  console.log(`MySQL adatbazis: ${db.info}`);
+});
+
+}
+
+main().catch((error) => {
+  console.error("A MySQL-alapu Maffia szerver nem tudott elindulni.");
+  console.error(error);
+  process.exitCode = 1;
 });

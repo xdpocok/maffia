@@ -1,4 +1,7 @@
 data/*.sqlite
 data/*.sqlite-*
+data/mysql-bootstrap-saves.json
+node_modules/
+.env
 assets/world/map-expanded-composite.png
 assets/world/world-map-expanded-composite.png
