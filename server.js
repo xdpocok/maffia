@@ -161,6 +161,337 @@ const selectPlayerStateStmt = db.prepare(`
   WHERE profile_name = ?
 `);
 
+const upsertPlayerRuntimeStateStmt = db.prepare(`
+  INSERT INTO player_runtime_state (
+    profile_name,
+    runtime_json,
+    updated_at
+  )
+  VALUES (?, ?, ?)
+  ON DUPLICATE KEY UPDATE
+    runtime_json = VALUES(runtime_json),
+    updated_at = VALUES(updated_at)
+`);
+
+const selectPlayerRuntimeStateStmt = db.prepare(`
+  SELECT profile_name, runtime_json, updated_at
+  FROM player_runtime_state
+  WHERE profile_name = ?
+`);
+
+const deletePlayerProcessTasksStmt = db.prepare(`
+  DELETE FROM player_process_tasks
+  WHERE profile_name = ?
+`);
+
+const insertPlayerProcessTaskStmt = db.prepare(`
+  INSERT INTO player_process_tasks (
+    task_id,
+    profile_name,
+    task_scope,
+    slot_index,
+    task_type,
+    task_status,
+    ends_at,
+    payload_json,
+    updated_at
+  )
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  ON DUPLICATE KEY UPDATE
+    task_scope = VALUES(task_scope),
+    slot_index = VALUES(slot_index),
+    task_type = VALUES(task_type),
+    task_status = VALUES(task_status),
+    ends_at = VALUES(ends_at),
+    payload_json = VALUES(payload_json),
+    updated_at = VALUES(updated_at)
+`);
+
+const listPlayerProcessTasksStmt = db.prepare(`
+  SELECT task_id, profile_name, task_scope, slot_index, task_type, task_status, ends_at, payload_json, updated_at
+  FROM player_process_tasks
+  WHERE profile_name = ?
+  ORDER BY task_scope ASC, slot_index ASC, updated_at DESC, task_id ASC
+`);
+
+const deletePlayerTerritoriesStmt = db.prepare(`
+  DELETE FROM player_territories
+  WHERE profile_name = ?
+`);
+
+const insertPlayerTerritoryStmt = db.prepare(`
+  INSERT INTO player_territories (
+    profile_name,
+    territory_id,
+    owner_type,
+    territory_level,
+    payload_json,
+    updated_at
+  )
+  VALUES (?, ?, ?, ?, ?, ?)
+  ON DUPLICATE KEY UPDATE
+    owner_type = VALUES(owner_type),
+    territory_level = VALUES(territory_level),
+    payload_json = VALUES(payload_json),
+    updated_at = VALUES(updated_at)
+`);
+
+const listPlayerTerritoriesStmt = db.prepare(`
+  SELECT profile_name, territory_id, owner_type, territory_level, payload_json, updated_at
+  FROM player_territories
+  WHERE profile_name = ?
+  ORDER BY updated_at DESC, territory_id ASC
+`);
+
+const deletePlayerEquipmentStmt = db.prepare(`
+  DELETE FROM player_equipment_slots
+  WHERE profile_name = ?
+`);
+
+const insertPlayerEquipmentStmt = db.prepare(`
+  INSERT INTO player_equipment_slots (
+    profile_name,
+    owner_type,
+    owner_id,
+    slot_key,
+    payload_json,
+    updated_at
+  )
+  VALUES (?, ?, ?, ?, ?, ?)
+  ON DUPLICATE KEY UPDATE
+    payload_json = VALUES(payload_json),
+    updated_at = VALUES(updated_at)
+`);
+
+const listPlayerEquipmentStmt = db.prepare(`
+  SELECT profile_name, owner_type, owner_id, slot_key, payload_json, updated_at
+  FROM player_equipment_slots
+  WHERE profile_name = ?
+  ORDER BY owner_type ASC, owner_id ASC, slot_key ASC
+`);
+
+const deletePlayerInventoryStmt = db.prepare(`
+  DELETE FROM player_inventory_items
+  WHERE profile_name = ?
+`);
+
+const insertPlayerInventoryItemStmt = db.prepare(`
+  INSERT INTO player_inventory_items (
+    profile_name,
+    slot_key,
+    item_id,
+    payload_json,
+    updated_at
+  )
+  VALUES (?, ?, ?, ?, ?)
+  ON DUPLICATE KEY UPDATE
+    payload_json = VALUES(payload_json),
+    updated_at = VALUES(updated_at)
+`);
+
+const listPlayerInventoryStmt = db.prepare(`
+  SELECT profile_name, slot_key, item_id, payload_json, updated_at
+  FROM player_inventory_items
+  WHERE profile_name = ?
+  ORDER BY slot_key ASC, updated_at DESC, item_id ASC
+`);
+
+const deletePlayerCrewMembersStmt = db.prepare(`
+  DELETE FROM player_crew_members
+  WHERE profile_name = ?
+`);
+
+const insertPlayerCrewMemberStmt = db.prepare(`
+  INSERT INTO player_crew_members (
+    profile_name,
+    member_id,
+    payload_json,
+    updated_at
+  )
+  VALUES (?, ?, ?, ?)
+  ON DUPLICATE KEY UPDATE
+    payload_json = VALUES(payload_json),
+    updated_at = VALUES(updated_at)
+`);
+
+const listPlayerCrewMembersStmt = db.prepare(`
+  SELECT profile_name, member_id, payload_json, updated_at
+  FROM player_crew_members
+  WHERE profile_name = ?
+  ORDER BY updated_at DESC, member_id ASC
+`);
+
+const deletePlayerQuestsStmt = db.prepare(`
+  DELETE FROM player_quests
+  WHERE profile_name = ?
+`);
+
+const insertPlayerQuestStmt = db.prepare(`
+  INSERT INTO player_quests (
+    quest_id,
+    profile_name,
+    quest_scope,
+    slot_index,
+    quest_status,
+    payload_json,
+    updated_at
+  )
+  VALUES (?, ?, ?, ?, ?, ?, ?)
+  ON DUPLICATE KEY UPDATE
+    quest_scope = VALUES(quest_scope),
+    slot_index = VALUES(slot_index),
+    quest_status = VALUES(quest_status),
+    payload_json = VALUES(payload_json),
+    updated_at = VALUES(updated_at)
+`);
+
+const listPlayerQuestsStmt = db.prepare(`
+  SELECT quest_id, profile_name, quest_scope, slot_index, quest_status, payload_json, updated_at
+  FROM player_quests
+  WHERE profile_name = ?
+  ORDER BY quest_scope ASC, slot_index ASC, updated_at DESC, quest_id ASC
+`);
+
+const deletePlayerNotificationsStmt = db.prepare(`
+  DELETE FROM player_notifications
+  WHERE profile_name = ?
+`);
+
+const insertPlayerNotificationStmt = db.prepare(`
+  INSERT INTO player_notifications (
+    notification_id,
+    profile_name,
+    message_type,
+    title,
+    body,
+    sender_profile_name,
+    read_at,
+    created_at,
+    payload_json,
+    updated_at
+  )
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  ON DUPLICATE KEY UPDATE
+    message_type = VALUES(message_type),
+    title = VALUES(title),
+    body = VALUES(body),
+    sender_profile_name = VALUES(sender_profile_name),
+    read_at = VALUES(read_at),
+    created_at = VALUES(created_at),
+    payload_json = VALUES(payload_json),
+    updated_at = VALUES(updated_at)
+`);
+
+const listPlayerNotificationsStmt = db.prepare(`
+  SELECT notification_id, profile_name, message_type, title, body, sender_profile_name, read_at, created_at, payload_json, updated_at
+  FROM player_notifications
+  WHERE profile_name = ?
+  ORDER BY created_at DESC, notification_id ASC
+`);
+
+const countUnreadPlayerNotificationsStmt = db.prepare(`
+  SELECT COUNT(*) AS unread_count
+  FROM player_notifications
+  WHERE profile_name = ? AND read_at IS NULL
+`);
+
+const markPlayerNotificationsReadStmt = db.prepare(`
+  UPDATE player_notifications
+  SET read_at = ?
+  WHERE profile_name = ? AND read_at IS NULL
+`);
+
+const deletePlayerDistrictsStmt = db.prepare(`
+  DELETE FROM player_districts
+  WHERE profile_name = ?
+`);
+
+const insertPlayerDistrictStmt = db.prepare(`
+  INSERT INTO player_districts (
+    profile_name,
+    district_id,
+    slot_index,
+    is_selected,
+    payload_json,
+    updated_at
+  )
+  VALUES (?, ?, ?, ?, ?, ?)
+  ON DUPLICATE KEY UPDATE
+    slot_index = VALUES(slot_index),
+    is_selected = VALUES(is_selected),
+    payload_json = VALUES(payload_json),
+    updated_at = VALUES(updated_at)
+`);
+
+const listPlayerDistrictsStmt = db.prepare(`
+  SELECT profile_name, district_id, slot_index, is_selected, payload_json, updated_at
+  FROM player_districts
+  WHERE profile_name = ?
+  ORDER BY slot_index ASC, updated_at DESC, district_id ASC
+`);
+
+const deletePlayerBuildingDifficultiesStmt = db.prepare(`
+  DELETE FROM player_building_difficulties
+  WHERE profile_name = ?
+`);
+
+const insertPlayerBuildingDifficultyStmt = db.prepare(`
+  INSERT INTO player_building_difficulties (
+    profile_name,
+    spot_id,
+    difficulty_value,
+    difficulty_cycle,
+    updated_at
+  )
+  VALUES (?, ?, ?, ?, ?)
+  ON DUPLICATE KEY UPDATE
+    difficulty_value = VALUES(difficulty_value),
+    difficulty_cycle = VALUES(difficulty_cycle),
+    updated_at = VALUES(updated_at)
+`);
+
+const listPlayerBuildingDifficultiesStmt = db.prepare(`
+  SELECT profile_name, spot_id, difficulty_value, difficulty_cycle, updated_at
+  FROM player_building_difficulties
+  WHERE profile_name = ?
+  ORDER BY updated_at DESC, spot_id ASC
+`);
+
+const deletePlayerWorldRivalsStmt = db.prepare(`
+  DELETE FROM player_world_rivals
+  WHERE profile_name = ?
+`);
+
+const insertPlayerWorldRivalStmt = db.prepare(`
+  INSERT INTO player_world_rivals (
+    city_id,
+    profile_name,
+    lot_id,
+    city_status,
+    city_level,
+    city_power,
+    tribute_ready_at,
+    payload_json,
+    updated_at
+  )
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  ON DUPLICATE KEY UPDATE
+    lot_id = VALUES(lot_id),
+    city_status = VALUES(city_status),
+    city_level = VALUES(city_level),
+    city_power = VALUES(city_power),
+    tribute_ready_at = VALUES(tribute_ready_at),
+    payload_json = VALUES(payload_json),
+    updated_at = VALUES(updated_at)
+`);
+
+const listPlayerWorldRivalsStmt = db.prepare(`
+  SELECT city_id, profile_name, lot_id, city_status, city_level, city_power, tribute_ready_at, payload_json, updated_at
+  FROM player_world_rivals
+  WHERE profile_name = ?
+  ORDER BY updated_at DESC, city_id ASC
+`);
+
 const selectOwnedWorldLotStmt = db.prepare(`
   SELECT lot_id, coord, owner_profile_name, base_level, district, status, claimed_at, updated_at
   FROM world_lots
@@ -611,24 +942,153 @@ function buildMarketStockFromRows(rows = []) {
   });
 }
 
+function buildProcessTasksFromRows(rows = []) {
+  return rows
+    .map((row) => parseJsonSafely(row.payload_json, null))
+    .filter((task) => task && typeof task === "object");
+}
+
+function buildTerritoriesFromRows(rows = []) {
+  return rows.reduce((territories, row) => {
+    const payload = parseJsonSafely(row.payload_json, {});
+    territories[row.territory_id] = {
+      ...(payload && typeof payload === "object" ? payload : {}),
+      level: Math.max(1, toSafeInt(row.territory_level, 1, 1)),
+      ownerType: String(row.owner_type || payload?.ownerType || ""),
+    };
+    return territories;
+  }, {});
+}
+
+function buildEquipmentFromRows(rows = [], ownerType = "player", ownerId = "self") {
+  const selectedRows = rows.filter((row) => row.owner_type === ownerType && row.owner_id === ownerId);
+  return selectedRows.reduce((equipment, row) => {
+    equipment[row.slot_key] = parseJsonSafely(row.payload_json, null);
+    return equipment;
+  }, {});
+}
+
+function buildInventoryFromRows(rows = []) {
+  return rows.reduce((inventory, row) => {
+    if (!inventory[row.slot_key]) inventory[row.slot_key] = [];
+    inventory[row.slot_key].push(parseJsonSafely(row.payload_json, null));
+    return inventory;
+  }, {});
+}
+
+function buildCrewMembersFromRows(rows = []) {
+  return rows
+    .map((row) => parseJsonSafely(row.payload_json, null))
+    .filter((member) => member && typeof member === "object");
+}
+
+function buildQuestStateFromRows(rows = []) {
+  const offeredQuests = [];
+  const activeQuests = [];
+  let activeQuest = null;
+  for (const row of rows) {
+    const quest = parseJsonSafely(row.payload_json, null);
+    if (!quest || typeof quest !== "object") continue;
+    if (row.quest_scope === "featured") {
+      activeQuest = quest;
+      continue;
+    }
+    if (row.quest_scope === "offered") {
+      offeredQuests.push(quest);
+      continue;
+    }
+    activeQuests.push(quest);
+  }
+  return { activeQuest, activeQuests, offeredQuests };
+}
+
+function buildNotificationsFromRows(rows = []) {
+  return rows.map((row) => {
+    const payload = parseJsonSafely(row.payload_json, {});
+    return {
+      id: row.notification_id,
+      recipientProfileName: row.profile_name,
+      title: row.title,
+      body: row.body,
+      messageType: row.message_type,
+      senderProfileName: row.sender_profile_name || "",
+      createdAt: row.created_at,
+      readAt: row.read_at || 0,
+      localOnly: true,
+      payload,
+    };
+  });
+}
+
+function buildDistrictStateFromRows(rows = []) {
+  const districts = rows.map((row) => parseJsonSafely(row.payload_json, null)).filter((district) => district && typeof district === "object");
+  const selected = rows.find((row) => Number(row.is_selected) === 1);
+  return {
+    districts,
+    selectedDistrictIndex: selected ? Math.max(0, toSafeInt(selected.slot_index, 0, 0)) : 0,
+  };
+}
+
+function buildBuildingDifficultiesFromRows(rows = []) {
+  const difficulties = {};
+  let cycle = null;
+  for (const row of rows) {
+    difficulties[row.spot_id] = Math.max(1, toSafeInt(row.difficulty_value, 1, 1));
+    if (cycle === null && Number.isFinite(Number(row.difficulty_cycle))) {
+      cycle = Number(row.difficulty_cycle);
+    }
+  }
+  return { difficulties, cycle };
+}
+
+function buildWorldRivalCitiesFromRows(rows = []) {
+  return rows
+    .map((row) => {
+      const payload = parseJsonSafely(row.payload_json, null);
+      if (!payload || typeof payload !== "object") return null;
+      return {
+        ...payload,
+        id: row.city_id,
+        lotId: row.lot_id,
+        status: row.city_status,
+        level: Math.max(1, toSafeInt(row.city_level, 1, 1)),
+        power: Math.max(1, toSafeInt(row.city_power, 1, 1)),
+        tributeReadyAt: Number.isFinite(Number(row.tribute_ready_at)) ? Number(row.tribute_ready_at) : 0,
+      };
+    })
+    .filter(Boolean);
+}
+
 async function buildProfileState(profileName) {
-  const [saveRow, playerRow, stateRow, marketRows, ownedLot] = await Promise.all([
+  const [saveRow, playerRow, stateRow, runtimeRow, processTaskRows, territoryRows, equipmentRows, inventoryRows, crewRows, questRows, notificationRows, districtRows, buildingDifficultyRows, worldRivalRows, marketRows, ownedLot] = await Promise.all([
     selectSaveStmt.get(profileName),
     selectPlayerStmt.get(profileName),
     selectPlayerStateStmt.get(profileName),
+    selectPlayerRuntimeStateStmt.get(profileName),
+    listPlayerProcessTasksStmt.all(profileName),
+    listPlayerTerritoriesStmt.all(profileName),
+    listPlayerEquipmentStmt.all(profileName),
+    listPlayerInventoryStmt.all(profileName),
+    listPlayerCrewMembersStmt.all(profileName),
+    listPlayerQuestsStmt.all(profileName),
+    listPlayerNotificationsStmt.all(profileName),
+    listPlayerDistrictsStmt.all(profileName),
+    listPlayerBuildingDifficultiesStmt.all(profileName),
+    listPlayerWorldRivalsStmt.all(profileName),
     listMarketItemsStmt.all(profileName, profileName, 100),
     selectOwnedWorldLotStmt.get(profileName),
   ]);
-  if (!saveRow && !playerRow && !stateRow) return null;
+  if (!saveRow && !playerRow && !stateRow && !runtimeRow && !processTaskRows.length && !territoryRows.length && !equipmentRows.length && !inventoryRows.length && !crewRows.length && !questRows.length && !notificationRows.length && !districtRows.length && !buildingDifficultyRows.length && !worldRivalRows.length) return null;
 
-  const baseState = parseJsonSafely(saveRow?.state_json, {});
   const snapshot = parseJsonSafely(stateRow?.snapshot_json, {});
+  const baseState = Object.keys(snapshot).length
+    ? snapshot
+    : parseJsonSafely(saveRow?.state_json, {});
   const inventory = parseJsonSafely(stateRow?.inventory_json, {});
   const crew = parseJsonSafely(stateRow?.crew_json, []);
   const quests = parseJsonSafely(stateRow?.quests_json, {});
   const merged = {
     ...baseState,
-    ...snapshot,
     profileName,
     itemInventory: inventory && typeof inventory === "object" ? inventory : baseState.itemInventory,
     crewMembers: Array.isArray(crew) ? crew : baseState.crewMembers,
@@ -637,6 +1097,87 @@ async function buildProfileState(profileName) {
     offeredQuests: Array.isArray(quests?.offeredQuests) ? quests.offeredQuests : (baseState.offeredQuests ?? []),
     marketStock: buildMarketStockFromRows(marketRows),
   };
+
+  if (runtimeRow) {
+    const runtime = parseJsonSafely(runtimeRow.runtime_json, {});
+    merged.pendingProtectionRewards = Array.isArray(runtime.pendingProtectionRewards)
+      ? runtime.pendingProtectionRewards
+      : (merged.pendingProtectionRewards ?? []);
+    merged.localNotifications = Array.isArray(runtime.localNotifications)
+      ? runtime.localNotifications
+      : (merged.localNotifications ?? []);
+    merged.smuggledGoods = runtime.smuggledGoods && typeof runtime.smuggledGoods === "object"
+      ? runtime.smuggledGoods
+      : (merged.smuggledGoods ?? {});
+    merged.rivalEvent = runtime.rivalEvent ?? merged.rivalEvent ?? null;
+    merged.rivalNextSpawnAt = Number.isFinite(Number(runtime.rivalNextSpawnAt))
+      ? Number(runtime.rivalNextSpawnAt)
+      : (merged.rivalNextSpawnAt ?? 0);
+    merged.mentorStep = Number.isFinite(Number(runtime.mentorStep))
+      ? Number(runtime.mentorStep)
+      : (merged.mentorStep ?? 0);
+    merged.mentorCompleted = typeof runtime.mentorCompleted === "boolean"
+      ? runtime.mentorCompleted
+      : Boolean(merged.mentorCompleted);
+    merged.mentorFlags = runtime.mentorFlags && typeof runtime.mentorFlags === "object"
+      ? runtime.mentorFlags
+      : (merged.mentorFlags ?? {});
+    merged.protectionCooldowns = runtime.protectionCooldowns && typeof runtime.protectionCooldowns === "object"
+      ? runtime.protectionCooldowns
+      : (merged.protectionCooldowns ?? {});
+    merged.districts = Array.isArray(runtime.districts) ? runtime.districts : (merged.districts ?? []);
+    merged.selectedDistrictIndex = Number.isFinite(Number(runtime.selectedDistrictIndex))
+      ? Number(runtime.selectedDistrictIndex)
+      : (merged.selectedDistrictIndex ?? 0);
+  }
+
+  if (territoryRows.length) {
+    merged.territories = buildTerritoriesFromRows(territoryRows);
+  }
+
+  if (equipmentRows.length) {
+    merged.equipment = buildEquipmentFromRows(equipmentRows, "player", "self");
+  }
+
+  if (inventoryRows.length) {
+    merged.itemInventory = buildInventoryFromRows(inventoryRows);
+  }
+
+  if (crewRows.length) {
+    merged.crewMembers = buildCrewMembersFromRows(crewRows);
+  }
+
+  if (questRows.length) {
+    const questState = buildQuestStateFromRows(questRows);
+    merged.activeQuest = questState.activeQuest;
+    merged.activeQuests = questState.activeQuests;
+    merged.offeredQuests = questState.offeredQuests;
+  }
+
+  if (notificationRows.length) {
+    merged.localNotifications = buildNotificationsFromRows(notificationRows);
+  }
+
+  if (districtRows.length) {
+    const districtState = buildDistrictStateFromRows(districtRows);
+    merged.districts = districtState.districts;
+    merged.selectedDistrictIndex = districtState.selectedDistrictIndex;
+  }
+
+  if (buildingDifficultyRows.length) {
+    const difficultyState = buildBuildingDifficultiesFromRows(buildingDifficultyRows);
+    merged.buildingDifficulties = difficultyState.difficulties;
+    if (difficultyState.cycle !== null) merged.buildingDifficultyCycle = difficultyState.cycle;
+  }
+
+  if (worldRivalRows.length) {
+    merged.worldRivalCities = buildWorldRivalCitiesFromRows(worldRivalRows);
+  }
+
+  if (processTaskRows.length) {
+    merged.processTasks = buildProcessTasksFromRows(processTaskRows.filter((row) => row.task_scope !== "harbor"));
+    merged.harborProcessTasks = buildProcessTasksFromRows(processTaskRows.filter((row) => row.task_scope === "harbor"));
+  }
 
   if (playerRow) {
     merged.fame = playerRow.fame;
@@ -660,6 +1201,15 @@ async function buildProfileState(profileName) {
       Number(saveRow?.updated_at || 0),
       Number(playerRow?.updated_at || 0),
       Number(stateRow?.updated_at || 0),
+      Number(runtimeRow?.updated_at || 0),
+      ...equipmentRows.map((row) => Number(row.updated_at || 0)),
+      ...inventoryRows.map((row) => Number(row.updated_at || 0)),
+      ...crewRows.map((row) => Number(row.updated_at || 0)),
+      ...questRows.map((row) => Number(row.updated_at || 0)),
+      ...notificationRows.map((row) => Number(row.updated_at || 0)),
+      ...districtRows.map((row) => Number(row.updated_at || 0)),
+      ...buildingDifficultyRows.map((row) => Number(row.updated_at || 0)),
+      ...worldRivalRows.map((row) => Number(row.updated_at || 0)),
     ),
   };
 }
@@ -708,16 +1258,55 @@ async function writePlayerState(profileName, state, now) {
   );
   const snapshot = {
     profileName,
+    profileStartedAt: Number.isFinite(Number(state.profileStartedAt)) ? Number(state.profileStartedAt) : now,
     money: state.money ?? 0,
     fame: preservedFame,
     heat: state.heat ?? 0,
     influence: state.influence ?? 0,
     health: state.health ?? 100,
     energy: state.energy ?? 100,
+    gearPower: state.gearPower ?? 0,
+    equipment: state.equipment ?? {},
     cityLevel: state.cityLevel ?? 1,
+    crew: state.crew ?? 1,
+    activeCrewMemberId: state.activeCrewMemberId ?? null,
+    mainBaseSpotId: state.mainBaseSpotId ?? null,
     worldBaseLotId: state.worldBaseLotId ?? null,
     worldBaseLevel: state.worldBaseLevel ?? 1,
+    needsWorldBaseSelection: Boolean(state.needsWorldBaseSelection),
+    territories: state.territories ?? {},
+    buildingDifficulties: state.buildingDifficulties ?? {},
+    buildingDifficultyCycle: state.buildingDifficultyCycle ?? null,
+    marketRefreshAt: state.marketRefreshAt ?? 0,
+    selectedQuestSlot: state.selectedQuestSlot ?? 0,
+    questNextSpawnAt: state.questNextSpawnAt ?? 0,
+    pendingProtectionRewards: state.pendingProtectionRewards ?? [],
+    processTasks: state.processTasks ?? [],
+    harborProcessTasks: state.harborProcessTasks ?? [],
+    localNotifications: state.localNotifications ?? [],
+    smuggledGoods: state.smuggledGoods ?? {},
+    smugglerFame: state.smugglerFame ?? 0,
+    rivalEvent: state.rivalEvent ?? null,
+    rivalNextSpawnAt: state.rivalNextSpawnAt ?? 0,
+    mentorStep: state.mentorStep ?? 0,
+    mentorCompleted: Boolean(state.mentorCompleted),
+    mentorFlags: state.mentorFlags ?? {},
+    protectionCooldowns: state.protectionCooldowns ?? {},
+    recoveryEffects: state.recoveryEffects ?? { health: null, energy: null },
+    naturalRecoveryAt: state.naturalRecoveryAt ?? { health: now, energy: now },
+    nextPolicePressureAt: state.nextPolicePressureAt ?? 0,
+    mainBaseClaimDay: state.mainBaseClaimDay ?? 0,
+    baseRestDay: state.baseRestDay ?? 0,
+    baseRestAvailableAt: state.baseRestAvailableAt ?? 0,
+    hideUsesToday: state.hideUsesToday ?? 0,
+    hideUsesDay: state.hideUsesDay ?? 1,
     day: state.day ?? 1,
+    districts: state.districts ?? [],
+    selectedDistrictIndex: state.selectedDistrictIndex ?? 0,
+    worldRivalCities: state.worldRivalCities ?? [],
+    clanName: state.clanName ?? "",
+    clanDescription: state.clanDescription ?? "",
+    clanTreasury: state.clanTreasury ?? 0,
     registered: Boolean(state.profileName),
   };
   const inventory = state.itemInventory ?? {};
@@ -735,6 +1324,217 @@ async function writePlayerState(profileName, state, now) {
     JSON.stringify(quests),
     now,
   );
+}
+
+async function writePlayerRuntimeState(profileName, state, now) {
+  const runtime = {
+    pendingProtectionRewards: state.pendingProtectionRewards ?? [],
+    localNotifications: state.localNotifications ?? [],
+    smuggledGoods: state.smuggledGoods ?? {},
+    rivalEvent: state.rivalEvent ?? null,
+    rivalNextSpawnAt: state.rivalNextSpawnAt ?? 0,
+    mentorStep: state.mentorStep ?? 0,
+    mentorCompleted: Boolean(state.mentorCompleted),
+    mentorFlags: state.mentorFlags ?? {},
+    protectionCooldowns: state.protectionCooldowns ?? {},
+    districts: state.districts ?? [],
+    selectedDistrictIndex: state.selectedDistrictIndex ?? 0,
+  };
+  await upsertPlayerRuntimeStateStmt.run(
+    profileName,
+    JSON.stringify(runtime),
+    now,
+  );
+}
+
+async function writePlayerProcessTasks(profileName, state, now) {
+  await deletePlayerProcessTasksStmt.run(profileName);
+  const taskGroups = [
+    { scope: "main", tasks: Array.isArray(state.processTasks) ? state.processTasks : [] },
+    { scope: "harbor", tasks: Array.isArray(state.harborProcessTasks) ? state.harborProcessTasks : [] },
+  ];
+  for (const group of taskGroups) {
+    for (const [index, task] of group.tasks.entries()) {
+      if (!task || typeof task !== "object") continue;
+      const taskId = String(task.id || `${profileName}-${group.scope}-${index}`);
+      await insertPlayerProcessTaskStmt.run(
+        taskId.slice(0, 128),
+        profileName,
+        group.scope,
+        index,
+        String(task.type || ""),
+        String(task.status || ""),
+        Number.isFinite(Number(task.endsAt)) ? Number(task.endsAt) : null,
+        JSON.stringify(task),
+        now,
+      );
+    }
+  }
+}
+
+async function writePlayerTerritories(profileName, state, now) {
+  await deletePlayerTerritoriesStmt.run(profileName);
+  const territories = state.territories && typeof state.territories === "object"
+    ? Object.entries(state.territories)
+    : [];
+  for (const [territoryId, territory] of territories) {
+    if (!territoryId || !territory || typeof territory !== "object") continue;
+    await insertPlayerTerritoryStmt.run(
+      profileName,
+      String(territoryId).slice(0, 64),
+      String(territory.ownerType || "").slice(0, 24),
+      Math.max(1, toSafeInt(territory.level, 1, 1)),
+      JSON.stringify(territory),
+      now,
+    );
+  }
+}
+
+async function writePlayerEquipment(profileName, state, now) {
+  await deletePlayerEquipmentStmt.run(profileName);
+  const equipment = state.equipment && typeof state.equipment === "object" ? state.equipment : {};
+  for (const [slotKey, item] of Object.entries(equipment)) {
+    if (!item || typeof item !== "object") continue;
+    await insertPlayerEquipmentStmt.run(
+      profileName,
+      "player",
+      "self",
+      String(slotKey).slice(0, 32),
+      JSON.stringify(item),
+      now,
+    );
+  }
+}
+
+async function writePlayerInventory(profileName, state, now) {
+  await deletePlayerInventoryStmt.run(profileName);
+  const inventory = state.itemInventory && typeof state.itemInventory === "object" ? state.itemInventory : {};
+  for (const [slotKey, items] of Object.entries(inventory)) {
+    if (!Array.isArray(items)) continue;
+    for (const item of items) {
+      if (!item || typeof item !== "object") continue;
+      const itemId = String(item.id || `${slotKey}-${Math.random().toString(36).slice(2, 8)}`);
+      await insertPlayerInventoryItemStmt.run(
+        profileName,
+        String(slotKey).slice(0, 32),
+        itemId.slice(0, 128),
+        JSON.stringify(item),
+        now,
+      );
+    }
+  }
+}
+
+async function writePlayerCrewMembers(profileName, state, now) {
+  await deletePlayerCrewMembersStmt.run(profileName);
+  const members = Array.isArray(state.crewMembers) ? state.crewMembers : [];
+  for (const member of members) {
+    if (!member || typeof member !== "object") continue;
+    await insertPlayerCrewMemberStmt.run(
+      profileName,
+      String(member.id || "crew-member").slice(0, 64),
+      JSON.stringify(member),
+      now,
+    );
+  }
+}
+
+async function writePlayerQuests(profileName, state, now) {
+  await deletePlayerQuestsStmt.run(profileName);
+  const questGroups = [
+    { scope: "featured", items: state.activeQuest ? [state.activeQuest] : [] },
+    { scope: "active", items: Array.isArray(state.activeQuests) ? state.activeQuests : [] },
+    { scope: "offered", items: Array.isArray(state.offeredQuests) ? state.offeredQuests : [] },
+  ];
+  for (const group of questGroups) {
+    for (const [index, quest] of group.items.entries()) {
+      if (!quest || typeof quest !== "object") continue;
+      const questId = String(quest.id || `${profileName}-${group.scope}-${index}`);
+      await insertPlayerQuestStmt.run(
+        questId.slice(0, 128),
+        profileName,
+        group.scope,
+        index,
+        String(quest.status || ""),
+        JSON.stringify(quest),
+        now,
+      );
+    }
+  }
+}
+
+async function writePlayerNotifications(profileName, state, now) {
+  await deletePlayerNotificationsStmt.run(profileName);
+  const notifications = Array.isArray(state.localNotifications) ? state.localNotifications : [];
+  for (const [index, entry] of notifications.entries()) {
+    if (!entry || typeof entry !== "object") continue;
+    const notificationId = String(entry.id || `${profileName}-note-${index}`);
+    await insertPlayerNotificationStmt.run(
+      notificationId.slice(0, 128),
+      profileName,
+      String(entry.messageType || "event").slice(0, 32),
+      String(entry.title || "Ertesites").slice(0, 120),
+      String(entry.body || "").slice(0, 1200),
+      entry.senderProfileName ? String(entry.senderProfileName).slice(0, 18) : null,
+      Number.isFinite(Number(entry.readAt)) && Number(entry.readAt) > 0 ? Number(entry.readAt) : null,
+      Number.isFinite(Number(entry.createdAt)) ? Number(entry.createdAt) : now,
+      JSON.stringify(entry),
+      now,
+    );
+  }
+}
+
+async function writePlayerDistricts(profileName, state, now) {
+  await deletePlayerDistrictsStmt.run(profileName);
+  const districts = Array.isArray(state.districts) ? state.districts : [];
+  const selectedIndex = Math.max(0, toSafeInt(state.selectedDistrictIndex, 0, 0));
+  for (const [index, district] of districts.entries()) {
+    if (!district || typeof district !== "object") continue;
+    await insertPlayerDistrictStmt.run(
+      profileName,
+      String(district.id || `district-${index}`).slice(0, 64),
+      index,
+      index === selectedIndex ? 1 : 0,
+      JSON.stringify(district),
+      now,
+    );
+  }
+}
+
+async function writePlayerBuildingDifficulties(profileName, state, now) {
+  await deletePlayerBuildingDifficultiesStmt.run(profileName);
+  const difficulties = state.buildingDifficulties && typeof state.buildingDifficulties === "object"
+    ? Object.entries(state.buildingDifficulties)
+    : [];
+  const cycle = Number.isFinite(Number(state.buildingDifficultyCycle)) ? Number(state.buildingDifficultyCycle) : null;
+  for (const [spotId, difficulty] of difficulties) {
+    await insertPlayerBuildingDifficultyStmt.run(
+      profileName,
+      String(spotId).slice(0, 64),
+      Math.max(1, toSafeInt(difficulty, 1, 1)),
+      cycle,
+      now,
+    );
+  }
+}
+
+async function writePlayerWorldRivals(profileName, state, now) {
+  await deletePlayerWorldRivalsStmt.run(profileName);
+  const cities = Array.isArray(state.worldRivalCities) ? state.worldRivalCities : [];
+  for (const city of cities) {
+    if (!city || typeof city !== "object" || !city.id || !city.lotId) continue;
+    await insertPlayerWorldRivalStmt.run(
+      String(city.id).slice(0, 128),
+      profileName,
+      String(city.lotId).slice(0, 64),
+      String(city.status || "hostile").slice(0, 24),
+      Math.max(1, toSafeInt(city.level, 1, 1)),
+      Math.max(1, toSafeInt(city.power, 1, 1)),
+      Number.isFinite(Number(city.tributeReadyAt)) ? Number(city.tributeReadyAt) : null,
+      JSON.stringify(city),
+      now,
+    );
+  }
 }
 
 async function writeWorldLotOwnership(profileName, state, now) {
@@ -830,6 +1630,17 @@ async function syncStructuredTables(profileName, state, now, existingSaveRow = n
   const { summary, existed } = await writePlayerSnapshot(profileName, state, now, existingSaveRow);
   await Promise.all([
     writePlayerState(profileName, state, now),
+    writePlayerRuntimeState(profileName, state, now),
+    writePlayerProcessTasks(profileName, state, now),
+    writePlayerTerritories(profileName, state, now),
+    writePlayerEquipment(profileName, state, now),
+    writePlayerInventory(profileName, state, now),
+    writePlayerCrewMembers(profileName, state, now),
+    writePlayerQuests(profileName, state, now),
+    writePlayerNotifications(profileName, state, now),
+    writePlayerDistricts(profileName, state, now),
+    writePlayerBuildingDifficulties(profileName, state, now),
+    writePlayerWorldRivals(profileName, state, now),
     writeWorldLotOwnership(profileName, state, now),
     writeLeaderboardEntry(summary, now),
     writeMarketStock(profileName, state, now),
@@ -1176,15 +1987,12 @@ async function handleApiRequest(request, response, pathname) {
   }
 
   if (pathname === "/api/player-state" && request.method === "GET") {
-    const rows = (await listSavesStmt.all()).map((row) => {
-      let state = {};
-      try {
-        state = JSON.parse(row.state_json);
-      } catch {
-        state = {};
-      }
+    const players = await listPlayersStmt.all();
+    const rows = await Promise.all(players.map(async (player) => {
+      const profile = await buildProfileState(player.profile_name);
+      const state = profile?.state || {};
       return {
-        profileName: row.profile_name,
+        profileName: player.profile_name,
         snapshot: {
           money: state.money ?? 0,
           fame: state.fame ?? 0,
@@ -1193,10 +2001,15 @@ async function handleApiRequest(request, response, pathname) {
           cityLevel: state.cityLevel ?? 1,
           worldBaseLotId: state.worldBaseLotId ?? null,
           worldBaseLevel: state.worldBaseLevel ?? 1,
+          day: state.day ?? 1,
+          selectedDistrictIndex: state.selectedDistrictIndex ?? 0,
+          rivalEvent: state.rivalEvent ?? null,
+          processTasks: state.processTasks ?? [],
+          harborProcessTasks: state.harborProcessTasks ?? [],
         },
-        updatedAt: row.updated_at,
+        updatedAt: profile?.updatedAt ?? player.updated_at,
       };
-    });
+    }));
     sendJson(response, 200, { playerState: rows });
     return true;
   }
@@ -1275,6 +2088,7 @@ async function handleApiRequest(request, response, pathname) {
       return true;
     }
     const messages = (await listMessagesByRecipientStmt.all(profileName, limit)).map(mapMessageRow);
+    const notifications = buildNotificationsFromRows(await listPlayerNotificationsStmt.all(profileName));
     const events = (await listEventsByProfileStmt.all(profileName, limit))
       .map(mapEventRow)
       .filter((event) => !["save_update", "player_created"].includes(event.eventType))
@@ -1289,10 +2103,11 @@ async function handleApiRequest(request, response, pathname) {
         readAt: event.createdAt,
         createdAt: event.createdAt,
       }));
-    const inbox = [...messages, ...events]
+    const inbox = [...notifications, ...messages, ...events]
       .sort((left, right) => right.createdAt - left.createdAt)
       .slice(0, limit);
-    const unreadCount = Number((await countUnreadMessagesStmt.get(profileName))?.unread_count || 0);
+    const unreadCount = Number((await countUnreadMessagesStmt.get(profileName))?.unread_count || 0)
+      + Number((await countUnreadPlayerNotificationsStmt.get(profileName))?.unread_count || 0);
     sendJson(response, 200, { messages: inbox, unreadCount });
     return true;
   }
@@ -1340,7 +2155,11 @@ async function handleApiRequest(request, response, pathname) {
         sendJson(response, 400, { error: "Missing profile name" });
         return true;
       }
-      await markMessagesReadStmt.run(Date.now(), profileName);
+      const now = Date.now();
+      await Promise.all([
+        markMessagesReadStmt.run(now, profileName),
+        markPlayerNotificationsReadStmt.run(now, profileName),
+      ]);
       sendJson(response, 200, { ok: true, unreadCount: 0 });
       return true;
     } catch (error) {

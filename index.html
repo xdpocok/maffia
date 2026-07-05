@@ -334,8 +334,9 @@
           <div class="character-stat"><span>Eletero</span><strong id="characterHealth">100 / 100</strong></div>
           <div class="character-stat"><span>Tamadas</span><strong id="characterAttack">18</strong></div>
           <div class="character-stat"><span>Vedelem</span><strong id="characterDefense">12</strong></div>
-          <div class="character-stat"><span>Hirnev</span><strong id="characterFame">0</strong></div>
           <div class="character-stat"><span>Korozes</span><strong id="characterHeat">12%</strong></div>
+          <div class="character-stat"><span>Banda</span><strong id="characterCrew">1</strong></div>
+          <div class="character-stat"><span>Varos szint</span><strong id="characterCityLevel">1</strong></div>
         </div>
 
         <section class="character-xp">
@@ -345,6 +346,24 @@
           </div>
           <div class="character-xp__track">
             <i id="characterXpFill"></i>
+          </div>
+        </section>
+
+        <section id="itemCraftPanel" class="item-craft-panel is-collapsed" aria-label="Item craft">
+          <button id="itemCraftToggle" class="item-craft-panel__toggle" type="button" aria-expanded="false">
+            <span class="item-craft-panel__copy">
+              <strong>Item craft</strong>
+              <span>Jelolj ki 3 szabad, azonos ritkasagu itemet.</span>
+            </span>
+            <em>Lenyitas</em>
+          </button>
+          <div id="itemCraftBody" class="item-craft-panel__body" hidden>
+            <div class="item-craft-panel__actions">
+              <button id="itemCraftButton" class="item-craft-panel__button" type="button" disabled>Craft</button>
+              <button id="itemCraftClose" class="item-craft-panel__close" type="button">Bezaras</button>
+            </div>
+            <div id="itemCraftGrid" class="item-craft-panel__grid" aria-label="Craftolhato itemek"></div>
+            <div id="itemCraftStatus" class="item-craft-panel__status">Valassz iranyt, ha van eleg szabad itemed.</div>
           </div>
         </section>
       </div>
@@ -504,6 +523,29 @@
           <button class="hud-quick-btn hud-quick-btn--messages" id="hudQuickMessages" type="button">
             Üzenetek
             <span id="hudMessageBadge" class="hud-message-badge hidden">0</span>
+          </button>
+        </div>
+        <div class="hud-bottom-bar__action-row">
+          <button class="hud-action hud-action-slot" id="hudAction1" type="button" aria-label="Utcai rablas" title="Utcai rablas">
+            <span></span>
+          </button>
+          <button class="hud-action hud-action-slot" id="hudAction2" type="button" aria-label="Bolt kifosztasa" title="Bolt kifosztasa">
+            <span></span>
+          </button>
+          <button class="hud-action hud-action-slot" id="hudAction3" type="button" aria-label="Toborzas" title="Toborzas">
+            <span></span>
+          </button>
+          <button class="hud-action hud-action-slot" id="hudAction4" type="button" aria-label="Kerulet atvetele" title="Kerulet atvetele">
+            <span></span>
+          </button>
+          <button class="hud-action hud-action-slot" id="hudAction5" type="button" aria-label="Varos fejlesztese" title="Varos fejlesztese">
+            <span></span>
+          </button>
+          <button class="hud-action hud-action-slot" id="hudAction6" type="button" aria-label="Lapulas" title="Lapulas">
+            <span></span>
+          </button>
+          <button class="hud-action hud-action-slot hud-action-primary" id="hudReset" type="button" aria-label="Uj jatek" title="Uj jatek">
+            <span></span>
           </button>
         </div>
       </nav>

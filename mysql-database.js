@@ -110,6 +110,137 @@ const schema = `
     CONSTRAINT fk_player_state_player FOREIGN KEY (profile_name) REFERENCES players(profile_name) ON DELETE CASCADE
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_hungarian_ci;
 
+  CREATE TABLE IF NOT EXISTS player_runtime_state (
+    profile_name VARCHAR(18) PRIMARY KEY,
+    runtime_json LONGTEXT NOT NULL,
+    updated_at BIGINT NOT NULL,
+    CONSTRAINT fk_player_runtime_player FOREIGN KEY (profile_name) REFERENCES players(profile_name) ON DELETE CASCADE
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_hungarian_ci;
+
+  CREATE TABLE IF NOT EXISTS player_process_tasks (
+    task_id VARCHAR(128) PRIMARY KEY,
+    profile_name VARCHAR(18) NOT NULL,
+    task_scope VARCHAR(16) NOT NULL DEFAULT 'main',
+    slot_index INT NOT NULL DEFAULT 0,
+    task_type VARCHAR(32) NOT NULL DEFAULT '',
+    task_status VARCHAR(24) NOT NULL DEFAULT '',
+    ends_at BIGINT,
+    payload_json LONGTEXT NOT NULL,
+    updated_at BIGINT NOT NULL,
+    INDEX idx_process_tasks_profile_scope (profile_name, task_scope, slot_index, updated_at DESC),
+    CONSTRAINT fk_process_tasks_player FOREIGN KEY (profile_name) REFERENCES players(profile_name) ON DELETE CASCADE
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_hungarian_ci;
+
+  CREATE TABLE IF NOT EXISTS player_territories (
+    profile_name VARCHAR(18) NOT NULL,
+    territory_id VARCHAR(64) NOT NULL,
+    owner_type VARCHAR(24) NOT NULL DEFAULT '',
+    territory_level INT NOT NULL DEFAULT 1,
+    payload_json LONGTEXT NOT NULL,
+    updated_at BIGINT NOT NULL,
+    PRIMARY KEY (profile_name, territory_id),
+    INDEX idx_territories_profile_updated (profile_name, updated_at DESC),
+    CONSTRAINT fk_player_territories_player FOREIGN KEY (profile_name) REFERENCES players(profile_name) ON DELETE CASCADE
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_hungarian_ci;
+
+  CREATE TABLE IF NOT EXISTS player_equipment_slots (
+    profile_name VARCHAR(18) NOT NULL,
+    owner_type VARCHAR(16) NOT NULL DEFAULT 'player',
+    owner_id VARCHAR(64) NOT NULL DEFAULT 'self',
+    slot_key VARCHAR(32) NOT NULL,
+    payload_json LONGTEXT NOT NULL,
+    updated_at BIGINT NOT NULL,
+    PRIMARY KEY (profile_name, owner_type, owner_id, slot_key),
+    INDEX idx_equipment_profile_owner (profile_name, owner_type, owner_id, updated_at DESC),
+    CONSTRAINT fk_player_equipment_player FOREIGN KEY (profile_name) REFERENCES players(profile_name) ON DELETE CASCADE
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_hungarian_ci;
+
+  CREATE TABLE IF NOT EXISTS player_inventory_items (
+    profile_name VARCHAR(18) NOT NULL,
+    slot_key VARCHAR(32) NOT NULL,
+    item_id VARCHAR(128) NOT NULL,
+    payload_json LONGTEXT NOT NULL,
+    updated_at BIGINT NOT NULL,
+    PRIMARY KEY (profile_name, slot_key, item_id),
+    INDEX idx_inventory_profile_slot (profile_name, slot_key, updated_at DESC),
+    CONSTRAINT fk_player_inventory_player FOREIGN KEY (profile_name) REFERENCES players(profile_name) ON DELETE CASCADE
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_hungarian_ci;
+
+  CREATE TABLE IF NOT EXISTS player_crew_members (
+    profile_name VARCHAR(18) NOT NULL,
+    member_id VARCHAR(64) NOT NULL,
+    payload_json LONGTEXT NOT NULL,
+    updated_at BIGINT NOT NULL,
+    PRIMARY KEY (profile_name, member_id),
+    INDEX idx_crew_profile_updated (profile_name, updated_at DESC),
+    CONSTRAINT fk_player_crew_player FOREIGN KEY (profile_name) REFERENCES players(profile_name) ON DELETE CASCADE
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_hungarian_ci;
+
+  CREATE TABLE IF NOT EXISTS player_quests (
+    quest_id VARCHAR(128) PRIMARY KEY,
+    profile_name VARCHAR(18) NOT NULL,
+    quest_scope VARCHAR(16) NOT NULL DEFAULT 'active',
+    slot_index INT NOT NULL DEFAULT 0,
+    quest_status VARCHAR(24) NOT NULL DEFAULT 'offered',
+    payload_json LONGTEXT NOT NULL,
+    updated_at BIGINT NOT NULL,
+    INDEX idx_player_quests_profile_scope (profile_name, quest_scope, slot_index, updated_at DESC),
+    CONSTRAINT fk_player_quests_player FOREIGN KEY (profile_name) REFERENCES players(profile_name) ON DELETE CASCADE
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_hungarian_ci;
+
+  CREATE TABLE IF NOT EXISTS player_notifications (
+    notification_id VARCHAR(128) PRIMARY KEY,
+    profile_name VARCHAR(18) NOT NULL,
+    message_type VARCHAR(32) NOT NULL DEFAULT 'event',
+    title VARCHAR(120) NOT NULL,
+    body TEXT NOT NULL,
+    sender_profile_name VARCHAR(18),
+    read_at BIGINT,
+    created_at BIGINT NOT NULL,
+    payload_json LONGTEXT NOT NULL,
+    updated_at BIGINT NOT NULL,
+    INDEX idx_player_notifications_profile (profile_name, created_at DESC),
+    INDEX idx_player_notifications_unread (profile_name, read_at, created_at DESC),
+    CONSTRAINT fk_player_notifications_player FOREIGN KEY (profile_name) REFERENCES players(profile_name) ON DELETE CASCADE
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_hungarian_ci;
+
+  CREATE TABLE IF NOT EXISTS player_districts (
+    profile_name VARCHAR(18) NOT NULL,
+    district_id VARCHAR(64) NOT NULL,
+    slot_index INT NOT NULL DEFAULT 0,
+    is_selected TINYINT(1) NOT NULL DEFAULT 0,
+    payload_json LONGTEXT NOT NULL,
+    updated_at BIGINT NOT NULL,
+    PRIMARY KEY (profile_name, district_id),
+    INDEX idx_player_districts_profile (profile_name, slot_index, updated_at DESC),
+    CONSTRAINT fk_player_districts_player FOREIGN KEY (profile_name) REFERENCES players(profile_name) ON DELETE CASCADE
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_hungarian_ci;
+
+  CREATE TABLE IF NOT EXISTS player_building_difficulties (
+    profile_name VARCHAR(18) NOT NULL,
+    spot_id VARCHAR(64) NOT NULL,
+    difficulty_value INT NOT NULL DEFAULT 1,
+    difficulty_cycle BIGINT,
+    updated_at BIGINT NOT NULL,
+    PRIMARY KEY (profile_name, spot_id),
+    INDEX idx_player_building_difficulties_profile (profile_name, difficulty_cycle, updated_at DESC),
+    CONSTRAINT fk_player_building_difficulties_player FOREIGN KEY (profile_name) REFERENCES players(profile_name) ON DELETE CASCADE
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_hungarian_ci;
+
+  CREATE TABLE IF NOT EXISTS player_world_rivals (
+    city_id VARCHAR(128) PRIMARY KEY,
+    profile_name VARCHAR(18) NOT NULL,
+    lot_id VARCHAR(64) NOT NULL,
+    city_status VARCHAR(24) NOT NULL DEFAULT 'hostile',
+    city_level INT NOT NULL DEFAULT 1,
+    city_power INT NOT NULL DEFAULT 1,
+    tribute_ready_at BIGINT,
+    payload_json LONGTEXT NOT NULL,
+    updated_at BIGINT NOT NULL,
+    INDEX idx_player_world_rivals_profile (profile_name, updated_at DESC, lot_id),
+    CONSTRAINT fk_player_world_rivals_player FOREIGN KEY (profile_name) REFERENCES players(profile_name) ON DELETE CASCADE
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_hungarian_ci;
+
   CREATE TABLE IF NOT EXISTS world_lots (
     lot_id VARCHAR(64) PRIMARY KEY,
     coord VARCHAR(32) NOT NULL,
