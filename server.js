@@ -893,12 +893,38 @@ function rankForFame(fame) {
   return "Utcai figura";
 }
 
+function getOwnedCrewMembers(state = {}) {
+  const crewMembers = Array.isArray(state.crewMembers) ? state.crewMembers : [];
+  const hasExplicitHireState = crewMembers.some((member) => (
+    member && Object.prototype.hasOwnProperty.call(member, "hired")
+  ));
+  if (hasExplicitHireState) {
+    return crewMembers.filter((member) => member?.hired === true);
+  }
+
+  const storedCrewCount = Math.min(
+    crewMembers.length,
+    Math.max(0, toSafeInt(state.crew, 0, 0)),
+  );
+  return crewMembers.filter((member, index) => {
+    const equipment = member?.equipment && typeof member.equipment === "object"
+      ? Object.values(member.equipment)
+      : [];
+    return index < storedCrewCount
+      || toSafeInt(member?.level, 1, 1) > 1
+      || toSafeInt(member?.defenseLevel, 1, 1) > 1
+      || toSafeInt(member?.attackBonus, 0, 0) > 0
+      || toSafeInt(member?.defenseBonus, 0, 0) > 0
+      || equipment.some((item) => item && typeof item === "object");
+  });
+}
+
 function summarizeState(profileName, state = {}, now = Date.now()) {
   const fame = Math.max(0, toSafeInt(state.fame, 0, 0));
   const crewMembers = Array.isArray(state.crewMembers) ? state.crewMembers : [];
   const hasCrewMembers = crewMembers.length > 0;
-  const hiredCrewCount = crewMembers.filter((member) => member?.hired).length;
-  const storedCrewCount = toSafeInt(state.crew, hiredCrewCount, 0);
+  const storedCrewCount = toSafeInt(state.crew, 0, 0);
+  const hiredCrewCount = getOwnedCrewMembers(state).length;
   const capturedVillageCount = Array.isArray(state.worldRivalCities)
     ? state.worldRivalCities.filter((city) => city?.status === "captured").length
     : 0;
@@ -1605,6 +1631,8 @@ async function writePlayerState(profileName, state, now) {
   const snapshot = {
     profileName,
     profileStartedAt: Number.isFinite(Number(state.profileStartedAt)) ? Number(state.profileStartedAt) : now,
+    avatarId: typeof state.avatarId === "string" ? state.avatarId : "",
+    needsAvatarSelection: Boolean(state.needsAvatarSelection),
     money: state.money ?? 0,
     fame: preservedFame,
     heat: state.heat ?? 0,
@@ -2142,9 +2170,7 @@ function getCrewCombatStats(member = {}) {
 
 function getPvpCombatStats(state = {}) {
   const gear = getEquipmentCombatStats(state);
-  const crew = Array.isArray(state.crewMembers)
-    ? state.crewMembers.filter((member) => member?.hired)
-    : [];
+  const crew = getOwnedCrewMembers(state);
   const memberStats = crew.map(getCrewCombatStats);
   const requestedActiveIndex = crew.findIndex((member) => member?.id === state.activeCrewMemberId);
   const active = memberStats[requestedActiveIndex >= 0 ? requestedActiveIndex : 0] || {

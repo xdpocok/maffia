@@ -23,6 +23,7 @@ const RIVAL_EVENT_DURATION_MS = 5 * 60 * 60 * 1000;
 const WORLD_RIVAL_CITY_TRIBUTE_MS = 4 * 60 * 60 * 1000;
 const WORLD_RIVAL_CITY_PROTECTION_MS = 48 * 60 * 60 * 1000;
 const WORLD_RIVAL_STRUCTURE_REPAIR_MS = 35 * 60 * 1000;
+const WORLD_RIVAL_ATTACK_FAILURE_COOLDOWN_MS = 15 * 60 * 1000;
 const WORLD_RIVAL_CITY_BASE_COUNT = 18;
 const WORLD_RIVAL_CITY_MAX_COUNT = 34;
 const WORLD_RIVAL_CITY_NEAR_BASE_COUNT = 5;
@@ -112,7 +113,7 @@ const rankTable = rankNames.map((name, index) => ({
 
 const WORLD_MAP_EMPTY_SRC = "./t%C3%A9k%C3%A9p/7fe4a123-f5d0-4381-b12f-6b208bff958c.png";
 const WORLD_MAP_SETTLED_SRC = "./t%C3%A9k%C3%A9p/26414562-afef-4966-9f34-1a8eb9fe0a0e.png";
-const WORLD_MAP_CONTINUOUS_SRC = "./assets/world/world-map-expanded-optimized.webp";
+const WORLD_MAP_CONTINUOUS_SRC = "./assets/world/world-map-browser.webp";
 const WORLD_MAP_TILE_WIDTH = 1586;
 const WORLD_MAP_TILE_HEIGHT = 992;
 const WORLD_MAP_TILE_COLS = 6;
@@ -144,9 +145,9 @@ const WORLD_BASE_HOUSE_VARIANTS = {
   ],
 };
 const WORLD_RIVAL_CITY_ASSETS = [
-  "./assets/world/world-rival-village-1.png?v=2026-07-10-4",
-  "./assets/world/world-rival-village-2.png?v=2026-07-10-4",
-  "./assets/world/world-rival-village-3.png?v=2026-07-10-4",
+  "./assets/world/world-rival-castle-1.png?v=2026-07-12-1",
+  "./assets/world/world-rival-castle-2.png?v=2026-07-12-1",
+  "./assets/world/world-rival-castle-3.png?v=2026-07-12-1",
 ];
 const WORLD_RIVAL_CITY_MAP_ASSETS = [
   "./assets/world/npc-city-map-1.png",
@@ -268,7 +269,7 @@ function getWorldLotHouseLevel(owner = null) {
 
 function getWorldLotStatusText(owner, isOwn) {
   if (owner && !isOwn) return `${owner.profileName} mar lefoglalta ezt a telket.`;
-  if (isOwn) return "Ez a sajat kulso bazisod helye.";
+  if (isOwn) return "Ez a sajat varosod helye.";
   return "Szabad telek. Innen indulhat egy uj jatekos birodalma.";
 }
 
@@ -310,10 +311,10 @@ function buildWorldMapSelectionBar(ownLot, selectionMode) {
     <div class="worldmap__selectionbar">
       <div class="worldmap__selectioncopy">
         <strong id="worldMapLotTitle">${ownLot ? `${ownLot.code} / ${ownLot.coord}` : "Nincs kijelolt telek"}</strong>
-        <p id="worldMapLotText">Kattints egy szabad telekre, vagy keresd meg koordinata alapjan a kezdo bazisod helyet.</p>
+        <p id="worldMapLotText">Kattints egy szabad telekre, vagy keresd meg koordinata alapjan a varosod helyet.</p>
         <div id="worldMapLotMeta" class="worldmap__meta">${ownLot ? `Allapot: a tied | Bazisszint: ${clamp(Math.round(Number(state.worldBaseLevel) || 1), 1, 3)}` : "Allapot: ures telek"}</div>
       </div>
-      ${selectionMode ? `<button id="worldMapChooseBtn" class="worldmap__choose" type="button" disabled>Ez lesz a bazisom</button>` : ``}
+      ${selectionMode ? `<button id="worldMapChooseBtn" class="worldmap__choose" type="button" disabled>Ez lesz a varosom</button>` : ``}
     </div>
   `;
 }
@@ -469,6 +470,7 @@ function normalizeWorldRivalCity(entry, index = 0) {
       ? entry.ownerProfileName
       : (status === "captured" ? state.profileName : ""),
     lastAttackAt: Number.isFinite(Number(entry?.lastAttackAt)) ? Number(entry.lastAttackAt) : 0,
+    attackCooldownUntil: Number.isFinite(Number(entry?.attackCooldownUntil)) ? Number(entry.attackCooldownUntil) : 0,
     lastCaptureAt: Number.isFinite(Number(entry?.lastCaptureAt)) ? Number(entry.lastCaptureAt) : 0,
   };
 }
@@ -517,6 +519,7 @@ function createWorldRivalCityForLot(lot, usedCount = 0, now = Date.now()) {
     protectionUntil: 0,
     ownerProfileName: "",
     lastAttackAt: 0,
+    attackCooldownUntil: 0,
     lastCaptureAt: 0,
   }, usedCount);
 }
@@ -983,8 +986,26 @@ const buildingHoverAdjustments = Object.fromEntries(
   }]),
 );
 
+const playerAvatarDefs = [
+  { id: "boss", image: "./assets/character/player-avatar-boss.png" },
+  { id: "lady", image: "./assets/character/player-avatar-lady.png" },
+  { id: "enforcer", image: "./assets/character/player-avatar-enforcer.png" },
+];
+const legacyPlayerAvatarImage = "./assets/character/gangster-character.png";
+
+function normalizePlayerAvatarId(value) {
+  const id = typeof value === "string" ? value.trim() : "";
+  return playerAvatarDefs.some((avatar) => avatar.id === id) ? id : "";
+}
+
+function getPlayerAvatarImage() {
+  return playerAvatarDefs.find((avatar) => avatar.id === state.avatarId)?.image || legacyPlayerAvatarImage;
+}
+
 const state = {
   profileName: "",
+  avatarId: "",
+  needsAvatarSelection: false,
   money: 120,
   fame: 0,
   crew: 0,
@@ -1075,6 +1096,7 @@ let mapDragState = {
 const overlay = document.getElementById("bootOverlay");
 const registerForm = document.getElementById("registerForm");
 const playerNameInput = document.getElementById("playerName");
+const avatarSelection = document.getElementById("avatarSelection");
 const hudRoot = document.getElementById("hudRoot");
 const mapBackgroundLayer = document.getElementById("mapBackgroundLayer");
 const lotHouseLayer = document.getElementById("lotHouseLayer");
@@ -1230,6 +1252,7 @@ const itemCraftButton = document.getElementById("itemCraftButton");
 const itemCraftStatus = document.getElementById("itemCraftStatus");
 const characterName = document.getElementById("characterName");
 const characterRank = document.getElementById("characterRank");
+const characterPortrait = document.getElementById("characterPortrait");
 const characterMoney = document.getElementById("characterMoney");
 const characterLevel = document.getElementById("characterLevel");
 const characterHealth = document.getElementById("characterHealth");
@@ -2044,7 +2067,7 @@ function hideMentorPanel(markUserClosed = false) {
 
 function hideAuxPanel() {
   if (activeAuxPanelKind === "world" && state.needsWorldBaseSelection) {
-    sceneRef?.setMessage("Elobb valassz egy ures telket a kezdo bazisodnak.");
+    sceneRef?.setMessage("Elobb valassz egy ures telket a varosodnak.");
     return;
   }
   hideQuestCard();
@@ -2470,6 +2493,11 @@ function renderWorldRivalCityProfile(cityId, focusStructureId = "") {
   const selectedRepairing = selected ? isWorldRivalStructureRepairing(selected) : false;
   const repairBlocked = Boolean(activeRepair && activeRepair.id !== selected?.id);
   const incomeState = getWorldRivalIncomeState(city);
+  const attackCooldownUntil = Math.max(0, Number(city.attackCooldownUntil) || 0);
+  const attackCooldownRemaining = Math.max(0, attackCooldownUntil - Date.now());
+  const attackCooldownLabel = attackCooldownRemaining > 0
+    ? `Varakozas ${formatCountdown(attackCooldownRemaining)}`
+    : "Tamadas";
   setPublicProfileDialogContent(city.name, city.status === "captured" ? "Elfoglalt NPC falu" : "NPC falu profil", `
     <section class="npc-city-profile npc-city-profile--${escapeHtml(city.themeId || "uptown")}">
       <article class="npc-city-profile__hero">
@@ -2517,12 +2545,14 @@ function renderWorldRivalCityProfile(cityId, focusStructureId = "") {
                     ? `${activeRepair.name} felujitasa mar folyamatban van. Egy faluban egyszerre csak egy haz fejlesztheto. Hatralevo ido: <strong data-rival-repair-ready-at="${activeRepair.repairReadyAt}">${formatCountdown(activeRepair.repairReadyAt - Date.now())}</strong>.`
                   : `Romos haz. ${repairCost} $-ert, 35 perc alatt felujithatod, es kivalaszthatod az erosseget.`
               : Number(selected.hp) > 0
-                ? `Tamadasi esely: ${attackChance}%. Ero: ${selected.attack}, vedelem: ${selected.defense}.`
+                ? attackCooldownRemaining > 0
+                  ? `A legutobbi tamadast visszavertek. Ujra tamadhatsz <strong data-rival-attack-countdown="${attackCooldownUntil}">${formatCountdown(attackCooldownRemaining)}</strong> mulva.`
+                  : `Tamadasi esely: ${attackChance}%. Ero: ${selected.attack}, vedelem: ${selected.defense}.`
                 : "Ez az epulet mar romokban all."}</p>
           </div>
           <div class="npc-city-profile__focus-actions">
             <div class="npc-city-profile__hp"><span>HP</span><strong>${selected.hp}/${selected.maxHp}</strong></div>
-            ${city.status !== "captured" && Number(selected.hp) > 0 ? `<button type="button" class="npc-city-profile__attack" data-rival-structure-attack="${escapeHtml(selected.id)}">Tamadas</button>` : ""}
+            ${city.status !== "captured" && Number(selected.hp) > 0 ? `<button type="button" class="npc-city-profile__attack" data-rival-structure-attack="${escapeHtml(selected.id)}" data-rival-attack-ready-at="${attackCooldownUntil}" data-rival-attack-label="Tamadas"${attackCooldownRemaining > 0 ? " disabled" : ""}>${attackCooldownLabel}</button>` : ""}
             ${city.status === "captured" && Number(selected.hp) <= 0 && !selectedRepairing && !repairBlocked ? `
               <div class="npc-city-profile__repair-actions">
                 <button type="button" data-rival-structure-repair="${escapeHtml(selected.id)}" data-rival-repair-specialization="attack">Erore · ${repairCost} $ · 35p</button>
@@ -2545,7 +2575,7 @@ function renderWorldRivalCityProfile(cityId, focusStructureId = "") {
           ${city.status === "captured"
             ? `<button type="button" data-rival-city-tribute="${escapeHtml(city.id)}"${incomeState.ready ? "" : " disabled"}>Bevetel beszedese</button>`
             : areWorldRivalStructuresCleared(city)
-              ? `<button type="button" class="is-primary" data-rival-city-capture="${escapeHtml(city.id)}">Falufőnök</button>`
+              ? `<button type="button" class="is-primary" data-rival-city-capture="${escapeHtml(city.id)}" data-rival-attack-ready-at="${attackCooldownUntil}" data-rival-attack-label="Falufőnök"${attackCooldownRemaining > 0 ? " disabled" : ""}>${attackCooldownRemaining > 0 ? attackCooldownLabel : "Falufőnök"}</button>`
               : ``}
         </div>
       </footer>
@@ -2567,6 +2597,18 @@ function refreshWorldRivalRepairTimers(now = Date.now()) {
   document.querySelectorAll("[data-rival-protection-until]").forEach((element) => {
     const protectionUntil = Number(element.getAttribute("data-rival-protection-until")) || 0;
     element.textContent = protectionUntil > now ? formatWorldRivalHoursMinutes(protectionUntil - now) : "lejart";
+  });
+  document.querySelectorAll("[data-rival-attack-countdown]").forEach((element) => {
+    const readyAt = Number(element.getAttribute("data-rival-attack-countdown")) || 0;
+    element.textContent = formatCountdown(Math.max(0, readyAt - now));
+  });
+  document.querySelectorAll("[data-rival-attack-ready-at]").forEach((button) => {
+    const readyAt = Number(button.getAttribute("data-rival-attack-ready-at")) || 0;
+    const remaining = Math.max(0, readyAt - now);
+    button.disabled = remaining > 0;
+    button.textContent = remaining > 0
+      ? `Varakozas ${formatCountdown(remaining)}`
+      : (button.getAttribute("data-rival-attack-label") || "Tamadas");
   });
   const incomeCache = new Map();
   const getIncome = (cityId) => {
@@ -2594,14 +2636,24 @@ function openWorldRivalCityProfile(cityId, focusStructureId = "") {
   renderWorldRivalCityProfile(cityId, focusStructureId);
 }
 
+function getWorldRivalAttackCooldownRemaining(city, now = Date.now()) {
+  return Math.max(0, (Number(city?.attackCooldownUntil) || 0) - now);
+}
+
 function runWorldRivalStructureAttack(cityId, structureId) {
   const city = getWorldRivalCityById(cityId);
   const structure = getWorldRivalStructureById(city, structureId);
   if (!city || !structure || city.status !== "hostile" || Number(structure.hp) <= 0) return false;
+  const now = Date.now();
+  const cooldownRemaining = getWorldRivalAttackCooldownRemaining(city, now);
+  if (cooldownRemaining > 0) {
+    sceneRef?.setMessage(`${city.name}: ujabb tamadas ${formatCountdown(cooldownRemaining)} mulva indithato.`);
+    renderWorldRivalCityProfile(cityId, structureId);
+    return false;
+  }
   if (!canStartCombat("Az epulettamadas")) return false;
   const successChance = getWorldRivalStructureAttackChance(city, structure);
   const success = Math.random() <= successChance;
-  const now = Date.now();
   if (success) {
     const damage = structure.hp;
     const nextHp = 0;
@@ -2618,6 +2670,7 @@ function runWorldRivalStructureAttack(cityId, structureId) {
         ? { ...item, hp: nextHp, destroyedAt: destroyed ? now : 0, lastHitAt: now }
         : item),
       lastAttackAt: now,
+      attackCooldownUntil: 0,
     }));
     const updatedCity = getWorldRivalCityById(cityId);
     const cityCleared = areWorldRivalStructuresCleared(updatedCity);
@@ -2646,13 +2699,14 @@ function runWorldRivalStructureAttack(cityId, structureId) {
       ...entry,
       power: entry.power + Math.round(4 + city.level * 2),
       lastAttackAt: now,
+      attackCooldownUntil: now + WORLD_RIVAL_ATTACK_FAILURE_COOLDOWN_MS,
     }));
     addLocalNotification(
       "Vilagterkep",
       `${city.name}: ${structure.name} vedoi visszavertek. -${moneyLoss} $, -${healthLoss} HP, +${heatGain}% korozes.`,
       { messageType: "event" },
     );
-    sceneRef?.setMessage(`${structure.name} vedoi visszavertek az embereidet.`);
+    sceneRef?.setMessage(`${structure.name} vedoi visszavertek az embereidet. Ujabb tamadas 15:00 mulva.`);
   }
   saveGame(true);
   sceneRef?.refreshHUD();
@@ -2737,9 +2791,15 @@ function runWorldRivalCapture(cityId) {
     openWorldRivalCityProfile(cityId);
     return false;
   }
+  const now = Date.now();
+  const cooldownRemaining = getWorldRivalAttackCooldownRemaining(city, now);
+  if (cooldownRemaining > 0) {
+    sceneRef?.setMessage(`${city.name}: a falufonokot ${formatCountdown(cooldownRemaining)} mulva tamadhatod ujra.`);
+    renderWorldRivalCityProfile(cityId, activeWorldRivalStructureId || "");
+    return false;
+  }
   if (!canStartCombat("Az elfoglalast")) return false;
   const successChance = getWorldRivalCaptureChance(city);
-  const now = Date.now();
   const success = Math.random() <= successChance;
   if (success) {
     const moneyGain = Math.round(city.rewardMoney * 1.35);
@@ -2762,6 +2822,7 @@ function runWorldRivalCapture(cityId) {
       protectionUntil: now + WORLD_RIVAL_CITY_PROTECTION_MS,
       ownerProfileName: state.profileName,
       lastCaptureAt: now,
+      attackCooldownUntil: 0,
     }));
     queueRewardModal({
       title: "Falufőnök legyőzve",
@@ -2795,6 +2856,7 @@ function runWorldRivalCapture(cityId) {
       weakened: true,
       power: Math.max(20, entry.power - Math.round(8 + entry.level * 3)),
       lastCaptureAt: now,
+      attackCooldownUntil: now + WORLD_RIVAL_ATTACK_FAILURE_COOLDOWN_MS,
     }));
     queueRewardModal({
       title: "Falufőnök",
@@ -2809,7 +2871,7 @@ function runWorldRivalCapture(cityId) {
       `${city.name}: a falufonok visszavert. -${moneyLoss} $, -${healthLoss} eletero, +${heatGain}% korozes.`,
       { messageType: "event" },
     );
-    sceneRef?.setMessage(`${city.name}: a falufonok meg ellenall, de meggyengult.`);
+    sceneRef?.setMessage(`${city.name}: a falufonok meg ellenall, de meggyengult. Ujabb tamadas 15:00 mulva.`);
   }
   saveGame(true);
   sceneRef?.refreshHUD();
@@ -2946,7 +3008,7 @@ function renderLeaderboardPanel(saves) {
               </span>
               <span class="leaderboard__value">${entry.level}</span>
               <span class="leaderboard__value">${entry.fame}</span>
-              <span class="leaderboard__value">${entry.cityLevel}. szint · ${Math.max(0, Math.round(Number(entry.npcVillageVictories) || 0))} város</span>
+              <span class="leaderboard__value">${Math.max(0, Math.round(Number(entry.npcVillageVictories) || 0))} város</span>
             </article>
           `).join("")}
         </div>
@@ -3105,8 +3167,9 @@ function renderWorldMapPanelWithSaves(saves = []) {
           <div
             class="worldmap__canvas"
             id="worldMapCanvas"
-            style="width:${metrics.width}px; height:${metrics.height}px; background-image:url('${WORLD_MAP_CONTINUOUS_SRC}'); background-size:${metrics.width}px ${metrics.height}px;"
+            style="width:${metrics.width}px; height:${metrics.height}px;"
           >
+            <img class="worldmap__canvas-art" src="${WORLD_MAP_CONTINUOUS_SRC}" alt="" aria-hidden="true">
             ${worldMapLotDefs.map((lot) => buildWorldMapLotButton(lot, occupiedLots[lot.id], selectionMode)).join("")}
             ${selectionMode ? "" : rivalCities.map((city) => buildWorldRivalCityButton(city)).join("")}
           </div>
@@ -3115,7 +3178,7 @@ function renderWorldMapPanelWithSaves(saves = []) {
       </div>
     </section>
   `;
-  setAuxPanelContent("Vilagterkep", selectionMode ? "Kezdo bazis" : "", body);
+  setAuxPanelContent("Vilagterkep", selectionMode ? "Valaszd ki a varosod helyet" : "", body);
   auxPanel?.setAttribute("data-kind", "world");
   document.body.classList.add("is-world-map-open");
   activeAuxPanelKind = "world";
@@ -3128,13 +3191,16 @@ function selectWorldBaseLot(lotId) {
   state.worldBaseLotId = lot.id;
   state.worldBaseLevel = Math.max(1, Number(state.worldBaseLevel) || 1);
   state.needsWorldBaseSelection = false;
-  sceneRef?.pushLog(`Kulso bazis kijelolve: ${lot.code} (${lot.coord}).`);
-  sceneRef?.setMessage(`Kezdo bazis kijelolve: ${lot.code} / ${lot.coord}.`);
+  sceneRef?.pushLog(`Varos helye kijelolve: ${lot.code} (${lot.coord}).`);
+  sceneRef?.setMessage(`A varosod helye kijelolve: ${lot.code} / ${lot.coord}.`);
   saveGame(true);
   sceneRef?.refreshHUD();
   sceneRef?.refreshMap();
   hideAuxPanel();
   document.body.classList.remove("is-world-map-open");
+  mentorCardOpen = true;
+  if (hudMentorCard) delete hudMentorCard.dataset.userClosed;
+  updateMentorPanel();
 }
 
 function hideWorldPlayerWheel() {
@@ -3300,7 +3366,7 @@ function bindWorldMapInteractions(occupiedLots, rivalCities, selectionMode) {
     if (chooseButton) {
       const canChoose = selectionMode && (!isOccupied || isOwn);
       chooseButton.disabled = !canChoose;
-      chooseButton.textContent = canChoose ? "Ez lesz a bazisom" : "Ez a telek most nem valaszthato";
+      chooseButton.textContent = canChoose ? "Ez lesz a varosom" : "Ez a telek most nem valaszthato";
       chooseButton.dataset.worldLot = lot.id;
     }
     if (center) centerLotInView(activeButton);
@@ -4212,7 +4278,7 @@ function renderGarageVehicleList() {
     if (levelLocked && !unlocked) buttonLabel = `${vehicle.requiredLevel}. szint kell`;
     return `
       <article class="harbor-garage-vehicle${active ? " is-active" : ""}${unlocked ? "" : " is-locked"}">
-        <img class="harbor-garage-vehicle__image" src="${escapeHtml(vehicle.image || "./assets/garage/sedan.svg")}" alt="${escapeHtml(vehicle.title)}">
+        <img class="harbor-garage-vehicle__image" src="${escapeHtml(vehicle.image || "./garage-assets/sedan-1930.png")}" alt="${escapeHtml(vehicle.title)}">
         <span>${escapeHtml(vehicle.accent)}</span>
         <strong>${escapeHtml(vehicle.title)}</strong>
         <small>${escapeHtml(vehicle.description)}</small>
@@ -6846,17 +6912,14 @@ function formatMoney(value) {
   return `${value} $`;
 }
 
-function escapeHtml(value) {
-  return String(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
-}
-
-function normalizeCrewMembers(members) {
+function normalizeCrewMembers(members, storedCrewCount = 0) {
   const savedMembers = Array.isArray(members) ? members : [];
+  const hasExplicitHireState = savedMembers.some((member) => (
+    member && Object.prototype.hasOwnProperty.call(member, "hired")
+  ));
+  const legacyCrewCount = hasExplicitHireState
+    ? 0
+    : clamp(Math.round(Number(storedCrewCount) || 0), 0, crewMemberTemplates.length);
   return crewMemberTemplates.map((template, index) => {
     const saved = savedMembers.find((member) => member?.id === template.id) || {};
     const hasSavedMember = Boolean(savedMembers.find((member) => member?.id === template.id));
@@ -6865,6 +6928,7 @@ function normalizeCrewMembers(members) {
     const hasEquipment = saved.equipment && typeof saved.equipment === "object"
       && Object.values(saved.equipment).some((item) => item && typeof item === "object");
     const legacyOwned = saved.hired === true
+      || (!hasExplicitHireState && index < legacyCrewCount)
       || (hasSavedMember && (
         level > 1
         || defenseLevel > 1
@@ -7331,6 +7395,35 @@ function setHudVisible(visible) {
   }
 }
 
+function showAvatarSelection() {
+  if (!state.registered || !state.needsAvatarSelection) return;
+  overlay?.classList.add("hidden");
+  setHudVisible(false);
+  hideChoiceWheel();
+  avatarSelection?.classList.remove("hidden");
+  avatarSelection?.setAttribute("aria-hidden", "false");
+}
+
+function hideAvatarSelection() {
+  avatarSelection?.classList.add("hidden");
+  avatarSelection?.setAttribute("aria-hidden", "true");
+}
+
+function selectPlayerAvatar(avatarId) {
+  const normalizedId = normalizePlayerAvatarId(avatarId);
+  if (!state.registered || !state.needsAvatarSelection || !normalizedId) return false;
+  state.avatarId = normalizedId;
+  state.needsAvatarSelection = false;
+  hideAvatarSelection();
+  setHudVisible(true);
+  saveGame(true);
+  void refreshMessageBadge();
+  sceneRef?.refreshScene();
+  sceneRef?.setMessage("Valaszd ki a vilagterkepen, hol legyen a varosod.");
+  void openAuxPanel("world");
+  return true;
+}
+
 let activeChoiceSpot = null;
 let activeRobberyGame = null;
 let robberyAutoPlayTimer = null;
@@ -7520,11 +7613,19 @@ function finishRobberySuccess() {
   closeRobberyGame();
 }
 
+function getRobberyFailureHealthLossCap(encounter, reason = "") {
+  const label = encounter?.difficultyInfo?.label || getDifficultyInfo(encounter?.difficulty || 0).label;
+  const baseCap = label === "Veszelyes" ? 34 : label === "Kockazatos" ? 26 : 18;
+  return String(reason).toLowerCase().includes("visszavonult") ? Math.max(8, Math.round(baseCap * 0.55)) : baseCap;
+}
+
 function finishRobberyFailure(reason) {
   const encounter = activeRobberyGame;
   if (!encounter || encounter.ended) return;
   const heatGain = encounter.alert >= 100 ? 18 : 8;
-  state.health = Math.max(state.health, 12);
+  const healthLossCap = getRobberyFailureHealthLossCap(encounter, reason);
+  const minimumHealth = Math.max(1, encounter.healthAtStart - healthLossCap);
+  state.health = clamp(Math.max(state.health, minimumHealth), 1, 100);
   state.naturalRecoveryAt.health = Date.now();
   const healthLost = Math.max(0, encounter.healthAtStart - state.health);
   const appliedHeat = applyHeat(heatGain);
@@ -7735,6 +7836,7 @@ function refreshCharacterPanel() {
   const xpProgress = clamp(Math.round(((state.fame - currentThreshold) / xpSpan) * 100), 0, 100);
   if (characterName) characterName.textContent = state.profileName || "Ismeretlen";
   if (characterRank) characterRank.textContent = rankForFame(state.fame);
+  if (characterPortrait) characterPortrait.src = getPlayerAvatarImage();
   if (characterMoney) characterMoney.textContent = String(state.money);
   if (characterLevel) characterLevel.textContent = String(level);
   if (characterHealth) characterHealth.textContent = `${state.health} / 100`;
@@ -7759,12 +7861,14 @@ function showCharacterPanel() {
   if (!state.registered || !characterPanel) return;
   hideChoiceWheel();
   refreshCharacterPanel();
+  document.body.classList.add("is-character-open");
   characterPanel.classList.remove("hidden");
   characterPanel.setAttribute("aria-hidden", "false");
 }
 
 function hideCharacterPanel() {
   hideEquipmentPicker();
+  document.body.classList.remove("is-character-open");
   characterPanel?.classList.add("hidden");
   characterPanel?.setAttribute("aria-hidden", "true");
 }
@@ -8254,6 +8358,8 @@ function createSaveSnapshot() {
   return {
     profileName: state.profileName,
     profileStartedAt: state.profileStartedAt,
+    avatarId: state.avatarId,
+    needsAvatarSelection: state.needsAvatarSelection,
     money: state.money,
     fame: state.fame,
     crew: state.crew,
@@ -8314,6 +8420,8 @@ function hydrateState(saved) {
   if (!saved || typeof saved !== "object") return false;
   Object.assign(state, saved);
   state.profileStartedAt = Number.isFinite(Number(state.profileStartedAt)) ? Number(state.profileStartedAt) : Date.now();
+  state.avatarId = normalizePlayerAvatarId(state.avatarId);
+  state.needsAvatarSelection = Boolean(state.needsAvatarSelection && !state.avatarId);
   state.npcVillageVictories = Math.max(0, Math.round(Number(state.npcVillageVictories) || 0));
   if (!Array.isArray(state.districts) || state.districts.length === 0) {
     state.districts = makeDistricts();
@@ -8325,7 +8433,7 @@ function hydrateState(saved) {
   state.equipment = normalizeEquipment(state.equipment);
   state.itemInventory = normalizeItemInventory(state.itemInventory, state.equipment);
   recalculateGearPower();
-  state.crewMembers = normalizeCrewMembers(state.crewMembers);
+  state.crewMembers = normalizeCrewMembers(state.crewMembers, state.crew);
   state.crew = getHiredCrewMembers().length;
   state.activeCrewMemberId = state.crewMembers.some((member) => member.hired && member.id === state.activeCrewMemberId)
     ? state.activeCrewMemberId
@@ -8936,6 +9044,8 @@ function startNewGame(name) {
   hideAuxPanel();
   state.profileName = name.trim().slice(0, 18);
   state.profileStartedAt = Date.now();
+  state.avatarId = "";
+  state.needsAvatarSelection = true;
   state.money = 120;
   state.fame = 0;
   state.crew = 0;
@@ -8991,23 +9101,21 @@ function startNewGame(name) {
   rememberLastProfileName(state.profileName);
   saveGame(true);
   overlay.classList.add("hidden");
-  setHudVisible(true);
-  void refreshMessageBadge();
+  setHudVisible(false);
   hideChoiceWheel();
   hideQuestCard();
-  mentorCardOpen = true;
-  if (hudMentorCard) delete hudMentorCard.dataset.userClosed;
-  updateMentorPanel();
+  mentorCardOpen = false;
   sceneRef?.resetLogs();
   sceneRef?.refreshScene();
-  sceneRef?.setMessage("Valaszd ki a vilagterkepen, hol induljon a bazisod.");
-  void openAuxPanel("world");
+  sceneRef?.setMessage("Valaszd ki az avatarodat.");
+  showAvatarSelection();
 }
 
 function resetGame() {
   const profileNameToDelete = state.profileName;
   const pendingSaveRequest = saveRequestInFlight;
   state.registered = false;
+  hideAvatarSelection();
   latestQueuedSave = null;
   if (pendingSaveTimer) {
     window.clearTimeout(pendingSaveTimer);
@@ -9035,6 +9143,8 @@ function resetGame() {
     await clearActiveProfileSession();
   })();
   state.profileName = "";
+  state.avatarId = "";
+  state.needsAvatarSelection = false;
   state.money = 120;
   state.fame = 0;
   state.crew = 0;
@@ -9227,7 +9337,7 @@ class CityScene extends Phaser.Scene {
 
     if (avatarNameEl) avatarNameEl.textContent = profileName;
     if (avatarLevelEl) avatarLevelEl.textContent = String(avatarLevel);
-    if (avatarPortraitEl) avatarPortraitEl.src = "./assets/character/gangster-character.png";
+    if (avatarPortraitEl) avatarPortraitEl.src = getPlayerAvatarImage();
     if (avatarBar1TextEl) avatarBar1TextEl.textContent = `${healthValue} / ${healthMax}`;
     if (avatarBar2TextEl) avatarBar2TextEl.textContent = `${energyValue} / ${energyMax}`;
     if (avatarBar1FillEl) avatarBar1FillEl.style.width = `${(healthValue / healthMax) * 100}%`;
@@ -9851,20 +9961,20 @@ function getRobberyTierProfile(difficultyInfo, battleMode = "full") {
   if (difficultyInfo?.label === "Veszelyes") {
     return {
       color: "red",
-      attack: 1.12 * modeProfile.stat,
-      defense: 1.08 * modeProfile.stat,
-      health: 1.12 * modeProfile.health,
-      enemyDamage: 1.08 * modeProfile.enemyDamage,
+      attack: 1.06 * modeProfile.stat,
+      defense: 1.03 * modeProfile.stat,
+      health: 1.07 * modeProfile.health,
+      enemyDamage: 1.01 * modeProfile.enemyDamage,
       levelOffset: 1,
     };
   }
   if (difficultyInfo?.label === "Kockazatos") {
     return {
       color: "yellow",
-      attack: 0.98 * modeProfile.stat,
-      defense: 0.98 * modeProfile.stat,
-      health: 1 * modeProfile.health,
-      enemyDamage: 0.98 * modeProfile.enemyDamage,
+      attack: 0.94 * modeProfile.stat,
+      defense: 0.94 * modeProfile.stat,
+      health: 0.96 * modeProfile.health,
+      enemyDamage: 0.94 * modeProfile.enemyDamage,
       levelOffset: 0,
     };
   }
@@ -10465,6 +10575,12 @@ function bindHudActions() {
     [hudAction6, handleLayLow],
   ];
 
+  avatarSelection?.addEventListener("click", (event) => {
+    const choice = event.target.closest("[data-avatar-id]");
+    if (!choice) return;
+    selectPlayerAvatar(choice.dataset.avatarId);
+  });
+
   map.forEach(([button, action]) => {
     button?.addEventListener("click", () => {
       if (!state.registered) return;
@@ -10782,6 +10898,13 @@ registerForm.addEventListener("submit", async (event) => {
     const saved = await loadGame(name);
     if (saved && state.profileName === name) {
       overlay.classList.add("hidden");
+      if (state.needsAvatarSelection) {
+        setHudVisible(false);
+        sceneRef?.refreshScene();
+        showAvatarSelection();
+        return;
+      }
+      hideAvatarSelection();
       setHudVisible(true);
       void refreshMessageBadge();
       sceneRef?.refreshScene();

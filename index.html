@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Maffia: Birodalomépítő</title>
-    <link rel="stylesheet" href="./style.css?v=ui-repair-2026-07-02-1" />
+    <link rel="stylesheet" href="./style.css?v=avatar-onboarding-2026-07-12-1" />
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.90.0/dist/phaser.min.js"></script>
   </head>
   <body>
@@ -32,6 +32,30 @@
         </form>
       </section>
     </div>
+
+    <section id="avatarSelection" class="avatar-selection hidden" aria-hidden="true">
+      <div class="avatar-selection__backdrop" aria-hidden="true"></div>
+      <div class="avatar-selection__panel" role="dialog" aria-modal="true" aria-labelledby="avatarSelectionTitle">
+        <header class="avatar-selection__header">
+          <p class="avatar-selection__eyebrow">A csalad uj feje</p>
+          <h2 id="avatarSelectionTitle">Valaszd ki az avatarodat</h2>
+        </header>
+        <div class="avatar-selection__grid">
+          <button class="avatar-choice" type="button" data-avatar-id="boss">
+            <img src="./assets/character/player-avatar-boss.png" alt="Elegans maffiavezer az irodajaban">
+            <span class="avatar-choice__label"><strong>A Fonok</strong><small>Tekintely es hidegver</small></span>
+          </button>
+          <button class="avatar-choice" type="button" data-avatar-id="lady">
+            <img src="./assets/character/player-avatar-lady.png" alt="Elegans maffiaholgy egy klubban">
+            <span class="avatar-choice__label"><strong>A Nagyasszony</strong><small>Befolyas es rafinaria</small></span>
+          </button>
+          <button class="avatar-choice" type="button" data-avatar-id="enforcer">
+            <img src="./assets/character/player-avatar-enforcer.png" alt="Maffiozo az ejszakai utcaban">
+            <span class="avatar-choice__label"><strong>A Vegrehajto</strong><small>Ero es konyortelenseg</small></span>
+          </button>
+        </div>
+      </div>
+    </section>
 
     <img id="mapBackgroundLayer" class="map-background-layer" src="./assets/map/map-background-clean-roadfix.png" alt="" aria-hidden="true">
     <div id="gameRoot" class="game-root"></div>
@@ -285,7 +309,7 @@
           <main class="character-figure">
             <div class="character-figure__name" id="characterName">Ismeretlen</div>
             <div class="character-figure__portrait">
-              <img class="character-figure__art" src="./assets/character/gangster-character.png" alt="1930-as evekbeli maffiozo">
+              <img id="characterPortrait" class="character-figure__art" src="./assets/character/gangster-character.png" alt="1930-as evekbeli maffiozo">
             </div>
             <div class="character-figure__rank" id="characterRank">Kezdo gengszter</div>
           </main>
@@ -554,6 +578,7 @@
       (() => {
         const ensureHidden = [
           "harborMapView",
+          "avatarSelection",
           "harborOperationPanel",
           "choiceWheel",
           "auxPanel",
@@ -590,6 +615,6 @@
       })();
     </script>
     <script src="./assets-inline.js"></script>
-    <script src="./game.js?v=ui-repair-2026-07-02-1"></script>
+    <script src="./game.js?v=avatar-onboarding-2026-07-12-1"></script>
   </body>
 </html>
