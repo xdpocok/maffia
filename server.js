@@ -66,6 +66,7 @@ const selectPlayerStmt = db.prepare(`
     energy,
     world_base_lot_id,
     world_base_level,
+    npc_village_victories,
     registered_at,
     updated_at,
     last_seen_at
@@ -89,11 +90,17 @@ const listPlayersStmt = db.prepare(`
     energy,
     world_base_lot_id,
     world_base_level,
+    npc_village_victories,
     registered_at,
     updated_at,
     last_seen_at
   FROM players
   ORDER BY level DESC, fame DESC, city_level DESC, updated_at DESC
+`);
+
+const countPlayersStmt = db.prepare(`
+  SELECT COUNT(*) AS profile_count
+  FROM players
 `);
 
 const upsertPlayerStmt = db.prepare(`
@@ -112,11 +119,12 @@ const upsertPlayerStmt = db.prepare(`
     energy,
     world_base_lot_id,
     world_base_level,
+    npc_village_victories,
     registered_at,
     updated_at,
     last_seen_at
   )
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   ON DUPLICATE KEY UPDATE
     display_name = VALUES(display_name),
     rank_title = VALUES(rank_title),
@@ -131,6 +139,7 @@ const upsertPlayerStmt = db.prepare(`
     energy = VALUES(energy),
     world_base_lot_id = VALUES(world_base_lot_id),
     world_base_level = VALUES(world_base_level),
+    npc_village_victories = VALUES(npc_village_victories),
     updated_at = VALUES(updated_at),
     last_seen_at = VALUES(last_seen_at)
 `);
@@ -492,6 +501,34 @@ const listPlayerWorldRivalsStmt = db.prepare(`
   ORDER BY updated_at DESC, city_id ASC
 `);
 
+const upsertPlayerHarborGarageStmt = db.prepare(`
+  INSERT INTO player_harbor_garage (
+    profile_name,
+    garage_level,
+    active_vehicle_id,
+    unlocked_vehicle_ids,
+    successful_runs,
+    failed_runs,
+    payload_json,
+    updated_at
+  )
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  ON DUPLICATE KEY UPDATE
+    garage_level = VALUES(garage_level),
+    active_vehicle_id = VALUES(active_vehicle_id),
+    unlocked_vehicle_ids = VALUES(unlocked_vehicle_ids),
+    successful_runs = VALUES(successful_runs),
+    failed_runs = VALUES(failed_runs),
+    payload_json = VALUES(payload_json),
+    updated_at = VALUES(updated_at)
+`);
+
+const selectPlayerHarborGarageStmt = db.prepare(`
+  SELECT profile_name, garage_level, active_vehicle_id, unlocked_vehicle_ids, successful_runs, failed_runs, payload_json, updated_at
+  FROM player_harbor_garage
+  WHERE profile_name = ?
+`);
+
 const selectOwnedWorldLotStmt = db.prepare(`
   SELECT lot_id, coord, owner_profile_name, base_level, district, status, claimed_at, updated_at
   FROM world_lots
@@ -539,24 +576,42 @@ const upsertLeaderboardEntryStmt = db.prepare(`
     level,
     fame,
     city_level,
+    npc_village_victories,
     rank_title,
     updated_at
   )
-  VALUES (?, ?, ?, ?, ?, ?, ?)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   ON DUPLICATE KEY UPDATE
     season_key = VALUES(season_key),
     level = VALUES(level),
     fame = VALUES(fame),
     city_level = VALUES(city_level),
+    npc_village_victories = VALUES(npc_village_victories),
     rank_title = VALUES(rank_title),
     updated_at = VALUES(updated_at)
 `);
 
 const listLeaderboardEntriesStmt = db.prepare(`
-  SELECT profile_name, season_key, level, fame, city_level, rank_title, updated_at
-  FROM leaderboard_entries
-  WHERE season_key = ?
-  ORDER BY level DESC, fame DESC, city_level DESC, updated_at DESC
+  SELECT
+    leaderboard.profile_name,
+    leaderboard.season_key,
+    leaderboard.level,
+    leaderboard.fame,
+    leaderboard.city_level,
+    GREATEST(
+      leaderboard.npc_village_victories,
+      (
+        SELECT COUNT(*)
+        FROM player_world_rivals AS rival
+        WHERE rival.profile_name = leaderboard.profile_name
+          AND rival.city_status = 'captured'
+      )
+    ) AS npc_village_victories,
+    leaderboard.rank_title,
+    leaderboard.updated_at
+  FROM leaderboard_entries AS leaderboard
+  WHERE leaderboard.season_key = ?
+  ORDER BY leaderboard.level DESC, leaderboard.fame DESC, leaderboard.city_level DESC, leaderboard.updated_at DESC
   LIMIT ?
 `);
 
@@ -603,6 +658,22 @@ const listMarketItemsStmt = db.prepare(`
   WHERE (? IS NULL OR owner_profile_name = ?)
   ORDER BY updated_at DESC, item_id ASC
   LIMIT ?
+`);
+
+const insertGameConfigEntryStmt = db.prepare(`
+  INSERT IGNORE INTO game_config_entries (
+    config_key,
+    config_group,
+    payload_json,
+    updated_at
+  )
+  VALUES (?, ?, ?, ?)
+`);
+
+const listGameConfigEntriesStmt = db.prepare(`
+  SELECT config_key, config_group, payload_json, updated_at
+  FROM game_config_entries
+  ORDER BY config_group ASC, config_key ASC
 `);
 
 const upsertClanStmt = db.prepare(`
@@ -695,7 +766,7 @@ const insertMessageStmt = db.prepare(`
 const listMessagesByRecipientStmt = db.prepare(`
   SELECT id, recipient_profile_name, sender_profile_name, message_type, title, body, payload_json, read_at, created_at
   FROM messages
-  WHERE recipient_profile_name = ?
+  WHERE recipient_profile_name = ? AND message_type = 'player'
   ORDER BY created_at DESC
   LIMIT ?
 `);
@@ -703,13 +774,13 @@ const listMessagesByRecipientStmt = db.prepare(`
 const countUnreadMessagesStmt = db.prepare(`
   SELECT COUNT(*) AS unread_count
   FROM messages
-  WHERE recipient_profile_name = ? AND read_at IS NULL
+  WHERE recipient_profile_name = ? AND message_type = 'player' AND read_at IS NULL
 `);
 
 const markMessagesReadStmt = db.prepare(`
   UPDATE messages
   SET read_at = ?
-  WHERE recipient_profile_name = ? AND read_at IS NULL
+  WHERE recipient_profile_name = ? AND message_type = 'player' AND read_at IS NULL
 `);
 
 const deleteMessagesByProfileStmt = db.prepare(`
@@ -742,6 +813,56 @@ const contentTypes = {
 
 function normalizeProfileName(rawValue = "") {
   return String(rawValue).trim().slice(0, 18);
+}
+
+const ACTIVE_PROFILE_COOKIE = "maffia_active_profile";
+
+function parseCookieHeader(rawHeader = "") {
+  return String(rawHeader || "")
+    .split(";")
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .reduce((cookies, part) => {
+      const separator = part.indexOf("=");
+      if (separator <= 0) return cookies;
+      const key = part.slice(0, separator).trim();
+      const value = part.slice(separator + 1).trim();
+      cookies[key] = decodeURIComponent(value);
+      return cookies;
+    }, {});
+}
+
+function getActiveProfileFromRequest(request) {
+  const cookies = parseCookieHeader(request.headers.cookie || "");
+  return normalizeProfileName(cookies[ACTIVE_PROFILE_COOKIE] || "");
+}
+
+function appendResponseHeader(response, headerName, headerValue) {
+  const existing = response.getHeader(headerName);
+  if (!existing) {
+    response.setHeader(headerName, headerValue);
+    return;
+  }
+  const values = Array.isArray(existing) ? existing : [existing];
+  response.setHeader(headerName, [...values, headerValue]);
+}
+
+function setActiveProfileCookie(response, profileName) {
+  const normalized = normalizeProfileName(profileName);
+  if (!normalized) return;
+  appendResponseHeader(
+    response,
+    "Set-Cookie",
+    `${ACTIVE_PROFILE_COOKIE}=${encodeURIComponent(normalized)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${60 * 60 * 24 * 30}`,
+  );
+}
+
+function clearActiveProfileCookie(response) {
+  appendResponseHeader(
+    response,
+    "Set-Cookie",
+    `${ACTIVE_PROFILE_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`,
+  );
 }
 
 function toSafeInt(value, fallback = 0, min = null) {
@@ -778,6 +899,9 @@ function summarizeState(profileName, state = {}, now = Date.now()) {
   const hasCrewMembers = crewMembers.length > 0;
   const hiredCrewCount = crewMembers.filter((member) => member?.hired).length;
   const storedCrewCount = toSafeInt(state.crew, hiredCrewCount, 0);
+  const capturedVillageCount = Array.isArray(state.worldRivalCities)
+    ? state.worldRivalCities.filter((city) => city?.status === "captured").length
+    : 0;
   return {
     profileName,
     displayName: profileName,
@@ -793,6 +917,7 @@ function summarizeState(profileName, state = {}, now = Date.now()) {
     energy: Math.max(0, toSafeInt(state.energy, 100, 0)),
     worldBaseLotId: typeof state.worldBaseLotId === "string" ? state.worldBaseLotId : null,
     worldBaseLevel: Math.max(1, toSafeInt(state.worldBaseLevel, 1, 1)),
+    npcVillageVictories: Math.max(0, capturedVillageCount, toSafeInt(state.npcVillageVictories, 0, 0)),
     updatedAt: now,
     lastSeenAt: now,
   };
@@ -814,6 +939,7 @@ function mapPlayerRow(row) {
     energy: row.energy,
     worldBaseLotId: row.world_base_lot_id,
     worldBaseLevel: row.world_base_level,
+    npcVillageVictories: row.npc_village_victories,
     registeredAt: row.registered_at,
     updatedAt: row.updated_at,
     lastSeenAt: row.last_seen_at,
@@ -871,6 +997,7 @@ function mapLeaderboardRow(row) {
     level: row.level,
     fame: row.fame,
     cityLevel: row.city_level,
+    npcVillageVictories: row.npc_village_victories,
     rankTitle: row.rank_title,
     updatedAt: row.updated_at,
   };
@@ -922,6 +1049,182 @@ function parseJsonSafely(rawValue, fallback) {
   }
 }
 
+function buildDefaultHarborMissionCatalog() {
+  return Array.from({ length: 50 }, (_, index) => {
+    const batch = Math.floor(index / 4);
+    const customsVariants = [
+      { title: "Gyors vami boritek", gives: { papers: 4 + (batch % 3), counterfeitMoney: 2 + (batch % 2) }, rewardMoney: 45 + batch * 3, rewardXp: 14 + (batch % 4), durationMs: 35 * 60 * 1000, successChance: 0.94 },
+      { title: "Hamis papiros csere", gives: { papers: 8 + (batch % 4) }, rewardMoney: 72 + batch * 4, rewardXp: 20 + (batch % 5), durationMs: 35 * 60 * 1000, successChance: 0.88 },
+      { title: "Penzmoso pecset", gives: { counterfeitMoney: 9 + (batch % 5), papers: 2 + (batch % 2) }, rewardMoney: 96 + batch * 5, rewardXp: 24 + (batch % 6), durationMs: 35 * 60 * 1000, successChance: 0.8 },
+      { title: "Kockazatos vami atiras", gives: { counterfeitMoney: 13 + (batch % 6), papers: 6 + (batch % 3) }, rewardMoney: 142 + batch * 6, rewardXp: 32 + (batch % 7), durationMs: 35 * 60 * 1000, successChance: 0.68 },
+    ];
+    const railVariants = [
+      { title: "Kis rakomanyu vagon", gives: { drugs: 3 + (batch % 3), weapons: 1 }, rewardMoney: 62 + batch * 3, rewardXp: 17 + (batch % 4), durationMs: 35 * 60 * 1000, successChance: 0.92 },
+      { title: "Fegyveres lada", gives: { weapons: 5 + (batch % 4), papers: 1 + (batch % 2) }, rewardMoney: 105 + batch * 4, rewardXp: 25 + (batch % 5), durationMs: 35 * 60 * 1000, successChance: 0.84 },
+      { title: "Drogos tehervagon", gives: { drugs: 9 + (batch % 5), weapons: 2 + (batch % 2) }, rewardMoney: 128 + batch * 5, rewardXp: 30 + (batch % 6), durationMs: 35 * 60 * 1000, successChance: 0.77 },
+      { title: "Ejfeli vonatrablas", gives: { drugs: 12 + (batch % 6), weapons: 6 + (batch % 3), counterfeitMoney: 2 }, rewardMoney: 190 + batch * 7, rewardXp: 42 + (batch % 8), durationMs: 35 * 60 * 1000, successChance: 0.64 },
+    ];
+    const profiles = [
+      { zone: "docks", title: "Rakparti atadas", requires: { counterfeitMoney: 6 + (index % 4), weapons: 1 + (index % 3) }, rewardMoney: 170 + index * 5, rewardXp: 28 + (index % 8), durationMs: 30 * 60 * 1000 },
+      { zone: "customs", ...customsVariants[batch % customsVariants.length] },
+      { zone: "rail", ...railVariants[batch % railVariants.length] },
+      { zone: "fish", title: "Hajnali halaszat", gives: {}, rewardMoney: 90 + index * 3, rewardXp: 18 + (index % 10), heal: 20, energy: 20, durationMs: [60, 180, 360][index % 3] * 60 * 1000 },
+    ];
+    const profile = profiles[index % profiles.length];
+    return {
+      id: `harbor-${index + 1}`,
+      ...profile,
+      title: `${profile.title} ${Math.floor(index / profiles.length) + 1}`,
+    };
+  });
+}
+
+const defaultGameConfigEntries = {
+  harbor_zones: {
+    group: "harbor",
+    payload: [
+      { id: "docks", title: "Dokkok", x: 1.5, y: 4.5, w: 29, h: 28, clip: "polygon(2% 48%, 18% 18%, 55% 4%, 91% 22%, 100% 58%, 75% 86%, 28% 96%, 0 72%)", note: "Csempesz fuvarok es hajos megbizasok." },
+      { id: "warehouse", title: "Csempeszraktar", x: 76.5, y: 45, w: 20, h: 20, clip: "polygon(12% 24%, 58% 4%, 96% 25%, 100% 76%, 66% 100%, 13% 84%, 0 48%)", note: "Arukeszlet: hamis penz, drog, fegyver, papirok." },
+      { id: "bar", title: "Kocsma", x: 27, y: 69, w: 20, h: 18, clip: "polygon(8% 32%, 42% 5%, 88% 14%, 100% 55%, 74% 95%, 20% 88%, 0 58%)", note: "Italok, eletero es energia toltes." },
+      { id: "office", title: "Kikotoi iroda", x: 36.5, y: 5, w: 18, h: 22, clip: "polygon(10% 28%, 43% 2%, 84% 8%, 100% 48%, 79% 87%, 28% 100%, 0 68%)", note: "Kapcsolatok es rendori lefizetes." },
+      { id: "market", title: "Feketepiac", x: 82, y: 20, w: 17, h: 19, clip: "polygon(12% 30%, 48% 5%, 91% 12%, 100% 54%, 76% 92%, 24% 100%, 0 64%)", note: "Ritka aruk es csempesz cuccok." },
+      { id: "customs", title: "Vam", x: 32, y: 26, w: 16, h: 18, clip: "polygon(7% 43%, 35% 10%, 76% 0, 100% 36%, 88% 78%, 42% 100%, 0 73%)", note: "Hamis penz es hamis papirok beszerzese." },
+      { id: "rail", title: "Vasuti rakodo", x: 52, y: 31, w: 30, h: 15, clip: "polygon(3% 44%, 25% 14%, 86% 2%, 100% 38%, 86% 78%, 24% 100%, 0 72%)", note: "Drog es fegyver csempeszet." },
+      { id: "garage", title: "Garazs", x: 63.1, y: 53, w: 18, h: 15, clip: "polygon(9% 32%, 38% 6%, 84% 7%, 100% 48%, 78% 91%, 22% 100%, 0 66%)", note: "Jarmuvek kesobb." },
+      { id: "fish", title: "Halpiac", x: 3.5, y: 35, w: 22, h: 20, clip: "polygon(2% 45%, 28% 12%, 78% 4%, 100% 43%, 83% 84%, 30% 100%, 0 74%)", note: "Halaskuldetesek: penz, XP, pihenes." },
+    ],
+  },
+  harbor_garage_vehicles: {
+    group: "harbor",
+    payload: [
+      { id: "sedan", title: "Utcai sedan", cost: 0, requiredLevel: 1, speed: 2, stealth: 2, load: 1, accent: "Sedan", image: "./garage-assets/sedan-1930.png", description: "Kompakt menekuloauto. Kisebb utcai atjatszasokra jo, mindenbol keveset hoz.", rewardProfile: "balanced", lootText: "Kisebb penz, hamis papir es hamis penz." },
+      { id: "van", title: "Csempesz furgon", cost: 520, requiredLevel: 2, speed: 1, stealth: 2, load: 3, accent: "Furgon", image: "./garage-assets/smuggler-van-1930.png", description: "Megerositett rakteru furgon. Csempesz aruhoz kell, drogot, fegyvert es papirokat hoz jobban.", rewardProfile: "cargo", lootText: "Csempesz aru: drog, fegyver, hamis papirok." },
+      { id: "armor", title: "Pancelkocsi", cost: 980, requiredLevel: 3, speed: 2, stealth: 1, load: 4, accent: "Pancel", image: "./garage-assets/armored-money-car-1930.png", description: "Nehez pancelkocsi. Nagy penzes korokhoz kell, foleg hamis penzt es nagyobb kasszat hoz.", rewardProfile: "cash", lootText: "Nagy penz, hamis penz es vedettebb rakomany." },
+    ],
+  },
+  harbor_garage_missions: {
+    group: "harbor",
+    payload: [
+      { id: "alley-run", title: "Sikatori atjatszas", vehicleId: "sedan", description: "Utcai sedan kell hozza. Kis csomag, kevesebb penz, de stabil kezdo fuvar.", requiredLevel: 1, rewardMoney: 140, rewardXp: 18, heatSuccess: 2, heatFail: 7, failurePenalty: 55, cargoReward: { papers: 1, counterfeitMoney: 1 }, rounds: 3, requiredHits: 2, baseSafeWidth: 0.24, baseSpeed: 0.032 },
+      { id: "night-convoy", title: "Ejjeli konvoj", vehicleId: "van", description: "Csempesz furgon kell hozza. Rakteres fuvar, ahol a csempesz aru a fo jutalom.", requiredLevel: 2, rewardMoney: 240, rewardXp: 31, heatSuccess: 3, heatFail: 10, failurePenalty: 95, cargoReward: { drugs: 2, papers: 1 }, rounds: 4, requiredHits: 3, baseSafeWidth: 0.2, baseSpeed: 0.037 },
+      { id: "vault-route", title: "Pancelkocsis kor", vehicleId: "armor", description: "Pancelkocsi kell hozza. Nagy penzes kor, nehezebb utvonallal es komolyabb kasszaval.", requiredLevel: 3, rewardMoney: 410, rewardXp: 46, heatSuccess: 4, heatFail: 14, failurePenalty: 155, cargoReward: { weapons: 2, counterfeitMoney: 2, papers: 1 }, rounds: 5, requiredHits: 4, baseSafeWidth: 0.17, baseSpeed: 0.043 },
+    ],
+  },
+  harbor_missions: {
+    group: "harbor",
+    payload: buildDefaultHarborMissionCatalog(),
+  },
+  harbor_fish_missions: {
+    group: "harbor",
+    payload: [
+      { id: "fish-1h", zone: "fish", title: "Hajnali halaszat - 1 ora", gives: {}, rewardMoney: 90, rewardXp: 18, heal: 20, energy: 20, durationMs: 60 * 60 * 1000 },
+      { id: "fish-3h", zone: "fish", title: "Part menti halaszat - 3 ora", gives: {}, rewardMoney: 180, rewardXp: 34, heal: 28, energy: 28, durationMs: 180 * 60 * 1000 },
+      { id: "fish-6h", zone: "fish", title: "Ejszakai halaszat - 6 ora", gives: {}, rewardMoney: 330, rewardXp: 58, heal: 40, energy: 40, durationMs: 360 * 60 * 1000 },
+    ],
+  },
+  main_quest_templates: {
+    group: "quests",
+    payload: {
+      early: [
+        { type: "robbery", title: "Gyors kassza", description: "Rabolj ki 1 boltot a varosban.", objective: "1 sikeres bolti kirablas.", goal: { action: "robbery", mode: "shop", target: 1, progress: 0 }, xp: 5, money: 150 },
+        { type: "robbery", title: "Utcai villanas", description: "Hajts vegre 2 sikeres kirablast.", objective: "2 sikeres kirablas barmelyik epuletnel.", goal: { action: "robbery", mode: "any", target: 2, progress: 0 }, xp: 5, money: 165 },
+        { type: "protection", title: "Elso boritek", description: "Szedj be vedelmi penzt 1 helyrol.", objective: "1 sikeres vedelmi penz beszedese.", goal: { action: "protection", mode: "any", target: 1, progress: 0 }, xp: 5, money: 145 },
+      ],
+      standard: [
+        { type: "robbery", title: "Bolti szuret", description: "Rabolj ki 2 boltot a varosban.", objective: "Sikeres kirablas 2 shop/bolt tipusu hazon.", goal: { action: "robbery", mode: "shop", target: 2, progress: 0 }, xp: 32, money: 140 },
+        { type: "robbery", title: "Negy utcai melo", description: "Hajts vegre 4 sikeres kirablast barmelyik hazon.", objective: "4 sikeres kirablas barmelyik epuletnel.", goal: { action: "robbery", mode: "any", target: 4, progress: 0 }, xp: 46, money: 210 },
+        { type: "protection", title: "Vedett kirakatok", description: "Szedj be vedelmi penzt 3 helyrol.", objective: "3 sikeres vedelmi penz beszedese.", goal: { action: "protection", mode: "any", target: 3, progress: 0 }, xp: 36, money: 170 },
+        { type: "robbery", title: "Gazdag celpont", description: "Rabolj ki egy boltot a(z) {district} kornyeken.", objective: "1 sikeres bolti kirablas.", goal: { action: "robbery", mode: "shop", target: 1, progress: 0 }, xp: 24, money: 110 },
+      ],
+    },
+  },
+  equipment_catalog: {
+    group: "items",
+    payload: {
+      hat: [
+        { id: "hat-fedora-black", name: "Fekete fedora", power: 1, stat: "defense", rarity: "gray", image: "./assets/items/item-hat-gray.png" },
+        { id: "hat-silk-band", name: "Selyemszalagos kalap", power: 3, stat: "defense", rarity: "yellow", image: "./assets/items/item-hat-yellow.png" },
+        { id: "hat-don-fedora", name: "Don fedora", power: 5, stat: "defense", rarity: "red", image: "./assets/items/item-hat-red.png" },
+      ],
+      shirt: [
+        { id: "shirt-white", name: "Feher ing", power: 2, stat: "defense", rarity: "gray", image: "./assets/items/item-shirt-gray.png" },
+        { id: "shirt-silk", name: "Selyeming", power: 4, stat: "defense", rarity: "yellow", image: "./assets/items/item-shirt-yellow.png" },
+        { id: "shirt-tailored", name: "Szabott ing", power: 6, stat: "defense", rarity: "red", image: "./assets/items/item-shirt-red.png" },
+      ],
+      pants: [
+        { id: "pants-black", name: "Fekete szovet", power: 2, stat: "defense", rarity: "gray", image: "./assets/items/item-pants-gray.png" },
+        { id: "pants-pressed", name: "Eltett nadrag", power: 3, stat: "defense", rarity: "yellow", image: "./assets/items/item-pants-yellow.png" },
+        { id: "pants-don", name: "Fonoki nadrag", power: 5, stat: "defense", rarity: "red", image: "./assets/items/item-pants-red.png" },
+      ],
+      weapon: [
+        { id: "weapon-colt", name: "Colt M1911", power: 4, stat: "attack", rarity: "gray", image: "./assets/items/item-weapon-gray.png" },
+        { id: "weapon-thompson", name: "Tommy gepisztoly", power: 7, stat: "attack", rarity: "yellow", image: "./assets/items/item-weapon-yellow.png" },
+        { id: "weapon-custom", name: "Egyedi automata", power: 10, stat: "attack", rarity: "red", image: "./assets/items/item-weapon-red.png" },
+      ],
+      shoes: [
+        { id: "shoes-leather", name: "Bor felcipo", power: 1, stat: "attack", rarity: "gray", image: "./assets/items/item-shoes-gray.png" },
+        { id: "shoes-lacquer", name: "Lakkcipo", power: 3, stat: "attack", rarity: "yellow", image: "./assets/items/item-shoes-yellow.png" },
+        { id: "shoes-import", name: "Import borcipo", power: 5, stat: "attack", rarity: "red", image: "./assets/items/item-shoes-red.png" },
+      ],
+      watch: [
+        { id: "watch-pocket", name: "Zsebora", power: 1, stat: "attack", rarity: "gray", image: "./assets/items/item-watch-gray.png" },
+        { id: "watch-gold", name: "Arany ora", power: 2, stat: "attack", rarity: "yellow", image: "./assets/items/item-watch-yellow.png" },
+        { id: "watch-family", name: "Csaladi kronometer", power: 4, stat: "attack", rarity: "red", image: "./assets/items/item-watch-red.png" },
+      ],
+    },
+  },
+  rank_table: {
+    group: "progression",
+    payload: [
+      { fame: 0, name: "Kezdo gengszter" },
+      { fame: 10, name: "Utcai ember" },
+      { fame: 24, name: "Kisfiu" },
+      { fame: 42, name: "Sarokfonok" },
+      { fame: 68, name: "Behajto" },
+      { fame: 100, name: "Utcai fonok" },
+      { fame: 134, name: "Raktarvezeto" },
+      { fame: 236, name: "Keruleti ember" },
+      { fame: 406, name: "Keruletvezeto" },
+      { fame: 644, name: "Befolyasos figura" },
+      { fame: 950, name: "Varosi kapcsolat" },
+      { fame: 1324, name: "Csaladi megbizott" },
+      { fame: 1766, name: "Maffia hadnagy" },
+      { fame: 2276, name: "Alvezeto" },
+      { fame: 2854, name: "Maffia kozepvezeto" },
+      { fame: 3500, name: "Kereskedelmi fonok" },
+      { fame: 4214, name: "Kikoto ura" },
+      { fame: 4996, name: "Varosi arnyek" },
+      { fame: 5846, name: "Csaladi tanacsado" },
+      { fame: 6764, name: "Birodalmi ember" },
+      { fame: 7750, name: "Sotet patronus" },
+      { fame: 8804, name: "Varosresz ura" },
+      { fame: 9926, name: "Maffia kapitany" },
+      { fame: 11116, name: "Csaladi jobbkez" },
+      { fame: 12374, name: "Szervezeti fonok" },
+      { fame: 13700, name: "Birodalmi fonok" },
+      { fame: 15094, name: "Nagyfonok" },
+      { fame: 16556, name: "Don helyettese" },
+      { fame: 18086, name: "Don" },
+      { fame: 19684, name: "Maffia legenda" },
+    ],
+  },
+  mentor_steps: {
+    group: "progression",
+    payload: [
+      { id: "base", title: "Elso munka", text: "Valaszd ki a lakohazadat.", reward: { money: 80, xp: 2 } },
+      { id: "crew", title: "Ember a bandaba", text: "Vegyel fel vagy fejlessz egy bandatagot.", reward: { money: 90, xp: 2 } },
+      { id: "equip", title: "Oltozz munkahoz", text: "Szereld fel a fegyvert a karakteredre.", reward: { money: 70, xp: 2 } },
+      { id: "robbery", title: "Zold celpont", text: "Rabolj ki egy konnyu hazat.", reward: { money: 110, xp: 2 } },
+      { id: "protection", title: "Utcai ado", text: "Szedj vedelmi penzt egy hazbol.", reward: { money: 120, xp: 2 } },
+      { id: "quest", title: "Atadas", text: "Vegyel fel es adj le egy kuldetest.", reward: { money: 130, xp: 2 } },
+      { id: "rest", title: "Biztos hely", text: "Pihenj a fo bazisodon.", reward: { money: 90, xp: 1 } },
+      { id: "world", title: "Nagyvilag", text: "Nezd meg a vilagterkepet.", reward: { money: 100, xp: 2 } },
+      { id: "level5", title: "Nevet szerzel", text: "Erd el az 5. szintet.", reward: { money: 180, xp: 8 } },
+      { id: "harbor", title: "Kikotoi kapu", text: "Lepj be a kikoto negyedbe.", reward: { money: 220, xp: 10 } },
+    ],
+  },
+};
+
 function buildMarketStockFromRows(rows = []) {
   return rows.map((row) => {
     const payload = parseJsonSafely(row.payload_json, {});
@@ -966,6 +1269,21 @@ function buildEquipmentFromRows(rows = [], ownerType = "player", ownerId = "self
     equipment[row.slot_key] = parseJsonSafely(row.payload_json, null);
     return equipment;
   }, {});
+}
+
+function mergeCrewEquipmentFromRows(crewMembers = [], equipmentRows = []) {
+  return crewMembers.map((member) => {
+    if (!member || typeof member !== "object") return member;
+    const equipment = buildEquipmentFromRows(equipmentRows, "crew", String(member.id || ""));
+    if (!Object.keys(equipment).length) return member;
+    return {
+      ...member,
+      equipment: {
+        ...(member.equipment && typeof member.equipment === "object" ? member.equipment : {}),
+        ...equipment,
+      },
+    };
+  });
 }
 
 function buildInventoryFromRows(rows = []) {
@@ -1059,9 +1377,22 @@ function buildWorldRivalCitiesFromRows(rows = []) {
     .filter(Boolean);
 }
 
+function buildHarborGarageFromRow(row) {
+  if (!row) return null;
+  const payload = parseJsonSafely(row.payload_json, {});
+  const unlockedVehicleIds = parseJsonSafely(row.unlocked_vehicle_ids, []);
+  return {
+    ...(payload && typeof payload === "object" ? payload : {}),
+    level: Math.max(1, toSafeInt(row.garage_level, 1, 1)),
+    activeVehicleId: String(row.active_vehicle_id || payload?.activeVehicleId || "sedan"),
+    unlockedVehicleIds: Array.isArray(unlockedVehicleIds) ? unlockedVehicleIds : (payload?.unlockedVehicleIds ?? ["sedan"]),
+    wins: Math.max(0, toSafeInt(row.successful_runs, 0, 0)),
+    losses: Math.max(0, toSafeInt(row.failed_runs, 0, 0)),
+  };
+}
+
 async function buildProfileState(profileName) {
-  const [saveRow, playerRow, stateRow, runtimeRow, processTaskRows, territoryRows, equipmentRows, inventoryRows, crewRows, questRows, notificationRows, districtRows, buildingDifficultyRows, worldRivalRows, marketRows, ownedLot] = await Promise.all([
-    selectSaveStmt.get(profileName),
+  const [playerRow, stateRow, runtimeRow, processTaskRows, territoryRows, equipmentRows, inventoryRows, crewRows, questRows, notificationRows, districtRows, buildingDifficultyRows, worldRivalRows, garageRow, marketRows, ownedLot] = await Promise.all([
     selectPlayerStmt.get(profileName),
     selectPlayerStateStmt.get(profileName),
     selectPlayerRuntimeStateStmt.get(profileName),
@@ -1075,15 +1406,14 @@ async function buildProfileState(profileName) {
     listPlayerDistrictsStmt.all(profileName),
     listPlayerBuildingDifficultiesStmt.all(profileName),
     listPlayerWorldRivalsStmt.all(profileName),
+    selectPlayerHarborGarageStmt.get(profileName),
     listMarketItemsStmt.all(profileName, profileName, 100),
     selectOwnedWorldLotStmt.get(profileName),
   ]);
-  if (!saveRow && !playerRow && !stateRow && !runtimeRow && !processTaskRows.length && !territoryRows.length && !equipmentRows.length && !inventoryRows.length && !crewRows.length && !questRows.length && !notificationRows.length && !districtRows.length && !buildingDifficultyRows.length && !worldRivalRows.length) return null;
+  if (!playerRow && !stateRow && !runtimeRow && !processTaskRows.length && !territoryRows.length && !equipmentRows.length && !inventoryRows.length && !crewRows.length && !questRows.length && !notificationRows.length && !districtRows.length && !buildingDifficultyRows.length && !worldRivalRows.length && !garageRow) return null;
 
   const snapshot = parseJsonSafely(stateRow?.snapshot_json, {});
-  const baseState = Object.keys(snapshot).length
-    ? snapshot
-    : parseJsonSafely(saveRow?.state_json, {});
+  const baseState = Object.keys(snapshot).length ? snapshot : {};
   const inventory = parseJsonSafely(stateRow?.inventory_json, {});
   const crew = parseJsonSafely(stateRow?.crew_json, []);
   const quests = parseJsonSafely(stateRow?.quests_json, {});
@@ -1147,6 +1477,10 @@ async function buildProfileState(profileName) {
     merged.crewMembers = buildCrewMembersFromRows(crewRows);
   }
 
+  if (equipmentRows.length && Array.isArray(merged.crewMembers)) {
+    merged.crewMembers = mergeCrewEquipmentFromRows(merged.crewMembers, equipmentRows);
+  }
+
   if (questRows.length) {
     const questState = buildQuestStateFromRows(questRows);
     merged.activeQuest = questState.activeQuest;
@@ -1173,6 +1507,17 @@ async function buildProfileState(profileName) {
   if (worldRivalRows.length) {
     merged.worldRivalCities = buildWorldRivalCitiesFromRows(worldRivalRows);
   }
+  merged.npcVillageVictories = Math.max(
+    0,
+    toSafeInt(merged.npcVillageVictories, 0, 0),
+    Array.isArray(merged.worldRivalCities)
+      ? merged.worldRivalCities.filter((city) => city?.status === "captured").length
+      : 0,
+  );
+
+  if (garageRow) {
+    merged.harborGarage = buildHarborGarageFromRow(garageRow);
+  }
 
   if (processTaskRows.length) {
     merged.processTasks = buildProcessTasksFromRows(processTaskRows.filter((row) => row.task_scope !== "harbor"));
@@ -1196,9 +1541,8 @@ async function buildProfileState(profileName) {
   return {
     profileName,
     state: merged,
-    createdAt: saveRow?.created_at ?? playerRow?.registered_at ?? Date.now(),
+    createdAt: playerRow?.registered_at ?? Date.now(),
     updatedAt: Math.max(
-      Number(saveRow?.updated_at || 0),
       Number(playerRow?.updated_at || 0),
       Number(stateRow?.updated_at || 0),
       Number(runtimeRow?.updated_at || 0),
@@ -1210,6 +1554,7 @@ async function buildProfileState(profileName) {
       ...districtRows.map((row) => Number(row.updated_at || 0)),
       ...buildingDifficultyRows.map((row) => Number(row.updated_at || 0)),
       ...worldRivalRows.map((row) => Number(row.updated_at || 0)),
+      Number(garageRow?.updated_at || 0),
     ),
   };
 }
@@ -1242,6 +1587,7 @@ async function writePlayerSnapshot(profileName, state, now, existingSaveRow = nu
     summary.energy,
     summary.worldBaseLotId,
     summary.worldBaseLevel,
+    summary.npcVillageVictories,
     registeredAt,
     summary.updatedAt,
     summary.lastSeenAt,
@@ -1268,7 +1614,8 @@ async function writePlayerState(profileName, state, now) {
     gearPower: state.gearPower ?? 0,
     equipment: state.equipment ?? {},
     cityLevel: state.cityLevel ?? 1,
-    crew: state.crew ?? 1,
+    npcVillageVictories: state.npcVillageVictories ?? 0,
+    crew: state.crew ?? 0,
     activeCrewMemberId: state.activeCrewMemberId ?? null,
     mainBaseSpotId: state.mainBaseSpotId ?? null,
     worldBaseLotId: state.worldBaseLotId ?? null,
@@ -1286,6 +1633,7 @@ async function writePlayerState(profileName, state, now) {
     localNotifications: state.localNotifications ?? [],
     smuggledGoods: state.smuggledGoods ?? {},
     smugglerFame: state.smugglerFame ?? 0,
+    harborGarage: state.harborGarage ?? {},
     rivalEvent: state.rivalEvent ?? null,
     rivalNextSpawnAt: state.rivalNextSpawnAt ?? 0,
     mentorStep: state.mentorStep ?? 0,
@@ -1403,6 +1751,22 @@ async function writePlayerEquipment(profileName, state, now) {
       JSON.stringify(item),
       now,
     );
+  }
+  const crewMembers = Array.isArray(state.crewMembers) ? state.crewMembers : [];
+  for (const member of crewMembers) {
+    if (!member || typeof member !== "object" || !member.id) continue;
+    const memberEquipment = member.equipment && typeof member.equipment === "object" ? member.equipment : {};
+    for (const [slotKey, item] of Object.entries(memberEquipment)) {
+      if (!item || typeof item !== "object") continue;
+      await insertPlayerEquipmentStmt.run(
+        profileName,
+        "crew",
+        String(member.id).slice(0, 64),
+        String(slotKey).slice(0, 32),
+        JSON.stringify(item),
+        now,
+      );
+    }
   }
 }
 
@@ -1537,6 +1901,34 @@ async function writePlayerWorldRivals(profileName, state, now) {
   }
 }
 
+async function writePlayerHarborGarage(profileName, state, now) {
+  const garage = state.harborGarage && typeof state.harborGarage === "object"
+    ? state.harborGarage
+    : {};
+  const unlockedVehicleIds = Array.isArray(garage.unlockedVehicleIds)
+    ? Array.from(new Set(garage.unlockedVehicleIds.map((id) => String(id || "").trim()).filter(Boolean)))
+    : ["sedan"];
+  const activeVehicleId = String(garage.activeVehicleId || unlockedVehicleIds[0] || "sedan").slice(0, 64);
+  const normalizedGarage = {
+    ...garage,
+    level: Math.max(1, toSafeInt(garage.level, 1, 1)),
+    activeVehicleId,
+    unlockedVehicleIds,
+    wins: Math.max(0, toSafeInt(garage.wins, 0, 0)),
+    losses: Math.max(0, toSafeInt(garage.losses, 0, 0)),
+  };
+  await upsertPlayerHarborGarageStmt.run(
+    profileName,
+    normalizedGarage.level,
+    normalizedGarage.activeVehicleId,
+    JSON.stringify(normalizedGarage.unlockedVehicleIds),
+    normalizedGarage.wins,
+    normalizedGarage.losses,
+    JSON.stringify(normalizedGarage),
+    now,
+  );
+}
+
 async function writeWorldLotOwnership(profileName, state, now) {
   await deleteWorldLotsByOwnerStmt.run(profileName);
   const lotId = typeof state.worldBaseLotId === "string" ? state.worldBaseLotId : "";
@@ -1569,6 +1961,7 @@ async function writeLeaderboardEntry(summary, now) {
     summary.level,
     summary.fame,
     summary.cityLevel,
+    summary.npcVillageVictories,
     summary.rankTitle,
     now,
   );
@@ -1641,6 +2034,7 @@ async function syncStructuredTables(profileName, state, now, existingSaveRow = n
     writePlayerDistricts(profileName, state, now),
     writePlayerBuildingDifficulties(profileName, state, now),
     writePlayerWorldRivals(profileName, state, now),
+    writePlayerHarborGarage(profileName, state, now),
     writeWorldLotOwnership(profileName, state, now),
     writeLeaderboardEntry(summary, now),
     writeMarketStock(profileName, state, now),
@@ -1649,16 +2043,25 @@ async function syncStructuredTables(profileName, state, now, existingSaveRow = n
   return { summary, existed };
 }
 
+async function isStaleProfileSave(profileName, incomingState) {
+  const incomingStartedAt = Number(incomingState?.profileStartedAt || 0);
+  if (!Number.isFinite(incomingStartedAt) || incomingStartedAt <= 0) return false;
+  const existingStateRow = await selectPlayerStateStmt.get(profileName);
+  const existingSnapshot = parseJsonSafely(existingStateRow?.snapshot_json, {});
+  const existingStartedAt = Number(existingSnapshot?.profileStartedAt || 0);
+  return Number.isFinite(existingStartedAt) && existingStartedAt > incomingStartedAt;
+}
+
 async function persistGameState(profileName, state, now = Date.now()) {
   return db.transaction(async () => {
-    const existingSave = await selectSaveStmt.get(profileName);
-    await upsertSaveStmt.run(
-      profileName,
-      JSON.stringify({ ...state, profileName }),
-      existingSave?.created_at ?? now,
-      now,
-    );
-    const result = await syncStructuredTables(profileName, state, now, existingSave);
+    if (await isStaleProfileSave(profileName, state)) {
+      return {
+        ignored: true,
+        summary: summarizeState(profileName, await buildProfileState(profileName).then((profile) => profile?.state || {}), now),
+        existed: true,
+      };
+    }
+    const result = await syncStructuredTables(profileName, state, now, null);
     await logEvent(
       profileName,
       result.existed ? "save_update" : "player_created",
@@ -1822,6 +2225,11 @@ async function buildPublicProfile(profileName) {
     fame: player.fame,
     influence: player.influence,
     cityLevel: player.city_level,
+    npcVillageVictories: Math.max(
+      0,
+      toSafeInt(player.npc_village_victories, 0, 0),
+      toSafeInt(profile.state.npcVillageVictories, 0, 0),
+    ),
     crewCount: player.crew_count,
     worldBaseLevel: player.world_base_level,
     attack: combat.attack,
@@ -1840,14 +2248,7 @@ async function buildPublicProfile(profileName) {
 }
 
 async function persistPvpState(profileName, state, now) {
-  const existingSave = await selectSaveStmt.get(profileName);
-  await upsertSaveStmt.run(
-    profileName,
-    JSON.stringify({ ...state, profileName }),
-    existingSave?.created_at ?? now,
-    now,
-  );
-  await syncStructuredTables(profileName, state, now, existingSave);
+  await syncStructuredTables(profileName, state, now, null);
 }
 
 async function backfillPlayersFromSaves() {
@@ -1907,8 +2308,21 @@ async function importBootstrapSavesIfNeeded() {
   await upsertMetaStmt.run("legacy_sqlite_import", "complete", Date.now());
 }
 
+async function ensureDefaultGameConfigEntries() {
+  const now = Date.now();
+  for (const [configKey, entry] of Object.entries(defaultGameConfigEntries)) {
+    await insertGameConfigEntryStmt.run(
+      configKey,
+      entry.group || "general",
+      JSON.stringify(entry.payload),
+      now,
+    );
+  }
+}
+
 await importBootstrapSavesIfNeeded();
 await backfillPlayersFromSaves();
+await ensureDefaultGameConfigEntries();
 
 function sendJson(response, statusCode, payload) {
   response.writeHead(statusCode, {
@@ -1940,15 +2354,63 @@ function readRequestBody(request) {
 }
 
 async function handleApiRequest(request, response, pathname) {
+  if (pathname === "/api/session" && request.method === "GET") {
+    const profileName = getActiveProfileFromRequest(request);
+    const player = profileName ? await selectPlayerStmt.get(profileName) : null;
+    sendJson(response, 200, { profileName, active: Boolean(profileName), exists: Boolean(player) });
+    return true;
+  }
+
+  if (pathname === "/api/session" && request.method === "POST") {
+    try {
+      const rawBody = await readRequestBody(request);
+      const body = rawBody ? JSON.parse(rawBody) : {};
+      const profileName = normalizeProfileName(body.profileName);
+      if (!profileName) {
+        sendJson(response, 400, { error: "Missing profile name" });
+        return true;
+      }
+      setActiveProfileCookie(response, profileName);
+      const player = await selectPlayerStmt.get(profileName);
+      sendJson(response, 200, { ok: true, profileName, exists: Boolean(player) });
+      return true;
+    } catch (error) {
+      sendJson(response, 400, { error: error.message || "Invalid session payload" });
+      return true;
+    }
+  }
+
+  if (pathname === "/api/session" && request.method === "DELETE") {
+    clearActiveProfileCookie(response);
+    sendEmpty(response);
+    return true;
+  }
+
   if (pathname === "/api/health") {
     await db.ping();
-    const counts = await countSavesStmt.get();
+    const counts = await countPlayersStmt.get();
     sendJson(response, 200, {
       ok: true,
       databaseType: "mysql",
       database: db.info,
       profiles: Number(counts?.profile_count || 0),
     });
+    return true;
+  }
+
+  if (pathname === "/api/game-config" && request.method === "GET") {
+    const entries = await listGameConfigEntriesStmt.all();
+    const configs = {};
+    for (const row of entries) {
+      const payload = parseJsonSafely(row.payload_json, null);
+      if (payload === null) continue;
+      configs[row.config_key] = {
+        group: row.config_group,
+        payload,
+        updatedAt: row.updated_at,
+      };
+    }
+    sendJson(response, 200, { configs });
     return true;
   }
 
@@ -1960,7 +2422,9 @@ async function handleApiRequest(request, response, pathname) {
 
   if (pathname.startsWith("/api/profile/") && request.method === "GET") {
     const encodedName = pathname.slice("/api/profile/".length);
-    const profileName = normalizeProfileName(decodeURIComponent(encodedName));
+    const profileName = encodedName === "current"
+      ? getActiveProfileFromRequest(request)
+      : normalizeProfileName(decodeURIComponent(encodedName));
     if (!profileName) {
       sendJson(response, 400, { error: "Missing profile name" });
       return true;
@@ -1970,6 +2434,7 @@ async function handleApiRequest(request, response, pathname) {
       sendJson(response, 200, { found: false });
       return true;
     }
+    setActiveProfileCookie(response, profileName);
     sendJson(response, 200, { found: true, ...profile });
     return true;
   }
@@ -1999,6 +2464,7 @@ async function handleApiRequest(request, response, pathname) {
           heat: state.heat ?? 0,
           influence: state.influence ?? 0,
           cityLevel: state.cityLevel ?? 1,
+          npcVillageVictories: state.npcVillageVictories ?? 0,
           worldBaseLotId: state.worldBaseLotId ?? null,
           worldBaseLevel: state.worldBaseLevel ?? 1,
           day: state.day ?? 1,
@@ -2031,7 +2497,7 @@ async function handleApiRequest(request, response, pathname) {
 
   if (pathname === "/api/market-items" && request.method === "GET") {
     const url = new URL(request.url || "/", `http://${request.headers.host || `${HOST}:${PORT}`}`);
-    const profileName = normalizeProfileName(url.searchParams.get("profileName") || "");
+    const profileName = getActiveProfileFromRequest(request);
     const limit = Math.min(500, Math.max(1, toSafeInt(url.searchParams.get("limit"), 100, 1)));
     const ownerFilter = profileName || null;
     const items = (await listMarketItemsStmt.all(ownerFilter, ownerFilter, limit)).map(mapMarketItemRow);
@@ -2047,7 +2513,7 @@ async function handleApiRequest(request, response, pathname) {
 
   if (pathname === "/api/events" && request.method === "GET") {
     const url = new URL(request.url || "/", `http://${request.headers.host || `${HOST}:${PORT}`}`);
-    const profileName = normalizeProfileName(url.searchParams.get("profileName") || "");
+    const profileName = getActiveProfileFromRequest(request);
     const limit = Math.min(200, Math.max(1, toSafeInt(url.searchParams.get("limit"), 40, 1)));
     const rows = profileName
       ? await listEventsByProfileStmt.all(profileName, limit)
@@ -2060,7 +2526,7 @@ async function handleApiRequest(request, response, pathname) {
     try {
       const rawBody = await readRequestBody(request);
       const body = rawBody ? JSON.parse(rawBody) : {};
-      const profileName = normalizeProfileName(body.profileName);
+      const profileName = getActiveProfileFromRequest(request);
       if (!profileName || !await selectPlayerStmt.get(profileName)) {
         sendJson(response, 404, { error: "Player not found" });
         return true;
@@ -2081,7 +2547,7 @@ async function handleApiRequest(request, response, pathname) {
 
   if (pathname === "/api/messages" && request.method === "GET") {
     const url = new URL(request.url || "/", `http://${request.headers.host || `${HOST}:${PORT}`}`);
-    const profileName = normalizeProfileName(url.searchParams.get("profileName") || "");
+    const profileName = getActiveProfileFromRequest(request);
     const limit = Math.min(200, Math.max(1, toSafeInt(url.searchParams.get("limit"), 60, 1)));
     if (!profileName) {
       sendJson(response, 400, { error: "Missing profile name" });
@@ -2103,12 +2569,14 @@ async function handleApiRequest(request, response, pathname) {
         readAt: event.createdAt,
         createdAt: event.createdAt,
       }));
-    const inbox = [...notifications, ...messages, ...events]
+    const inbox = messages
       .sort((left, right) => right.createdAt - left.createdAt)
       .slice(0, limit);
-    const unreadCount = Number((await countUnreadMessagesStmt.get(profileName))?.unread_count || 0)
-      + Number((await countUnreadPlayerNotificationsStmt.get(profileName))?.unread_count || 0);
-    sendJson(response, 200, { messages: inbox, unreadCount });
+    const unreadCount = Number((await countUnreadMessagesStmt.get(profileName))?.unread_count || 0);
+    sendJson(response, 200, {
+      messages: inbox.filter((message) => message.messageType === "player" && message.senderProfileName && message.senderProfileName !== profileName),
+      unreadCount,
+    });
     return true;
   }
 
@@ -2116,7 +2584,7 @@ async function handleApiRequest(request, response, pathname) {
     try {
       const rawBody = await readRequestBody(request);
       const body = rawBody ? JSON.parse(rawBody) : {};
-      const senderProfileName = normalizeProfileName(body.senderProfileName);
+      const senderProfileName = getActiveProfileFromRequest(request);
       const recipientProfileName = normalizeProfileName(body.recipientProfileName);
       const messageBody = String(body.body || "").trim().slice(0, 1200);
       if (!senderProfileName || !recipientProfileName || !messageBody) {
@@ -2148,18 +2616,13 @@ async function handleApiRequest(request, response, pathname) {
 
   if (pathname === "/api/messages/read" && request.method === "POST") {
     try {
-      const rawBody = await readRequestBody(request);
-      const body = rawBody ? JSON.parse(rawBody) : {};
-      const profileName = normalizeProfileName(body.profileName);
+      const profileName = getActiveProfileFromRequest(request);
       if (!profileName) {
         sendJson(response, 400, { error: "Missing profile name" });
         return true;
       }
       const now = Date.now();
-      await Promise.all([
-        markMessagesReadStmt.run(now, profileName),
-        markPlayerNotificationsReadStmt.run(now, profileName),
-      ]);
+      await markMessagesReadStmt.run(now, profileName);
       sendJson(response, 200, { ok: true, unreadCount: 0 });
       return true;
     } catch (error) {
@@ -2172,7 +2635,7 @@ async function handleApiRequest(request, response, pathname) {
     try {
       const rawBody = await readRequestBody(request);
       const body = rawBody ? JSON.parse(rawBody) : {};
-      const attackerProfileName = normalizeProfileName(body.attackerProfileName);
+      const attackerProfileName = getActiveProfileFromRequest(request);
       const defenderProfileName = normalizeProfileName(body.defenderProfileName);
       if (!attackerProfileName || !defenderProfileName || attackerProfileName === defenderProfileName) {
         sendJson(response, 400, { error: "Invalid PvP participants" });
@@ -2255,16 +2718,12 @@ async function handleApiRequest(request, response, pathname) {
   }
 
   if (pathname === "/api/saves" && request.method === "GET") {
-    const rows = await listSavesStmt.all();
-    const saves = rows.map((row) => {
-      let state = {};
-      try {
-        state = JSON.parse(row.state_json);
-      } catch {
-        state = {};
-      }
+    const players = await listPlayersStmt.all();
+    const saves = (await Promise.all(players.map(async (player) => {
+      const profile = await buildProfileState(player.profile_name);
+      const state = profile?.state || {};
       return {
-        profileName: row.profile_name,
+        profileName: player.profile_name,
         fame: Number.isFinite(Number(state.fame)) ? Math.round(Number(state.fame)) : 0,
         money: Number.isFinite(Number(state.money)) ? Math.round(Number(state.money)) : 0,
         day: Number.isFinite(Number(state.day)) ? Math.round(Number(state.day)) : 1,
@@ -2272,10 +2731,10 @@ async function handleApiRequest(request, response, pathname) {
         cityLevel: Number.isFinite(Number(state.cityLevel)) ? Math.round(Number(state.cityLevel)) : 1,
         worldBaseLotId: typeof state.worldBaseLotId === "string" ? state.worldBaseLotId : null,
         worldBaseLevel: Number.isFinite(Number(state.worldBaseLevel)) ? Math.max(1, Math.round(Number(state.worldBaseLevel))) : 1,
-        updatedAt: row.updated_at,
-        createdAt: row.created_at,
+        updatedAt: profile?.updatedAt ?? player.updated_at,
+        createdAt: profile?.createdAt ?? player.registered_at,
       };
-    });
+    }))).filter(Boolean);
     saves.sort((left, right) => {
       if (right.fame !== left.fame) return right.fame - left.fame;
       return right.updatedAt - left.updatedAt;
@@ -2288,9 +2747,9 @@ async function handleApiRequest(request, response, pathname) {
     try {
       const rawBody = await readRequestBody(request);
       const body = rawBody ? JSON.parse(rawBody) : {};
-      const profileName = normalizeProfileName(body.profileName);
+      const profileName = getActiveProfileFromRequest(request);
       if (!profileName || !body || typeof body.state !== "object") {
-        sendJson(response, 400, { error: "Missing profileName or state payload" });
+        sendJson(response, 400, { error: "Missing active profile or state payload" });
         return true;
       }
       const now = Date.now();
@@ -2307,24 +2766,27 @@ async function handleApiRequest(request, response, pathname) {
   if (!pathname.startsWith("/api/saves/")) return false;
 
   const encodedName = pathname.slice("/api/saves/".length);
-  const profileName = normalizeProfileName(decodeURIComponent(encodedName));
+  const profileName = encodedName === "current"
+    ? getActiveProfileFromRequest(request)
+    : normalizeProfileName(decodeURIComponent(encodedName));
   if (!profileName) {
     sendJson(response, 400, { error: "Missing profile name" });
     return true;
   }
 
   if (request.method === "GET") {
-    const row = await selectSaveStmt.get(profileName);
-    if (!row) {
+    const profile = await buildProfileState(profileName);
+    if (!profile) {
       sendJson(response, 200, { found: false });
       return true;
     }
+    setActiveProfileCookie(response, profileName);
     sendJson(response, 200, {
       found: true,
-      profileName: row.profile_name,
-      state: JSON.parse(row.state_json),
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
+      profileName,
+      state: profile.state,
+      createdAt: profile.createdAt,
+      updatedAt: profile.updatedAt,
     });
     return true;
   }
@@ -2340,6 +2802,7 @@ async function handleApiRequest(request, response, pathname) {
       const now = Date.now();
       const state = { ...body.state, profileName };
       await persistGameState(profileName, state, now);
+      setActiveProfileCookie(response, profileName);
       sendJson(response, 200, { ok: true, profileName, updatedAt: now });
       return true;
     } catch (error) {
@@ -2357,6 +2820,9 @@ async function handleApiRequest(request, response, pathname) {
         await deleteSaveStmt.run(profileName);
         await deletePlayerStmt.run(profileName);
       });
+      if (getActiveProfileFromRequest(request) === profileName) {
+        clearActiveProfileCookie(response);
+      }
       sendEmpty(response);
     } catch (error) {
       sendJson(response, 500, { error: error.message || "Player deletion failed" });

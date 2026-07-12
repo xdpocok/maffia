@@ -1,8 +1,9 @@
 ﻿const STORAGE_KEY = "maffia.birodalom.save.phaser.v3";
 const LEGACY_STORAGE_KEYS = [STORAGE_KEY, "maffia.birodalom.save.phaser.v2", "maffia.birodalom.save.phaser.v1"];
 const LAST_PROFILE_KEY = "maffia.birodalom.lastProfile";
-const SAVE_API_BASE = "/api/saves";
-const PROFILE_API_BASE = "/api/profile";
+const SAVE_API_BASE = "/api/saves/current";
+const PROFILE_API_BASE = "/api/profile/current";
+const GAME_CONFIG_API = "/api/game-config";
 const PROTECTION_COOLDOWN_MS = 3 * 60 * 1000;
 const RECOVERY_DURATION_MS = 20 * 60 * 1000;
 const RECOVERY_AMOUNT = 50;
@@ -20,8 +21,11 @@ const RIVAL_SPAWN_MIN_MS = 4 * 60 * 60 * 1000;
 const RIVAL_SPAWN_MAX_MS = 5 * 60 * 60 * 1000;
 const RIVAL_EVENT_DURATION_MS = 5 * 60 * 60 * 1000;
 const WORLD_RIVAL_CITY_TRIBUTE_MS = 4 * 60 * 60 * 1000;
-const WORLD_RIVAL_CITY_BASE_COUNT = 4;
-const WORLD_RIVAL_CITY_MAX_COUNT = 7;
+const WORLD_RIVAL_CITY_PROTECTION_MS = 48 * 60 * 60 * 1000;
+const WORLD_RIVAL_STRUCTURE_REPAIR_MS = 35 * 60 * 1000;
+const WORLD_RIVAL_CITY_BASE_COUNT = 18;
+const WORLD_RIVAL_CITY_MAX_COUNT = 34;
+const WORLD_RIVAL_CITY_NEAR_BASE_COUNT = 5;
 const districtDefs = [
   {
     id: "center",
@@ -140,12 +144,67 @@ const WORLD_BASE_HOUSE_VARIANTS = {
   ],
 };
 const WORLD_RIVAL_CITY_ASSETS = [
-  "./assets/world/world-rival-city-1.svg",
-  "./assets/world/world-rival-city-2.svg",
-  "./assets/world/world-rival-city-3.svg",
+  "./assets/world/world-rival-village-1.png?v=2026-07-10-4",
+  "./assets/world/world-rival-village-2.png?v=2026-07-10-4",
+  "./assets/world/world-rival-village-3.png?v=2026-07-10-4",
+];
+const WORLD_RIVAL_CITY_MAP_ASSETS = [
+  "./assets/world/npc-city-map-1.png",
+  "./assets/world/npc-city-map-2.png",
+  "./assets/world/npc-city-map-3.png",
 ];
 const WORLD_RIVAL_CITY_PREFIXES = ["Moretti", "Falcone", "Barzini", "Luchese", "Costello", "Romano", "Vespucci", "Belladonna"];
 const WORLD_RIVAL_CITY_SUFFIXES = ["rakpart", "telep", "negyed", "erod", "tanya", "kapu", "sarok", "udvar"];
+const WORLD_RIVAL_CITY_THEME_DEFS = [
+  {
+    id: "uptown",
+    label: "Poros utca",
+    bossTitle: "Falusi fonok",
+    mapImage: WORLD_RIVAL_CITY_MAP_ASSETS[0],
+    structures: [
+      { id: "hall", name: "Fonoki haz", type: "hq", x: 73, y: 27, maxHp: 150, rewardMoney: 72, rewardXp: 7 },
+      { id: "store", name: "Kis bolt", type: "vault", x: 24, y: 28, maxHp: 98, rewardMoney: 42, rewardXp: 4 },
+      { id: "tower", name: "Figyelohaz", type: "watch", x: 14, y: 28, maxHp: 92, rewardMoney: 38, rewardXp: 4 },
+      { id: "safehouse", name: "Menedekhaz", type: "safe", x: 15, y: 56, maxHp: 102, rewardMoney: 44, rewardXp: 4 },
+      { id: "garage", name: "Kocsiudvar", type: "garage", x: 82, y: 56, maxHp: 96, rewardMoney: 40, rewardXp: 4 },
+      { id: "barn", name: "Magtar", type: "yard", x: 42, y: 80, maxHp: 88, rewardMoney: 36, rewardXp: 3 },
+      { id: "shed", name: "Hatso sufnisor", type: "safe", x: 43, y: 19, maxHp: 84, rewardMoney: 34, rewardXp: 3 },
+      { id: "mill", name: "Malomudvar", type: "yard", x: 79, y: 68, maxHp: 94, rewardMoney: 39, rewardXp: 4 },
+    ],
+  },
+  {
+    id: "docklands",
+    label: "Kis rakparti falu",
+    bossTitle: "Rakparti fonok",
+    mapImage: WORLD_RIVAL_CITY_MAP_ASSETS[1],
+    structures: [
+      { id: "dock-office", name: "Rakparti haz", type: "hq", x: 51, y: 22, maxHp: 148, rewardMoney: 70, rewardXp: 7 },
+      { id: "fish-yard", name: "Haludvar", type: "yard", x: 18, y: 30, maxHp: 92, rewardMoney: 38, rewardXp: 4 },
+      { id: "customs", name: "Parti figyelo", type: "watch", x: 11, y: 62, maxHp: 102, rewardMoney: 42, rewardXp: 4 },
+      { id: "warehouse", name: "Kis raktar", type: "vault", x: 84, y: 30, maxHp: 110, rewardMoney: 46, rewardXp: 5 },
+      { id: "speak", name: "Parti kocsma", type: "safe", x: 34, y: 65, maxHp: 94, rewardMoney: 36, rewardXp: 4 },
+      { id: "garage", name: "Csónakbeallo", type: "garage", x: 72, y: 80, maxHp: 90, rewardMoney: 34, rewardXp: 4 },
+      { id: "hut", name: "Halaszkunyho", type: "safe", x: 86, y: 56, maxHp: 82, rewardMoney: 30, rewardXp: 3 },
+      { id: "shed", name: "Nettarolo", type: "yard", x: 7, y: 70, maxHp: 86, rewardMoney: 32, rewardXp: 3 },
+    ],
+  },
+  {
+    id: "industrial",
+    label: "Poros szeli telep",
+    bossTitle: "Telepi fonok",
+    mapImage: WORLD_RIVAL_CITY_MAP_ASSETS[2],
+    structures: [
+      { id: "factory", name: "Fonoki udvar", type: "hq", x: 74, y: 20, maxHp: 154, rewardMoney: 72, rewardXp: 7 },
+      { id: "foundry", name: "Szenraktar", type: "vault", x: 18, y: 24, maxHp: 100, rewardMoney: 44, rewardXp: 4 },
+      { id: "checkpoint", name: "Sorompohaz", type: "watch", x: 43, y: 16, maxHp: 96, rewardMoney: 40, rewardXp: 4 },
+      { id: "barracks", name: "Munkashaz", type: "safe", x: 13, y: 50, maxHp: 98, rewardMoney: 42, rewardXp: 4 },
+      { id: "depot", name: "Udvari depo", type: "yard", x: 49, y: 69, maxHp: 94, rewardMoney: 40, rewardXp: 4 },
+      { id: "motorpool", name: "Kocsiol", type: "garage", x: 77, y: 53, maxHp: 88, rewardMoney: 36, rewardXp: 3 },
+      { id: "hut", name: "Kis kunyho", type: "safe", x: 21, y: 79, maxHp: 80, rewardMoney: 30, rewardXp: 3 },
+      { id: "yard", name: "Faszin", type: "yard", x: 66, y: 82, maxHp: 84, rewardMoney: 32, rewardXp: 3 },
+    ],
+  },
+];
 
 function toWorldMapColumnLabel(index) {
   let current = Math.max(1, Math.round(index));
@@ -224,6 +283,7 @@ function buildWorldMapLotButton(lot, owner, selectionMode) {
   const isOccupied = Boolean(owner);
   const level = getWorldLotHouseLevel(owner);
   const houseAsset = getWorldLotHouseAsset(level, `${owner?.profileName || lot.id}-${lot.id}`);
+  const label = owner?.profileName || `${lot.code} / ${lot.coord}`;
   return `
     <button
       class="worldmap__lot${isOccupied ? " is-occupied" : " is-free"}${isOwn ? " is-own" : ""}"
@@ -231,12 +291,13 @@ function buildWorldMapLotButton(lot, owner, selectionMode) {
       data-world-lot="${lot.id}"
       data-world-code="${lot.code}"
       data-world-coord="${lot.coord}"
-      data-world-label="${lot.code} / ${lot.coord}"
+      data-world-label="${escapeHtml(label)}"
       data-world-x="${lot.x}"
       data-world-y="${lot.y}"
       style="left:${lot.x}px; top:${lot.y}px"
       ${selectionMode && isOccupied && !isOwn ? "disabled" : ""}
-      aria-label="${lot.code} ${lot.coord}${owner ? ` - ${owner.profileName}` : " - ures telek"}">
+      title="${escapeHtml(label)}"
+      aria-label="${escapeHtml(owner?.profileName || `${lot.code} ${lot.coord} - ures telek`)}">
       ${isOccupied ? `<img class="worldmap__house worldmap__house--level-${level}" src="${houseAsset}" alt="" aria-hidden="true">` : ""}
       <i></i>
     </button>
@@ -272,6 +333,10 @@ function getWorldRivalCityAsset(index = 0) {
   return WORLD_RIVAL_CITY_ASSETS[Math.abs(Math.round(index)) % WORLD_RIVAL_CITY_ASSETS.length] || WORLD_RIVAL_CITY_ASSETS[0];
 }
 
+function getWorldRivalCityTheme(index = 0) {
+  return WORLD_RIVAL_CITY_THEME_DEFS[Math.abs(Math.round(index)) % WORLD_RIVAL_CITY_THEME_DEFS.length] || WORLD_RIVAL_CITY_THEME_DEFS[0];
+}
+
 function buildWorldRivalCityName(seed = "") {
   const numericSeed = worldRivalSeedFromText(seed || state.profileName || "rival-city");
   const prefix = WORLD_RIVAL_CITY_PREFIXES[numericSeed % WORLD_RIVAL_CITY_PREFIXES.length];
@@ -279,15 +344,104 @@ function buildWorldRivalCityName(seed = "") {
   return `${prefix} ${suffix}`;
 }
 
+function buildWorldRivalCityStructures(assetIndex = 0, level = 1, seed = "") {
+  const theme = getWorldRivalCityTheme(assetIndex);
+  const baseSeed = worldRivalSeedFromText(`${seed}-${theme.id}-${level}`);
+  const structureCount = level <= 1 ? 4 : level === 2 ? 6 : 8;
+  return (theme.structures || []).slice(0, structureCount).map((entry, index) => {
+    const variance = ((baseSeed >> (index % 8)) % 17) - 8;
+    const specialization = ((baseSeed >> ((index + 3) % 12)) & 1) === 0 ? "attack" : "defense";
+    const baseMaxHp = Math.max(72, Math.round((Number(entry.maxHp) || 100) + level * 18 + variance));
+    const baseAttack = Math.max(18, Math.round(24 + level * 10 + Math.abs(variance) * 0.7));
+    const baseDefense = Math.max(18, Math.round(22 + level * 11 + Math.abs(variance) * 0.6));
+    const maxHp = Math.round(baseMaxHp * (specialization === "attack" ? 0.84 : 1.12));
+    return {
+      id: `${theme.id}-${entry.id}`,
+      name: entry.name,
+      type: entry.type || "safe",
+      x: Number(entry.x) || 50,
+      y: Number(entry.y) || 50,
+      maxHp,
+      hp: maxHp,
+      baseMaxHp,
+      specialization,
+      attack: Math.round(baseAttack * (specialization === "attack" ? 1.28 : 0.88)),
+      defense: Math.round(baseDefense * (specialization === "defense" ? 1.3 : 0.84)),
+      rewardMoney: Math.max(26, Math.round((Number(entry.rewardMoney) || 40) + level * 10 + Math.abs(variance))),
+      rewardXp: Math.max(3, Math.round((Number(entry.rewardXp) || 4) + level * 2)),
+      destroyedAt: 0,
+      lastHitAt: 0,
+    };
+  });
+}
+
+function normalizeWorldRivalStructure(structure, city, index = 0) {
+  if (!structure || typeof structure !== "object") return null;
+  const citySeed = `${city?.id || "city"}-${city?.assetIndex || 0}`;
+  const fallback = buildWorldRivalCityStructures(city?.assetIndex || 0, city?.level || 1, citySeed)[index];
+  const specialization = structure.specialization === "attack" || structure.specialization === "defense"
+    ? structure.specialization
+    : (worldRivalSeedFromText(`${citySeed}-${structure.id || index}`) % 2 === 0 ? "attack" : "defense");
+  const baseMaxHp = Math.max(60, Math.round(Number(structure.baseMaxHp) || Number(fallback?.baseMaxHp) || Number(structure.maxHp) || 100));
+  const maxHp = Math.max(60, Math.round(Number(structure.maxHp) || Number(fallback?.maxHp) || baseMaxHp));
+  const rawHp = Number(structure.hp);
+  const hp = clamp(Math.round(Number.isFinite(rawHp) ? rawHp : maxHp), 0, maxHp);
+  return {
+    id: String(structure.id || fallback?.id || `structure-${index}`),
+    name: String(structure.name || fallback?.name || `Haz ${index + 1}`),
+    type: String(structure.type || fallback?.type || "safe"),
+    x: clamp(Number(structure.x) || Number(fallback?.x) || 50, 4, 96),
+    y: clamp(Number(structure.y) || Number(fallback?.y) || 50, 6, 94),
+    maxHp,
+    hp,
+    baseMaxHp,
+    specialization,
+    attack: Math.max(8, Math.round(Number(structure.attack) || Number(fallback?.attack) || (22 + (city?.level || 1) * 10))),
+    defense: Math.max(8, Math.round(Number(structure.defense) || Number(fallback?.defense) || (22 + (city?.level || 1) * 10))),
+    rewardMoney: Math.max(20, Math.round(Number(structure.rewardMoney) || Number(fallback?.rewardMoney) || 40)),
+    rewardXp: Math.max(2, Math.round(Number(structure.rewardXp) || Number(fallback?.rewardXp) || 4)),
+    destroyedAt: Number.isFinite(Number(structure.destroyedAt)) ? Number(structure.destroyedAt) : (hp <= 0 ? Date.now() : 0),
+    lastHitAt: Number.isFinite(Number(structure.lastHitAt)) ? Number(structure.lastHitAt) : 0,
+    repairStartedAt: Number.isFinite(Number(structure.repairStartedAt)) ? Number(structure.repairStartedAt) : 0,
+    repairReadyAt: Number.isFinite(Number(structure.repairReadyAt)) ? Number(structure.repairReadyAt) : 0,
+    pendingSpecialization: structure.pendingSpecialization === "attack" || structure.pendingSpecialization === "defense"
+      ? structure.pendingSpecialization
+      : "",
+  };
+}
+
 function normalizeWorldRivalCity(entry, index = 0) {
   const lot = getWorldMapLotById(entry?.lotId);
   if (!lot) return null;
   const status = entry?.status === "captured" ? "captured" : "hostile";
   const level = clamp(Math.round(Number(entry?.level) || 1), 1, 3);
+  const assetIndex = Math.abs(Math.round(Number(entry?.assetIndex) || index)) % WORLD_RIVAL_CITY_ASSETS.length;
+  const theme = getWorldRivalCityTheme(assetIndex);
   const power = Math.max(24, Math.round(Number(entry?.power) || (68 + level * 24)));
   const rewardMoney = Math.max(80, Math.round(Number(entry?.rewardMoney) || (150 + level * 95)));
   const rewardXp = Math.max(12, Math.round(Number(entry?.rewardXp) || (20 + level * 11)));
-  const tributeMoney = Math.max(45, Math.round(Number(entry?.tributeMoney) || (70 + level * 30)));
+  const rawTributeMoney = Number(entry?.tributeMoney);
+  const tributeMoney = clamp(Math.round(Number.isFinite(rawTributeMoney) ? rawTributeMoney : 0), 0, 1000);
+  const tributeTargetMoney = clamp(Math.round(Number(entry?.tributeTargetMoney) || rawTributeMoney || randomInt(500, 1000)), 500, 1000);
+  const structuresSource = Array.isArray(entry?.structures) && entry.structures.length
+    ? entry.structures
+    : buildWorldRivalCityStructures(assetIndex, level, `${lot.id}-${index}`);
+  const skeletonCity = {
+    id: typeof entry?.id === "string" ? entry.id : `world-rival-${lot.id}-${index}`,
+    assetIndex,
+    level,
+  };
+  const structures = structuresSource
+    .map((structure, structureIndex) => normalizeWorldRivalStructure(structure, skeletonCity, structureIndex))
+    .filter(Boolean);
+  const capturedAt = Number.isFinite(Number(entry?.capturedAt)) ? Number(entry.capturedAt) : 0;
+  const tributeReadyAt = Number.isFinite(Number(entry?.tributeReadyAt)) ? Number(entry.tributeReadyAt) : 0;
+  const tributeCycleStartedAt = Number.isFinite(Number(entry?.tributeCycleStartedAt)) && Number(entry.tributeCycleStartedAt) > 0
+    ? Number(entry.tributeCycleStartedAt)
+    : (tributeReadyAt > 0 ? tributeReadyAt - WORLD_RIVAL_CITY_TRIBUTE_MS : capturedAt);
+  const protectionUntil = Number.isFinite(Number(entry?.protectionUntil)) && Number(entry.protectionUntil) > 0
+    ? Number(entry.protectionUntil)
+    : (status === "captured" && capturedAt > 0 ? capturedAt + WORLD_RIVAL_CITY_PROTECTION_MS : 0);
   return {
     id: typeof entry?.id === "string" ? entry.id : `world-rival-${lot.id}-${index}`,
     lotId: lot.id,
@@ -298,11 +452,22 @@ function normalizeWorldRivalCity(entry, index = 0) {
     rewardMoney,
     rewardXp,
     tributeMoney,
+    tributeTargetMoney,
     weakened: Boolean(entry?.weakened),
-    assetIndex: Math.abs(Math.round(Number(entry?.assetIndex) || index)) % WORLD_RIVAL_CITY_ASSETS.length,
+    assetIndex,
+    themeId: String(entry?.themeId || theme.id),
+    districtLabel: String(entry?.districtLabel || theme.label),
+    bossTitle: String(entry?.bossTitle || theme.bossTitle),
+    mapImage: String(entry?.mapImage || theme.mapImage || WORLD_RIVAL_CITY_MAP_ASSETS[0]),
+    structures,
     createdAt: Number.isFinite(Number(entry?.createdAt)) ? Number(entry.createdAt) : Date.now(),
-    tributeReadyAt: Number.isFinite(Number(entry?.tributeReadyAt)) ? Number(entry.tributeReadyAt) : 0,
-    capturedAt: Number.isFinite(Number(entry?.capturedAt)) ? Number(entry.capturedAt) : 0,
+    tributeReadyAt,
+    tributeCycleStartedAt,
+    capturedAt,
+    protectionUntil,
+    ownerProfileName: typeof entry?.ownerProfileName === "string" && entry.ownerProfileName
+      ? entry.ownerProfileName
+      : (status === "captured" ? state.profileName : ""),
     lastAttackAt: Number.isFinite(Number(entry?.lastAttackAt)) ? Number(entry.lastAttackAt) : 0,
     lastCaptureAt: Number.isFinite(Number(entry?.lastCaptureAt)) ? Number(entry.lastCaptureAt) : 0,
   };
@@ -325,6 +490,8 @@ function normalizeWorldRivalCities(source) {
 function createWorldRivalCityForLot(lot, usedCount = 0, now = Date.now()) {
   const baseSeed = worldRivalSeedFromText(`${state.profileName}-${lot.id}-${usedCount}-${state.cityLevel}`);
   const level = clamp(1 + (baseSeed % 3), 1, 3);
+  const assetIndex = baseSeed % WORLD_RIVAL_CITY_ASSETS.length;
+  const theme = getWorldRivalCityTheme(assetIndex);
   return normalizeWorldRivalCity({
     id: `world-rival-${lot.id}-${baseSeed.toString(36).slice(0, 6)}`,
     lotId: lot.id,
@@ -334,19 +501,32 @@ function createWorldRivalCityForLot(lot, usedCount = 0, now = Date.now()) {
     power: 64 + level * 24 + Math.round((baseSeed % 31) * 1.7) + state.cityLevel * 6,
     rewardMoney: 140 + level * 110 + (baseSeed % 60),
     rewardXp: 18 + level * 14 + (baseSeed % 10),
-    tributeMoney: 65 + level * 32 + (baseSeed % 18),
+    tributeMoney: 0,
+    tributeTargetMoney: 500 + (baseSeed % 501),
     weakened: false,
-    assetIndex: baseSeed % WORLD_RIVAL_CITY_ASSETS.length,
+    assetIndex,
+    themeId: theme.id,
+    districtLabel: theme.label,
+    bossTitle: theme.bossTitle,
+    mapImage: theme.mapImage,
+    structures: buildWorldRivalCityStructures(assetIndex, level, `${lot.id}-${baseSeed}`),
     createdAt: now,
     tributeReadyAt: 0,
+    tributeCycleStartedAt: 0,
     capturedAt: 0,
+    protectionUntil: 0,
+    ownerProfileName: "",
     lastAttackAt: 0,
     lastCaptureAt: 0,
   }, usedCount);
 }
 
 function getDesiredWorldRivalCityCount() {
-  return clamp(WORLD_RIVAL_CITY_BASE_COUNT + Math.floor(Math.max(0, state.cityLevel - 1) / 2), WORLD_RIVAL_CITY_BASE_COUNT, WORLD_RIVAL_CITY_MAX_COUNT);
+  return clamp(
+    WORLD_RIVAL_CITY_BASE_COUNT + Math.max(0, state.cityLevel - 1) * 2,
+    WORLD_RIVAL_CITY_BASE_COUNT,
+    WORLD_RIVAL_CITY_MAX_COUNT,
+  );
 }
 
 function syncWorldRivalCities(occupiedLots = {}, now = Date.now()) {
@@ -368,6 +548,50 @@ function syncWorldRivalCities(occupiedLots = {}, now = Date.now()) {
   const desiredHostiles = getDesiredWorldRivalCityCount();
   let hostileCount = output.filter((city) => city.status === "hostile").length;
   const availableLots = worldMapLotDefs.filter((lot) => !blockedLots.has(lot.id) && !usedLots.has(lot.id));
+  const baseLot = getWorldMapLotById(state.worldBaseLotId) || worldMapLotDefs[Math.floor(worldMapLotDefs.length / 2)];
+  if (baseLot && availableLots.length) {
+    const nearbyLots = [...availableLots].sort((left, right) => {
+      const leftDistance = Math.hypot(left.x - baseLot.x, left.y - baseLot.y);
+      const rightDistance = Math.hypot(right.x - baseLot.x, right.y - baseLot.y);
+      return leftDistance - rightDistance;
+    });
+    const nearHostileCount = output.filter((city) => {
+      if (city.status !== "hostile") return false;
+      const lot = getWorldMapLotById(city.lotId);
+      if (!lot) return false;
+      return Math.hypot(lot.x - baseLot.x, lot.y - baseLot.y) <= WORLD_MAP_TILE_WIDTH * 1.35;
+    }).length;
+    let missingNear = Math.max(0, WORLD_RIVAL_CITY_NEAR_BASE_COUNT - nearHostileCount);
+    while (missingNear > 0 && hostileCount >= WORLD_RIVAL_CITY_MAX_COUNT) {
+      let farthestIndex = -1;
+      let farthestDistance = WORLD_MAP_TILE_WIDTH * 1.35;
+      output.forEach((city, index) => {
+        if (city.status !== "hostile") return;
+        const lot = getWorldMapLotById(city.lotId);
+        if (!lot) return;
+        const distance = Math.hypot(lot.x - baseLot.x, lot.y - baseLot.y);
+        if (distance > farthestDistance) {
+          farthestDistance = distance;
+          farthestIndex = index;
+        }
+      });
+      if (farthestIndex < 0) break;
+      const [removedCity] = output.splice(farthestIndex, 1);
+      usedLots.delete(removedCity.lotId);
+      hostileCount -= 1;
+    }
+    while (missingNear > 0 && hostileCount < WORLD_RIVAL_CITY_MAX_COUNT && nearbyLots.length) {
+      const lot = nearbyLots.shift();
+      const availableIndex = availableLots.findIndex((entry) => entry.id === lot.id);
+      if (availableIndex >= 0) availableLots.splice(availableIndex, 1);
+      if (!lot || usedLots.has(lot.id) || blockedLots.has(lot.id)) continue;
+      const city = createWorldRivalCityForLot(lot, output.length, now);
+      output.push(city);
+      usedLots.add(lot.id);
+      hostileCount += 1;
+      missingNear -= 1;
+    }
+  }
   while (hostileCount < desiredHostiles && availableLots.length) {
     const nextIndex = worldRivalSeedFromText(`${state.profileName}-${hostileCount}-${now}-${availableLots.length}`) % availableLots.length;
     const [lot] = availableLots.splice(nextIndex, 1);
@@ -385,37 +609,159 @@ function getWorldRivalCityById(cityId) {
   return normalizeWorldRivalCities(state.worldRivalCities).find((city) => city.id === cityId) || null;
 }
 
+function getWorldRivalRemainingStructures(city) {
+  return (Array.isArray(city?.structures) ? city.structures : []).filter((structure) => Number(structure.hp) > 0);
+}
+
+function areWorldRivalStructuresCleared(city) {
+  return getWorldRivalRemainingStructures(city).length === 0;
+}
+
+function getWorldRivalStructureById(city, structureId) {
+  return (Array.isArray(city?.structures) ? city.structures : []).find((structure) => structure.id === structureId) || null;
+}
+
+function getWorldRivalCityTotalHp(city) {
+  return (Array.isArray(city?.structures) ? city.structures : []).reduce((sum, structure) => sum + Math.max(0, Number(structure.maxHp) || 0), 0);
+}
+
+function getWorldRivalCityCurrentHp(city) {
+  return (Array.isArray(city?.structures) ? city.structures : []).reduce((sum, structure) => sum + Math.max(0, Number(structure.hp) || 0), 0);
+}
+
 function getWorldRivalCityStatusText(city) {
   if (!city) return "";
-  if (city.status === "captured") return `Elfoglalt varosod. Kovetkezo tribute: ${formatWorldRivalTributeTime(city.tributeReadyAt)}.`;
-  if (city.weakened) return "Megroppant rivalis kozpont. Most nagyobb esellyel foglalhatod el.";
-  return "Rivalis banda varosa. Megtamadhatod, vagy megprobalhatod elfoglalni.";
+  const remaining = getWorldRivalRemainingStructures(city).length;
+  if (city.status === "captured") {
+    const incomeState = getWorldRivalIncomeState(city);
+    return `Elfoglalt falud. Bevetel: ${incomeState.money} $. Beszedes: ${incomeState.ready ? "most" : formatWorldRivalHoursMinutes(incomeState.remainingMs)}. Vedelem: ${formatWorldRivalProtectionTime(city.protectionUntil)}. Felujitott hazak: ${remaining}.`;
+  }
+  if (remaining === 0) return "A rivalis falu vedelme osszeomlott. Most mar megnyithatod az elfoglalast.";
+  if (city.weakened) return `Megroppant rivalis falu. Meg ${remaining} epulete all.`;
+  return `Rivalis banda faluja. Meg ${remaining} haz all benne, ezeket le kell bontanod az elfoglalas elott.`;
 }
 
 function formatWorldRivalTributeTime(timestamp) {
   if (!timestamp || timestamp <= Date.now()) return "most";
-  const remaining = Math.max(0, timestamp - Date.now());
-  const hours = Math.floor(remaining / (60 * 60 * 1000));
-  const minutes = Math.floor((remaining % (60 * 60 * 1000)) / (60 * 1000));
-  return hours > 0 ? `${hours}o ${String(minutes).padStart(2, "0")}p` : `${minutes} perc`;
+  return formatWorldRivalHoursMinutes(timestamp - Date.now());
+}
+
+function formatWorldRivalProtectionTime(timestamp) {
+  if (!timestamp || timestamp <= Date.now()) return "lejart";
+  return formatWorldRivalHoursMinutes(timestamp - Date.now());
+}
+
+function formatWorldRivalHoursMinutes(milliseconds) {
+  const totalMinutes = Math.max(0, Math.ceil(Number(milliseconds) / (60 * 1000)));
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return `${hours} ora ${minutes} perc`;
+}
+
+function getWorldRivalIncomeState(city, now = Date.now()) {
+  const targetMoney = clamp(Math.round(Number(city?.tributeTargetMoney) || 500), 500, 1000);
+  const readyAt = Number(city?.tributeReadyAt) || 0;
+  const startedAt = Number(city?.tributeCycleStartedAt) || Math.max(0, readyAt - WORLD_RIVAL_CITY_TRIBUTE_MS);
+  const duration = Math.max(1, readyAt - startedAt || WORLD_RIVAL_CITY_TRIBUTE_MS);
+  const progress = readyAt > 0 ? clamp((now - startedAt) / duration, 0, 1) : 0;
+  return {
+    money: Math.round(targetMoney * progress),
+    targetMoney,
+    readyAt,
+    remainingMs: Math.max(0, readyAt - now),
+    ready: readyAt > 0 && readyAt <= now,
+  };
+}
+
+function getWorldRivalStructureSpecializationLabel(specialization = "") {
+  return specialization === "attack" ? "Ero" : "Vedelem";
+}
+
+function getWorldRivalStructureRepairCost(city, structure) {
+  const baseCost = 24 + Math.max(1, Number(city?.level) || 1) * 12;
+  return Math.max(30, Math.round(baseCost + (Number(structure?.baseMaxHp) || 80) * 0.08));
+}
+
+function getWorldRivalStructureRepairStats(city, structure, specialization) {
+  const normalizedSpecialization = specialization === "attack" ? "attack" : "defense";
+  const baseMaxHp = Math.max(60, Math.round(Number(structure?.baseMaxHp) || Number(structure?.maxHp) || 90));
+  const baseAttack = Math.max(18, Math.round(24 + (Number(city?.level) || 1) * 11 + baseMaxHp * 0.08));
+  const baseDefense = Math.max(18, Math.round(23 + (Number(city?.level) || 1) * 11 + baseMaxHp * 0.08));
+  return {
+    baseMaxHp,
+    maxHp: Math.round(baseMaxHp * (normalizedSpecialization === "attack" ? 0.82 : 1.14)),
+    attack: Math.round(baseAttack * (normalizedSpecialization === "attack" ? 1.3 : 0.86)),
+    defense: Math.round(baseDefense * (normalizedSpecialization === "defense" ? 1.32 : 0.82)),
+    specialization: normalizedSpecialization,
+  };
+}
+
+function isWorldRivalStructureRepairing(structure, now = Date.now()) {
+  return Number(structure?.hp) <= 0 && Number(structure?.repairReadyAt) > now;
+}
+
+function syncWorldRivalStructureRepairs(now = Date.now()) {
+  let changed = false;
+  const completedNames = [];
+  state.worldRivalCities = normalizeWorldRivalCities(state.worldRivalCities).map((city, cityIndex) => {
+    if (city.status !== "captured") return city;
+    let cityChanged = false;
+    const structures = (city.structures || []).map((structure) => {
+      if (Number(structure.hp) > 0 || !Number(structure.repairReadyAt) || Number(structure.repairReadyAt) > now) return structure;
+      const stats = getWorldRivalStructureRepairStats(city, structure, structure.pendingSpecialization || structure.specialization);
+      cityChanged = true;
+      changed = true;
+      completedNames.push(`${city.name}: ${structure.name}`);
+      return {
+        ...structure,
+        ...stats,
+        hp: stats.maxHp,
+        destroyedAt: 0,
+        repairStartedAt: 0,
+        repairReadyAt: 0,
+        pendingSpecialization: "",
+      };
+    });
+    return cityChanged ? (normalizeWorldRivalCity({ ...city, structures }, cityIndex) || city) : city;
+  });
+  completedNames.forEach((name) => addLocalNotification(
+    "Falufelujitas kesz",
+    `${name} felujitasa befejezodott.`,
+    { messageType: "event" },
+  ));
+  if (completedNames.length) sceneRef?.setMessage(`${completedNames[completedNames.length - 1]} felujitasa elkeszult.`);
+  return changed;
+}
+
+function getWorldRivalVillageStats(city) {
+  return (Array.isArray(city?.structures) ? city.structures : []).reduce((totals, structure) => {
+    if (Number(structure.hp) <= 0) return totals;
+    totals.attack += Math.max(0, Math.round(Number(structure.attack) || 0));
+    totals.defense += Math.max(0, Math.round(Number(structure.defense) || 0));
+    return totals;
+  }, { attack: 0, defense: 0 });
 }
 
 function getWorldRivalAttackChance(city) {
   const mapPower = getActionPower("map");
-  const targetPower = Math.max(1, city.power - (city.weakened ? 18 : 0));
+  const structurePressure = Math.round(getWorldRivalRemainingStructures(city).length * 7);
+  const targetPower = Math.max(1, city.power + structurePressure - (city.weakened ? 18 : 0));
   return clamp(0.24 + ((mapPower - targetPower) / 260), 0.16, 0.93);
 }
 
 function getWorldRivalCaptureChance(city) {
   const mapPower = getActionPower("map");
-  const targetPower = Math.max(1, city.power + city.level * 20 - (city.weakened ? 28 : 0));
-  return clamp(0.16 + ((mapPower - targetPower) / 280), 0.1, 0.88);
+  const structurePenalty = getWorldRivalRemainingStructures(city).length * 18;
+  const clearedBonus = areWorldRivalStructuresCleared(city) ? 34 : 0;
+  const targetPower = Math.max(1, city.power + city.level * 20 + structurePenalty - (city.weakened ? 28 : 0) - clearedBonus);
+  return clamp(0.16 + ((mapPower - targetPower) / 280), 0.08, 0.88);
 }
 
 function buildWorldRivalCityButton(city) {
   const lot = getWorldMapLotById(city?.lotId);
   if (!lot || !city) return "";
-  const label = `${city.name} | ${city.status === "captured" ? "elfoglalt" : "rivalis"} varos`;
+  const remaining = getWorldRivalRemainingStructures(city).length;
+  const label = `${city.name} | ${city.status === "captured" ? "elfoglalt" : "rivalis"} falu | ${remaining} haz`;
   return `
     <button
       class="worldmap__rival-city worldmap__rival-city--${city.status}${city.weakened ? " is-weakened" : ""}"
@@ -519,12 +865,12 @@ const cityBuildingDefs = [
 const purchasableBuildingNumbers = new Set(["06", "11", "13", "16", "21", "23"]);
 const clickableBuildingDefs = cityBuildingDefs.filter((building) => !purchasableBuildingNumbers.has(building.number));
 const purchasableBuildingRestoreDefs = {
-  "market-row": { asset: "./assets/map/purchasable-houses/market-row.png", x: 794, y: 205, width: 298, height: 223 },
-  "west-mid-block": { asset: "./assets/map/purchasable-houses/west-mid-block.png", x: 256, y: 291, width: 278, height: 237 },
-  "east-office": { asset: "./assets/map/purchasable-houses/east-office.png", x: 935, y: 329, width: 292, height: 245 },
-  "central-bank": { asset: "./assets/map/purchasable-houses/central-bank.png", x: 685, y: 481, width: 274, height: 270 },
-  "southwest-tenement": { asset: "./assets/map/purchasable-houses/southwest-tenement.png", x: 227, y: 693, width: 317, height: 290 },
-  "courthouse": { asset: "./assets/map/purchasable-houses/courthouse.png", x: 950, y: 579, width: 299, height: 279 },
+  "market-row": { asset: "./assets/map/purchasable-houses-v4/market-row.png", x: 803, y: 214, width: 281, height: 206 },
+  "west-mid-block": { asset: "./assets/map/purchasable-houses-v4/west-mid-block.png", x: 265, y: 300, width: 261, height: 220 },
+  "east-office": { asset: "./assets/map/purchasable-houses-v4/east-office.png", x: 944, y: 338, width: 275, height: 228 },
+  "central-bank": { asset: "./assets/map/purchasable-houses-v4/central-bank.png", x: 694, y: 490, width: 257, height: 253 },
+  "southwest-tenement": { asset: "./assets/map/purchasable-houses-v4/southwest-tenement.png", x: 236, y: 702, width: 300, height: 273 },
+  "courthouse": { asset: "./assets/map/purchasable-houses-v4/courthouse.png", x: 959, y: 588, width: 282, height: 262 },
 };
 
 const clickableParkDefs = [
@@ -603,15 +949,15 @@ const crewMemberTemplates = [
   { id: "enzo", name: "Enzo Romano", role: "Megfigyelő", baseAttack: 10, baseDefense: 12, baseHealth: 112 },
 ];
 const crewHireCosts = {
-  luca: 0,
-  marco: 350,
-  enzo: 700,
+  luca: 155,
+  marco: 700,
+  enzo: 1500,
 };
 
 function makeCrewMembers() {
-  return crewMemberTemplates.map((member, index) => ({
+  return crewMemberTemplates.map((member) => ({
     ...member,
-    hired: index === 0,
+    hired: false,
     level: 1,
     defenseLevel: 1,
     attackBonus: 0,
@@ -641,7 +987,7 @@ const state = {
   profileName: "",
   money: 120,
   fame: 0,
-  crew: 1,
+  crew: 0,
   heat: 0,
   health: 100,
   energy: 100,
@@ -649,11 +995,12 @@ const state = {
   equipment: getDefaultEquipment(),
   itemInventory: getDefaultItemInventory(),
   crewMembers: makeCrewMembers(),
-  activeCrewMemberId: "luca",
+  activeCrewMemberId: null,
   mainBaseSpotId: null,
   worldBaseLotId: null,
   worldBaseLevel: 1,
   worldRivalCities: [],
+  npcVillageVictories: 0,
   profileStartedAt: 0,
   needsWorldBaseSelection: false,
   territories: {},
@@ -672,6 +1019,13 @@ const state = {
   localNotifications: [],
   smuggledGoods: { counterfeitMoney: 0, drugs: 0, weapons: 0, papers: 0 },
   smugglerFame: 0,
+  harborGarage: {
+    level: 1,
+    wins: 0,
+    losses: 0,
+    activeVehicleId: "sedan",
+    unlockedVehicleIds: ["sedan"],
+  },
   rivalEvent: null,
   rivalNextSpawnAt: 0,
   mentorStep: 0,
@@ -704,6 +1058,8 @@ let selectedCraftItemKeys = [];
 let recentlyCraftedItemKey = "";
 let mentorCardOpen = false;
 let mentorStepCompleting = false;
+let garageMiniGameState = null;
+let garageMiniGameTimer = null;
 let mapPan = { x: 0, y: 0 };
 let mapDragState = {
   active: false,
@@ -741,6 +1097,8 @@ const publicProfileDialogTitle = document.getElementById("publicProfileDialogTit
 const publicProfileDialogSubtitle = document.getElementById("publicProfileDialogSubtitle");
 const publicProfileDialogBody = document.getElementById("publicProfileDialogBody");
 const publicProfileDialogClose = document.getElementById("publicProfileDialogClose");
+let activeWorldRivalCityProfileId = null;
+let activeWorldRivalStructureId = null;
 const hudAvatarCard = document.querySelector(".hud-avatar-card");
 const hudMoney = document.getElementById("hudMoney");
 const hudFame = document.getElementById("hudFame");
@@ -854,6 +1212,8 @@ const rewardModalTitle = document.getElementById("rewardModalTitle");
 const rewardModalText = document.getElementById("rewardModalText");
 const rewardModalList = document.getElementById("rewardModalList");
 const rewardModalClose = document.getElementById("rewardModalClose");
+let lastRewardModalSignature = "";
+let lastRewardModalQueuedAt = 0;
 const characterPanel = document.getElementById("characterPanel");
 const characterPanelBackdrop = document.getElementById("characterPanelBackdrop");
 const characterPanelClose = document.getElementById("characterPanelClose");
@@ -1042,9 +1402,7 @@ function buildWorldLotOccupancy(entries = []) {
 }
 
 function getDefaultEquipment() {
-  return Object.fromEntries(
-    equipmentSlotOrder.map((slot) => [slot, { ...equipmentCatalog[slot][0] }]),
-  );
+  return getEmptyEquipment();
 }
 
 function getEmptyEquipment() {
@@ -1052,14 +1410,23 @@ function getEmptyEquipment() {
 }
 
 function getDefaultItemInventory() {
-  return Object.fromEntries(
-    equipmentSlotOrder.map((slot) => [slot, equipmentCatalog[slot].map((item) => ({ ...item }))]),
-  );
+  return Object.fromEntries(equipmentSlotOrder.map((slot) => [
+    slot,
+    slot === "weapon" && equipmentCatalog.weapon?.[0] ? [{ ...equipmentCatalog.weapon[0] }] : [],
+  ]));
 }
 
 function findEquipmentCatalogItem(slot, rawItem) {
   const list = equipmentCatalog[slot] || [];
   if (!list.length) return null;
+  if (typeof rawItem?.templateId === "string") {
+    const byTemplateId = list.find((item) => item.id === rawItem.templateId);
+    if (byTemplateId) return byTemplateId;
+  }
+  if (typeof rawItem?.baseItemId === "string") {
+    const byBaseId = list.find((item) => item.id === rawItem.baseItemId);
+    if (byBaseId) return byBaseId;
+  }
   if (typeof rawItem?.id === "string") {
     const byId = list.find((item) => item.id === rawItem.id);
     if (byId) return byId;
@@ -1078,6 +1445,11 @@ function normalizeEquipmentItem(slot, rawItem, fallback = null) {
   const rarity = ["gray", "yellow", "red"].includes(rawItem?.rarity) ? rawItem.rarity : template.rarity;
   return {
     id: typeof rawItem?.id === "string" ? rawItem.id : template.id,
+    templateId: typeof rawItem?.templateId === "string"
+      ? rawItem.templateId
+      : typeof rawItem?.baseItemId === "string"
+        ? rawItem.baseItemId
+        : template.id,
     name: typeof rawItem?.name === "string" ? rawItem.name : template.name,
     power: Number.isFinite(rawItem?.power) ? Math.max(0, rawItem.power) : template.power,
     stat: rawItem?.stat === "defense" || rawItem?.stat === "attack" ? rawItem.stat : template.stat,
@@ -1087,12 +1459,26 @@ function normalizeEquipmentItem(slot, rawItem, fallback = null) {
   };
 }
 
+function createOwnedEquipmentItem(slot, rawItem, source = "loot") {
+  const item = normalizeEquipmentItem(slot, rawItem);
+  if (!item) return null;
+  const baseId = String(item.templateId || item.id || `${slot}-item`).replace(/[^a-z0-9_-]+/gi, "-").slice(0, 48);
+  const keepOriginalId = typeof item.id === "string" && /^(market|crafted|owned)-/i.test(item.id);
+  return {
+    ...item,
+    templateId: item.templateId || baseId,
+    id: keepOriginalId
+      ? item.id
+      : `owned-${source}-${slot}-${baseId}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+  };
+}
+
 function normalizeItemInventory(source, equipment = null) {
   const defaults = getDefaultItemInventory();
   const output = {};
   equipmentSlotOrder.forEach((slot) => {
     const savedItems = Array.isArray(source?.[slot]) ? source[slot] : [];
-    const merged = new Map(defaults[slot].map((item) => [item.id, { ...item }]));
+    const merged = new Map((savedItems.length ? [] : defaults[slot]).map((item) => [item.id, { ...item }]));
     savedItems.forEach((rawItem) => {
       const item = normalizeEquipmentItem(slot, rawItem);
       if (item) merged.set(item.id, item);
@@ -1198,11 +1584,9 @@ function getPlayerDefenseStat() {
 function unlockEquipmentItem(slot, rawItem) {
   if (!slot || !state.itemInventory) return null;
   if (!Array.isArray(state.itemInventory[slot])) state.itemInventory[slot] = [];
-  const item = normalizeEquipmentItem(slot, rawItem);
+  const item = createOwnedEquipmentItem(slot, rawItem, "inv");
   if (!item) return null;
-  if (!state.itemInventory[slot].some((entry) => entry.id === item.id)) {
-    state.itemInventory[slot].push(item);
-  }
+  state.itemInventory[slot].push(item);
   return item;
 }
 
@@ -1439,7 +1823,7 @@ function normalizeEquipment(source) {
   Object.entries(defaults).forEach(([slot, item]) => {
     let saved = source && typeof source === "object" ? source[slot] : null;
     if (!saved && slot === "pants") saved = source?.trousers || null;
-    output[slot] = normalizeEquipmentItem(slot, saved, item);
+    output[slot] = saved ? normalizeEquipmentItem(slot, saved, item) : null;
   });
   return output;
 }
@@ -1450,10 +1834,17 @@ function syncEquipmentSheet() {
   entries.forEach(([slot, selector]) => {
     const root = document.querySelector(selector);
     const item = state.equipment?.[slot];
-    if (!root || !item) return;
+    if (!root) return;
     const art = root.querySelector(".character-equipment__art");
     const strong = root.querySelector("strong");
     const small = root.querySelector("small");
+    if (!item) {
+      if (art) art.style.backgroundImage = "";
+      if (strong) strong.textContent = "Ures";
+      if (small) small.textContent = equipmentSlotDefs[slot]?.label || "Felszereles";
+      root.classList.toggle("is-active", activeEquipmentSlot === slot);
+      return;
+    }
     if (art) {
       art.style.backgroundImage = `url("${item.image || getEquipmentArt(slot)}")`;
     }
@@ -1642,11 +2033,22 @@ function setChoiceWheelButtons(visibleIds) {
 
 let activeAuxPanelKind = null;
 
+function hideMentorPanel(markUserClosed = false) {
+  mentorCardOpen = false;
+  if (hudMentorCard) {
+    if (markUserClosed) hudMentorCard.dataset.userClosed = "true";
+    else delete hudMentorCard.dataset.userClosed;
+  }
+  updateMentorPanel();
+}
+
 function hideAuxPanel() {
   if (activeAuxPanelKind === "world" && state.needsWorldBaseSelection) {
     sceneRef?.setMessage("Elobb valassz egy ures telket a kezdo bazisodnak.");
     return;
   }
+  hideQuestCard();
+  hideMentorPanel(true);
   document.body.classList.remove("is-world-map-open");
   activeAuxPanelKind = null;
   auxPanel?.removeAttribute("data-kind");
@@ -1697,6 +2099,8 @@ function hideMessagesDialog() {
 
 function hidePublicProfileDialog() {
   if (activeAuxPanelKind === "public-profile") activeAuxPanelKind = null;
+  activeWorldRivalCityProfileId = null;
+  activeWorldRivalStructureId = null;
   publicProfileDialog?.classList.add("hidden");
   publicProfileDialog?.setAttribute("aria-hidden", "true");
 }
@@ -1710,10 +2114,9 @@ function setPublicProfileDialogContent(title, subtitle, bodyHtml) {
 }
 
 function updateMessageBadge(unreadCount = 0) {
-  const count = Math.max(0, Math.round(Number(unreadCount) || 0));
   if (hudMessageBadge) {
-    hudMessageBadge.textContent = count > 99 ? "99+" : String(count);
-    hudMessageBadge.classList.toggle("hidden", count <= 0);
+    hudMessageBadge.textContent = "";
+    hudMessageBadge.classList.add("hidden");
   }
 }
 
@@ -1820,7 +2223,7 @@ function hideRewardModal() {
 }
 
 function queueRewardModal(payload = {}) {
-  pendingRewardModals.push({
+  const normalizedPayload = {
     title: payload.title || "Jutalom",
     text: payload.text || "A jutalmad bekerult a kasszaba.",
     money: Math.round(Number(payload.money) || 0),
@@ -1828,24 +2231,30 @@ function queueRewardModal(payload = {}) {
     fame: Math.round(Number(payload.fame) || Number(payload.xp) || 0),
     itemName: payload.itemName ? String(payload.itemName) : "",
     showZeroValues: Boolean(payload.showZeroValues),
-  });
+  };
+  const signature = JSON.stringify(normalizedPayload);
+  const now = Date.now();
+  const alreadyQueued = pendingRewardModals.some((entry) => JSON.stringify(entry) === signature);
+  if (alreadyQueued || (signature === lastRewardModalSignature && now - lastRewardModalQueuedAt < 1500)) return;
+  lastRewardModalSignature = signature;
+  lastRewardModalQueuedAt = now;
+  pendingRewardModals.push(normalizedPayload);
   flushRewardModalQueue();
 }
 
 async function refreshMessageBadge() {
-  const localUnread = getLocalUnreadCount();
   if (!state.profileName) {
-    updateMessageBadge(localUnread);
+    updateMessageBadge(0);
     return;
   }
   try {
-    const response = await fetch(`/api/messages?profileName=${encodeURIComponent(state.profileName)}&limit=1`, {
+    const response = await fetch("/api/messages?limit=1", {
       headers: { Accept: "application/json" },
     });
     const payload = response.ok ? await response.json() : { unreadCount: 0 };
     updateMessageBadge(Number(payload.unreadCount) || 0);
   } catch {
-    updateMessageBadge(localUnread);
+    updateMessageBadge(0);
   }
 }
 
@@ -1860,23 +2269,25 @@ function formatInboxDate(timestamp) {
 }
 
 function getMessageTypeLabel(messageType) {
-  if (messageType === "pvp") return "PvP";
-  if (messageType === "event") return "Esemény";
-  if (messageType === "system") return "Rendszer";
-  if (messageType === "local") return "Jatek";
   return "Játékos";
 }
 
+function getPlayerInboxMessages(messages = []) {
+  return (Array.isArray(messages) ? messages : [])
+    .filter((message) => message?.messageType === "player" && message.senderProfileName && message.senderProfileName !== state.profileName);
+}
+
 function renderMessagesPanel(messages = []) {
-  const body = messages.length
+  const playerMessages = getPlayerInboxMessages(messages);
+  const body = playerMessages.length
     ? `
       <section class="messages-panel">
         <div class="messages-panel__intro">
           <strong>Családi posta</strong>
-          <span>Játékosüzenetek, események és a bázisodat ért támadások egy helyen.</span>
+          <span>Csak a más játékosoktól kapott privát üzenetek jelennek meg itt.</span>
         </div>
         <div class="messages-list">
-          ${messages.map((message) => `
+          ${playerMessages.map((message) => `
             <article class="message-card message-card--${escapeHtml(message.messageType || "player")}${message.readAt ? "" : " is-unread"}">
               <div class="message-card__stamp">${getMessageTypeLabel(message.messageType)}</div>
               <div class="message-card__copy">
@@ -1895,7 +2306,7 @@ function renderMessagesPanel(messages = []) {
     : `
       <div class="messages-panel__empty">
         <strong>Még üres a postaláda.</strong>
-        <span>Az események, játékosüzenetek és PvP támadások itt fognak megjelenni.</span>
+        <span>Itt csak akkor jelenik meg valami, ha egy másik játékos ír neked.</span>
       </div>
     `;
   hideAuxPanel();
@@ -1908,25 +2319,18 @@ async function openMessagesPanel() {
   setMessagesDialogContent("Üzenetek", "Családi posta", `<div class="aux-panel__carditem"><strong>Posta betöltése...</strong></div>`);
   activeAuxPanelKind = "messages";
   try {
-    const response = await fetch(`/api/messages?profileName=${encodeURIComponent(state.profileName)}&limit=80`, {
+    const response = await fetch("/api/messages?limit=80", {
       headers: { Accept: "application/json" },
     });
     const payload = response.ok ? await response.json() : { messages: [] };
-    markLocalNotificationsRead();
-    renderMessagesPanel(mergeInboxMessages(payload.messages));
+    renderMessagesPanel(payload.messages);
     updateMessageBadge(0);
     void fetch("/api/messages/read", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ profileName: state.profileName }),
+      body: JSON.stringify({}),
     });
   } catch {
-    markLocalNotificationsRead();
-    const localMessages = mergeInboxMessages([]);
-    if (localMessages.length) {
-      renderMessagesPanel(localMessages);
-      return;
-    }
     setMessagesDialogContent("Üzenetek", "Családi posta", `<div class="aux-panel__carditem"><strong>A posta most nem elérhető.</strong><div class="aux-panel__muted">Próbáld meg néhány pillanat múlva.</div></div>`);
   }
 }
@@ -1948,6 +2352,7 @@ function renderPublicPlayerProfile(profile, focusMessage = false) {
         <div><span>Védelem</span><strong>${profile.defense}</strong></div>
         <div><span>Bázis</span><strong>${profile.worldBaseLevel}. szint</strong></div>
         <div><span>Banda</span><strong>${profile.crewCount} fő</strong></div>
+        <div><span>Város</span><strong>${Math.max(0, Math.round(Number(profile.npcVillageVictories) || 0))} legyőzve</strong></div>
       </div>
       <div class="public-profile__actions">
         <button type="button" data-public-action="pvp" data-player="${escapeHtml(profile.profileName)}">PvP támadás</button>
@@ -1988,7 +2393,6 @@ function renderPublicPlayerProfile(profile, focusMessage = false) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          senderProfileName: state.profileName,
           recipientProfileName: profile.profileName,
           body: text,
         }),
@@ -2018,6 +2422,244 @@ async function openPublicPlayerProfile(profileName, focusMessage = false) {
   }
 }
 
+function getWorldRivalStructureAttackChance(city, structure) {
+  const mapPower = getActionPower("map");
+  const targetPower = Math.round(
+    city.power * 0.28
+    + (Number(structure?.hp) || 0) * 0.24
+    + (Number(structure?.attack) || 0) * 0.34
+    + (Number(structure?.defense) || 0) * 0.76
+    + city.level * 10
+    + (city.weakened ? -20 : 0),
+  );
+  return clamp(0.34 + ((mapPower - targetPower) / 300), 0.24, 0.92);
+}
+
+function buildWorldRivalStructureTypeLabel(type = "") {
+  switch (String(type || "")) {
+    case "hq": return "Foepulet";
+    case "vault": return "Penzes kozpont";
+    case "watch": return "Vedett pont";
+    case "garage": return "Jarmutelep";
+    case "yard": return "Raktarudvar";
+    default: return "Haz";
+  }
+}
+
+function renderWorldRivalCityProfile(cityId, focusStructureId = "") {
+  const city = getWorldRivalCityById(cityId);
+  if (!city) {
+    setPublicProfileDialogContent("Eltunt falu", "NPC profil", `<div class="aux-panel__carditem"><strong>Ez a rivalis falu mar nem erheto el.</strong></div>`);
+    return;
+  }
+  activeWorldRivalCityProfileId = city.id;
+  const structures = Array.isArray(city.structures) ? city.structures : [];
+  const selected = getWorldRivalStructureById(city, focusStructureId)
+    || getWorldRivalRemainingStructures(city)[0]
+    || structures[0]
+    || null;
+  activeWorldRivalStructureId = selected?.id || null;
+  const totalHp = getWorldRivalCityTotalHp(city);
+  const currentHp = getWorldRivalCityCurrentHp(city);
+  const integrityPercent = totalHp > 0 ? Math.round((currentHp / totalHp) * 100) : 0;
+  const remainingCount = getWorldRivalRemainingStructures(city).length;
+  const attackChance = selected ? Math.round(getWorldRivalStructureAttackChance(city, selected) * 100) : 0;
+  const villageStats = getWorldRivalVillageStats(city);
+  const repairCost = selected ? getWorldRivalStructureRepairCost(city, selected) : 0;
+  const activeRepair = structures.find((structure) => isWorldRivalStructureRepairing(structure)) || null;
+  const selectedRepairing = selected ? isWorldRivalStructureRepairing(selected) : false;
+  const repairBlocked = Boolean(activeRepair && activeRepair.id !== selected?.id);
+  const incomeState = getWorldRivalIncomeState(city);
+  setPublicProfileDialogContent(city.name, city.status === "captured" ? "Elfoglalt NPC falu" : "NPC falu profil", `
+    <section class="npc-city-profile npc-city-profile--${escapeHtml(city.themeId || "uptown")}">
+      <article class="npc-city-profile__hero">
+        <div class="npc-city-profile__map" style="background-image:url('${escapeHtml(city.mapImage || WORLD_RIVAL_CITY_MAP_ASSETS[0])}')">
+          <div class="npc-city-profile__map-shade"></div>
+          ${structures.map((structure, index) => city.status === "captured" || Number(structure.hp) > 0 ? `
+            <button
+              type="button"
+              class="npc-city-profile__marker npc-city-profile__marker--${escapeHtml(structure.specialization)}${Number(structure.hp) <= 0 ? " is-destroyed" : ""}${isWorldRivalStructureRepairing(structure) ? " is-repairing" : ""}${structure.id === activeWorldRivalStructureId ? " is-active" : ""}"
+              data-rival-structure-focus="${escapeHtml(structure.id)}"
+              style="left:${structure.x}%; top:${structure.y}%"
+              aria-label="${escapeHtml(`${structure.name}, ${getWorldRivalStructureSpecializationLabel(structure.specialization)}`)}">
+              <span class="npc-city-profile__marker-hitbox" aria-hidden="true"></span>
+              <span class="npc-city-profile__marker-badge">${String(index + 1).padStart(2, "0")}</span>
+              <span class="npc-city-profile__marker-role">${structure.specialization === "attack" ? "E" : "V"}</span>
+              ${structure.id === activeWorldRivalStructureId ? `<span class="npc-city-profile__marker-hp"${isWorldRivalStructureRepairing(structure) ? ` data-rival-repair-ready-at="${structure.repairReadyAt}"` : ""}>${Number(structure.hp) > 0 ? `${structure.hp}/${structure.maxHp} HP` : isWorldRivalStructureRepairing(structure) ? formatCountdown(structure.repairReadyAt - Date.now()) : "ROM"}</span>` : ``}
+            </button>
+          ` : ``).join("")}
+        </div>
+        <div class="npc-city-profile__hero-stats">
+          <div class="npc-city-profile__metric"><span>Szint</span><strong>${city.level}</strong></div>
+          <div class="npc-city-profile__metric"><span>Tamado ero</span><strong>${city.status === "captured" ? villageStats.attack : city.power}</strong></div>
+          <div class="npc-city-profile__metric"><span>Vedelem</span><strong>${villageStats.defense}</strong></div>
+          <div class="npc-city-profile__metric"><span>Allapot</span><strong>${integrityPercent}%</strong></div>
+          <div class="npc-city-profile__metric"><span>${city.status === "captured" ? "Felujitva" : "Megmaradt"}</span><strong>${remainingCount}/${structures.length}</strong></div>
+          ${city.status === "captured" ? `
+            <div class="npc-city-profile__metric"><span>Foglalasi vedelem</span><strong data-rival-protection-until="${city.protectionUntil}">${formatWorldRivalProtectionTime(city.protectionUntil)}</strong></div>
+            <div class="npc-city-profile__metric"><span>Felgyult bevetel</span><strong data-rival-income-money="${escapeHtml(city.id)}">${incomeState.money} $</strong></div>
+            <div class="npc-city-profile__metric"><span>Beszedesig</span><strong data-rival-income-time="${escapeHtml(city.id)}">${incomeState.ready ? "most" : formatWorldRivalHoursMinutes(incomeState.remainingMs)}</strong></div>
+          ` : ""}
+        </div>
+      </article>
+
+      ${selected ? `
+        <article class="npc-city-profile__focus">
+          <div>
+            <div class="npc-city-profile__eyebrow">${escapeHtml(buildWorldRivalStructureTypeLabel(selected.type))} · ${escapeHtml(getWorldRivalStructureSpecializationLabel(selected.specialization))}</div>
+            <h3>${escapeHtml(selected.name)}</h3>
+            <p>${city.status === "captured"
+              ? Number(selected.hp) > 0
+                ? `Felujitott haz. Ero: ${selected.attack}, vedelem: ${selected.defense}.`
+                : selectedRepairing
+                  ? `Felujitas folyamatban ${getWorldRivalStructureSpecializationLabel(selected.pendingSpecialization || selected.specialization).toLowerCase()} iranyra. Hatralevo ido: <strong data-rival-repair-ready-at="${selected.repairReadyAt}">${formatCountdown(selected.repairReadyAt - Date.now())}</strong>.`
+                  : repairBlocked
+                    ? `${activeRepair.name} felujitasa mar folyamatban van. Egy faluban egyszerre csak egy haz fejlesztheto. Hatralevo ido: <strong data-rival-repair-ready-at="${activeRepair.repairReadyAt}">${formatCountdown(activeRepair.repairReadyAt - Date.now())}</strong>.`
+                  : `Romos haz. ${repairCost} $-ert, 35 perc alatt felujithatod, es kivalaszthatod az erosseget.`
+              : Number(selected.hp) > 0
+                ? `Tamadasi esely: ${attackChance}%. Ero: ${selected.attack}, vedelem: ${selected.defense}.`
+                : "Ez az epulet mar romokban all."}</p>
+          </div>
+          <div class="npc-city-profile__focus-actions">
+            <div class="npc-city-profile__hp"><span>HP</span><strong>${selected.hp}/${selected.maxHp}</strong></div>
+            ${city.status !== "captured" && Number(selected.hp) > 0 ? `<button type="button" class="npc-city-profile__attack" data-rival-structure-attack="${escapeHtml(selected.id)}">Tamadas</button>` : ""}
+            ${city.status === "captured" && Number(selected.hp) <= 0 && !selectedRepairing && !repairBlocked ? `
+              <div class="npc-city-profile__repair-actions">
+                <button type="button" data-rival-structure-repair="${escapeHtml(selected.id)}" data-rival-repair-specialization="attack">Erore · ${repairCost} $ · 35p</button>
+                <button type="button" data-rival-structure-repair="${escapeHtml(selected.id)}" data-rival-repair-specialization="defense">Vedelemre · ${repairCost} $ · 35p</button>
+              </div>
+            ` : selectedRepairing ? `<div class="npc-city-profile__repair-progress">Felujitas <strong data-rival-repair-ready-at="${selected.repairReadyAt}">${formatCountdown(selected.repairReadyAt - Date.now())}</strong></div>` : repairBlocked ? `<div class="npc-city-profile__repair-progress">Varakozik <strong data-rival-repair-ready-at="${activeRepair.repairReadyAt}">${formatCountdown(activeRepair.repairReadyAt - Date.now())}</strong></div>` : ""}
+          </div>
+        </article>
+      ` : ""}
+
+      <footer class="npc-city-profile__footer">
+        ${city.status !== "captured" ? `
+          <div class="npc-city-profile__footcopy">
+            ${areWorldRivalStructuresCleared(city)
+              ? `Minden rivalis haz elesett. Most mar a falufonokot kell legyoznod, hogy tied legyen a zsakmany es a falu.`
+              : `Valassz egy hazat kozvetlenul a terkepen. Egy sikeres tamadas egy teljes hazat lerombol.`}
+          </div>
+        ` : ""}
+        <div class="npc-city-profile__footer-actions">
+          ${city.status === "captured"
+            ? `<button type="button" data-rival-city-tribute="${escapeHtml(city.id)}"${incomeState.ready ? "" : " disabled"}>Bevetel beszedese</button>`
+            : areWorldRivalStructuresCleared(city)
+              ? `<button type="button" class="is-primary" data-rival-city-capture="${escapeHtml(city.id)}">Falufőnök</button>`
+              : ``}
+        </div>
+      </footer>
+    </section>
+  `);
+}
+
+function refreshWorldRivalRepairTimers(now = Date.now()) {
+  let expired = false;
+  document.querySelectorAll("[data-rival-repair-ready-at]").forEach((element) => {
+    const readyAt = Number(element.getAttribute("data-rival-repair-ready-at")) || 0;
+    const remaining = Math.max(0, readyAt - now);
+    element.textContent = formatCountdown(remaining);
+    if (readyAt > 0 && remaining <= 0) expired = true;
+  });
+  if (expired && activeWorldRivalCityProfileId) {
+    renderWorldRivalCityProfile(activeWorldRivalCityProfileId, activeWorldRivalStructureId || "");
+  }
+  document.querySelectorAll("[data-rival-protection-until]").forEach((element) => {
+    const protectionUntil = Number(element.getAttribute("data-rival-protection-until")) || 0;
+    element.textContent = protectionUntil > now ? formatWorldRivalHoursMinutes(protectionUntil - now) : "lejart";
+  });
+  const incomeCache = new Map();
+  const getIncome = (cityId) => {
+    if (!incomeCache.has(cityId)) incomeCache.set(cityId, getWorldRivalIncomeState(getWorldRivalCityById(cityId), now));
+    return incomeCache.get(cityId);
+  };
+  document.querySelectorAll("[data-rival-income-money]").forEach((element) => {
+    const cityId = element.getAttribute("data-rival-income-money") || "";
+    element.textContent = `${getIncome(cityId).money} $`;
+  });
+  document.querySelectorAll("[data-rival-income-time]").forEach((element) => {
+    const cityId = element.getAttribute("data-rival-income-time") || "";
+    const income = getIncome(cityId);
+    element.textContent = income.ready ? "most" : formatWorldRivalHoursMinutes(income.remainingMs);
+  });
+  document.querySelectorAll("[data-rival-city-tribute]").forEach((button) => {
+    const cityId = button.getAttribute("data-rival-city-tribute") || "";
+    button.disabled = !getIncome(cityId).ready;
+  });
+}
+
+function openWorldRivalCityProfile(cityId, focusStructureId = "") {
+  hideAuxPanel();
+  activeAuxPanelKind = "public-profile";
+  renderWorldRivalCityProfile(cityId, focusStructureId);
+}
+
+function runWorldRivalStructureAttack(cityId, structureId) {
+  const city = getWorldRivalCityById(cityId);
+  const structure = getWorldRivalStructureById(city, structureId);
+  if (!city || !structure || city.status !== "hostile" || Number(structure.hp) <= 0) return false;
+  if (!canStartCombat("Az epulettamadas")) return false;
+  const successChance = getWorldRivalStructureAttackChance(city, structure);
+  const success = Math.random() <= successChance;
+  const now = Date.now();
+  if (success) {
+    const damage = structure.hp;
+    const nextHp = 0;
+    const destroyed = true;
+    const moneyGain = 0;
+    const xpGain = Math.max(1, Math.round(structure.rewardXp * 0.45));
+    const heatGain = applyHeat(6 + city.level);
+    applyFame(xpGain);
+    updateWorldRivalCity(cityId, (entry) => ({
+      ...entry,
+      weakened: true,
+      power: Math.max(16, entry.power - Math.round(14 + city.level * 6)),
+      structures: (entry.structures || []).map((item) => item.id === structureId
+        ? { ...item, hp: nextHp, destroyedAt: destroyed ? now : 0, lastHitAt: now }
+        : item),
+      lastAttackAt: now,
+    }));
+    const updatedCity = getWorldRivalCityById(cityId);
+    const cityCleared = areWorldRivalStructuresCleared(updatedCity);
+    queueRewardModal({
+      title: "Gyozelem",
+      text: `${structure.name} vedelmet attorted.`,
+      xp: xpGain,
+      fame: 0,
+    });
+    addLocalNotification(
+      "Vilagterkep",
+      `${city.name}: ${structure.name} vedelmet legyozted. +${xpGain} XP, +${heatGain}% korozes.`,
+      { messageType: "event" },
+    );
+    sceneRef?.setMessage(cityCleared
+      ? `${city.name}: minden haz romokban. Most mar johet az elfoglalas.`
+      : `${structure.name} vedelmet legyozted.`);
+  } else {
+    const moneyLoss = Math.min(state.money, Math.max(24, Math.round(structure.rewardMoney * 0.34)));
+    const healthLoss = clamp(7 + city.level * 5, 8, 26);
+    const heatGain = applyHeat(5 + city.level);
+    state.money = Math.max(0, state.money - moneyLoss);
+    state.health = clamp(state.health - healthLoss, 0, 100);
+    state.naturalRecoveryAt.health = now;
+    updateWorldRivalCity(cityId, (entry) => ({
+      ...entry,
+      power: entry.power + Math.round(4 + city.level * 2),
+      lastAttackAt: now,
+    }));
+    addLocalNotification(
+      "Vilagterkep",
+      `${city.name}: ${structure.name} vedoi visszavertek. -${moneyLoss} $, -${healthLoss} HP, +${heatGain}% korozes.`,
+      { messageType: "event" },
+    );
+    sceneRef?.setMessage(`${structure.name} vedoi visszavertek az embereidet.`);
+  }
+  saveGame(true);
+  sceneRef?.refreshHUD();
+  renderWorldRivalCityProfile(cityId, structureId);
+  return success;
+}
+
 async function runWorldPvpAttack(defenderProfileName) {
   setAuxPanelContent("PvP támadás", defenderProfileName, `<div class="pvp-result"><strong>A banda úton van...</strong><p>A szerver kiszámolja a két család erejét és védelmét.</p></div>`);
   auxPanel?.setAttribute("data-kind", "pvp");
@@ -2026,10 +2668,7 @@ async function runWorldPvpAttack(defenderProfileName) {
     const response = await fetch("/api/pvp/attack", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        attackerProfileName: state.profileName,
-        defenderProfileName,
-      }),
+      body: JSON.stringify({ defenderProfileName }),
     });
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.error || "PvP hiba");
@@ -2076,80 +2715,28 @@ function updateWorldRivalCity(cityId, updater) {
 function runWorldRivalAttack(cityId) {
   const city = getWorldRivalCityById(cityId);
   if (!city || city.status !== "hostile") return false;
-  if (!canStartCombat("A vilagterkepes tamadast")) return false;
-  const successChance = getWorldRivalAttackChance(city);
-  const now = Date.now();
-  const success = Math.random() <= successChance;
-  if (success) {
-    const moneyGain = Math.round(city.rewardMoney * (city.weakened ? 0.72 : 0.9));
-    const xpGain = Math.max(12, Math.round(city.rewardXp * 0.85));
-    const heatGain = applyHeat(5 + city.level);
-    state.money += moneyGain;
-    applyFame(xpGain);
-    updateWorldRivalCity(cityId, (entry) => ({
-      ...entry,
-      weakened: true,
-      power: Math.max(18, entry.power - Math.round(18 + entry.level * 7)),
-      rewardMoney: entry.rewardMoney + Math.round(14 + entry.level * 5),
-      rewardXp: entry.rewardXp + Math.round(3 + entry.level * 2),
-      lastAttackAt: now,
-    }));
-    queueRewardModal({
-      title: "Rivalis varos",
-      text: `${city.name} tamadasa sikerult.`,
-      money: moneyGain,
-      xp: xpGain,
-      fame: xpGain,
-    });
-    addLocalNotification(
-      "Vilagterkep",
-      `${city.name}: sikeres rajtautes. +${moneyGain} $, +${xpGain} XP, +${heatGain}% korozes.`,
-      { messageType: "event" },
-    );
-    postGameEvent("world_rival_attack", "Rivalis varos megtamadva", `${city.name} rajtautese sikerult.`, {
-      cityId,
-      cityName: city.name,
-      money: moneyGain,
-      xp: xpGain,
-    });
-    sceneRef?.setMessage(`${city.name} meggyengult. Most konnyebb lesz elfoglalni.`);
-  } else {
-    const moneyLoss = Math.min(state.money, Math.max(28, Math.round(city.rewardMoney * 0.2)));
-    const healthLoss = clamp(8 + city.level * 6, 8, 28);
-    const heatGain = applyHeat(7 + city.level);
-    state.money = Math.max(0, state.money - moneyLoss);
-    state.health = clamp(state.health - healthLoss, 0, 100);
-    state.naturalRecoveryAt.health = now;
-    updateWorldRivalCity(cityId, (entry) => ({
-      ...entry,
-      power: entry.power + Math.round(6 + entry.level * 3),
-      lastAttackAt: now,
-    }));
-    queueRewardModal({
-      title: "Rivalis varos",
-      text: `${city.name} visszaverte a tamadast.`,
-      money: -moneyLoss,
-      xp: 0,
-      fame: 0,
-      showZeroValues: true,
-    });
-    addLocalNotification(
-      "Vilagterkep",
-      `${city.name}: a tamadas elbukott. -${moneyLoss} $, -${healthLoss} eletero, +${heatGain}% korozes.`,
-      { messageType: "event" },
-    );
-    sceneRef?.setMessage(`${city.name} visszaverte az embereidet.`);
+  const targetStructure = getWorldRivalRemainingStructures(city)[0]
+    || (Array.isArray(city.structures) ? city.structures[0] : null);
+  if (!targetStructure) {
+    sceneRef?.setMessage("Ebben a faluban mar nincs mit rombolni.");
+    return false;
   }
-  saveGame(true);
-  sceneRef?.refreshHUD();
   hideWorldPlayerWheel();
-  void openAuxPanel("world");
-  return success;
+  return runWorldRivalStructureAttack(cityId, targetStructure.id);
 }
 
 function runWorldRivalCapture(cityId) {
   const city = getWorldRivalCityById(cityId);
   if (!city || city.status !== "hostile") return false;
+  if (city.protectionUntil > Date.now() && city.ownerProfileName && city.ownerProfileName !== state.profileName) {
+    sceneRef?.setMessage(`${city.name}: a falu meg ${formatWorldRivalProtectionTime(city.protectionUntil)} ideig vedett.`);
+    return false;
+  }
+  if (!areWorldRivalStructuresCleared(city)) {
+    sceneRef?.setMessage("Elobb rombold le a rivalis hazakat a Profil nezetben.");
+    openWorldRivalCityProfile(cityId);
+    return false;
+  }
   if (!canStartCombat("Az elfoglalast")) return false;
   const successChance = getWorldRivalCaptureChance(city);
   const now = Date.now();
@@ -2157,37 +2744,45 @@ function runWorldRivalCapture(cityId) {
   if (success) {
     const moneyGain = Math.round(city.rewardMoney * 1.35);
     const xpGain = Math.round(city.rewardXp * 1.25);
+    const fameGain = Math.max(4, Math.round(city.level * 4 + city.rewardXp * 0.2));
     const heatGain = applyHeat(8 + city.level);
-    state.money += moneyGain;
-    applyFame(xpGain);
+    state.money = Math.max(0, Math.round(Number(state.money) || 0) + moneyGain);
+    applyFame(xpGain + fameGain);
     state.influence = Math.max(0, Math.round((state.influence || 0) + 3 + city.level));
+    state.npcVillageVictories = Math.max(0, Math.round(Number(state.npcVillageVictories) || 0)) + 1;
     updateWorldRivalCity(cityId, (entry) => ({
       ...entry,
       status: "captured",
       weakened: false,
+      tributeMoney: 0,
+      tributeTargetMoney: randomInt(500, 1000),
+      tributeCycleStartedAt: now,
       tributeReadyAt: now + WORLD_RIVAL_CITY_TRIBUTE_MS,
       capturedAt: now,
+      protectionUntil: now + WORLD_RIVAL_CITY_PROTECTION_MS,
+      ownerProfileName: state.profileName,
       lastCaptureAt: now,
     }));
     queueRewardModal({
-      title: "Varos elfoglalva",
-      text: `${city.name} most mar a te kulso pontod.`,
+      title: "Falufőnök legyőzve",
+      text: `${city.name} fonoke elesett, a falu zsakmanya a tied.`,
       money: moneyGain,
       xp: xpGain,
-      fame: xpGain,
+      fame: fameGain,
     });
     addLocalNotification(
       "Vilagterkep",
-      `${city.name} elfoglalva. +${moneyGain} $, +${xpGain} XP, +${heatGain}% korozes.`,
+      `${city.name}: a falufonokot legyozted. +${moneyGain} $, +${xpGain} XP, +${fameGain} hirnev, +${heatGain}% korozes.`,
       { messageType: "event" },
     );
-    postGameEvent("world_rival_capture", "Rivalis varos elfoglalva", `${city.name} most mar a te befolyasod alatt all.`, {
+    postGameEvent("world_rival_capture", "Falufonok legyozve", `${city.name} most mar a te befolyasod alatt all.`, {
       cityId,
       cityName: city.name,
       money: moneyGain,
       xp: xpGain,
+      fame: fameGain,
     });
-    sceneRef?.setMessage(`${city.name} elfoglalva. Kesobb tribute-et is fizet.`);
+    sceneRef?.setMessage(`${city.name}: a falufonok elesett. A falu most mar tribute-et fizet neked.`);
   } else {
     const moneyLoss = Math.min(state.money, Math.max(40, Math.round(city.rewardMoney * 0.24)));
     const healthLoss = clamp(12 + city.level * 7, 10, 34);
@@ -2202,8 +2797,8 @@ function runWorldRivalCapture(cityId) {
       lastCaptureAt: now,
     }));
     queueRewardModal({
-      title: "Elfoglalas",
-      text: `${city.name} meg kitartott.`,
+      title: "Falufőnök",
+      text: `${city.name} fonoke visszaverte a tamadasodat.`,
       money: -moneyLoss,
       xp: 0,
       fame: 0,
@@ -2211,49 +2806,101 @@ function runWorldRivalCapture(cityId) {
     });
     addLocalNotification(
       "Vilagterkep",
-      `${city.name}: az elfoglalas nem sikerult. -${moneyLoss} $, -${healthLoss} eletero, +${heatGain}% korozes.`,
+      `${city.name}: a falufonok visszavert. -${moneyLoss} $, -${healthLoss} eletero, +${heatGain}% korozes.`,
       { messageType: "event" },
     );
-    sceneRef?.setMessage(`${city.name} meg ellenall, de meggyengult.`);
+    sceneRef?.setMessage(`${city.name}: a falufonok meg ellenall, de meggyengult.`);
   }
   saveGame(true);
   sceneRef?.refreshHUD();
   hideWorldPlayerWheel();
-  void openAuxPanel("world");
+  if (activeWorldRivalCityProfileId === cityId) {
+    renderWorldRivalCityProfile(cityId, activeWorldRivalStructureId || "");
+  } else {
+    void openAuxPanel("world");
+  }
   return success;
+}
+
+function repairWorldRivalStructure(cityId, structureId, specialization) {
+  const city = getWorldRivalCityById(cityId);
+  const structure = getWorldRivalStructureById(city, structureId);
+  const normalizedSpecialization = specialization === "attack" ? "attack" : "defense";
+  if (!city || city.status !== "captured" || !structure || Number(structure.hp) > 0) return false;
+  const activeRepair = (city.structures || []).find((item) => isWorldRivalStructureRepairing(item));
+  if (activeRepair && activeRepair.id !== structure.id) {
+    sceneRef?.setMessage(`${activeRepair.name} felujitasa mar folyamatban van. Egy faluban egyszerre csak egy haz fejlesztheto.`);
+    renderWorldRivalCityProfile(cityId, structureId);
+    return false;
+  }
+  if (isWorldRivalStructureRepairing(structure)) {
+    sceneRef?.setMessage(`${structure.name} felujitasa mar folyamatban van: ${formatCountdown(structure.repairReadyAt - Date.now())}.`);
+    return false;
+  }
+  const cost = getWorldRivalStructureRepairCost(city, structure);
+  if (state.money < cost) {
+    sceneRef?.setMessage(`A felujitashoz ${cost} $ kell.`);
+    return false;
+  }
+  const now = Date.now();
+  state.money = Math.max(0, state.money - cost);
+  updateWorldRivalCity(cityId, (entry) => ({
+    ...entry,
+    structures: (entry.structures || []).map((item) => item.id === structureId
+      ? {
+          ...item,
+          specialization: normalizedSpecialization,
+          pendingSpecialization: normalizedSpecialization,
+          repairStartedAt: now,
+          repairReadyAt: now + WORLD_RIVAL_STRUCTURE_REPAIR_MS,
+        }
+      : item),
+  }));
+  saveGame(true);
+  sceneRef?.refreshHUD();
+  sceneRef?.setMessage(`${structure.name} felujitasa elindult ${getWorldRivalStructureSpecializationLabel(normalizedSpecialization).toLowerCase()} iranyra. Hatralevo ido: 35:00.`);
+  renderWorldRivalCityProfile(cityId, structureId);
+  return true;
 }
 
 function runWorldRivalTribute(cityId) {
   const city = getWorldRivalCityById(cityId);
   if (!city || city.status !== "captured") return false;
   const now = Date.now();
-  if (city.tributeReadyAt > now) {
+  const incomeState = getWorldRivalIncomeState(city, now);
+  if (!incomeState.ready) {
     sceneRef?.setMessage(`${city.name}: a kovetkezo tribute ${formatWorldRivalTributeTime(city.tributeReadyAt)} mulva jon.`);
     return false;
   }
-  const xpGain = Math.max(6, Math.round(city.level * 4));
-  state.money += city.tributeMoney;
-  applyFame(xpGain);
+  const moneyGain = incomeState.money;
+  state.money = Math.max(0, Math.round(Number(state.money) || 0) + moneyGain);
   updateWorldRivalCity(cityId, (entry) => ({
     ...entry,
+    tributeMoney: 0,
+    tributeTargetMoney: randomInt(500, 1000),
+    tributeCycleStartedAt: now,
     tributeReadyAt: now + WORLD_RIVAL_CITY_TRIBUTE_MS,
   }));
   queueRewardModal({
     title: "Tribute",
-    text: `${city.name} befizette a reszet.`,
-    money: city.tributeMoney,
-    xp: xpGain,
-    fame: xpGain,
+    text: `${city.name} befizette a negyoras bevetelt.`,
+    money: moneyGain,
+    xp: 0,
+    fame: 0,
   });
   addLocalNotification(
     "Vilagterkep",
-    `${city.name}: bejott a tribute. +${city.tributeMoney} $.`,
+    `${city.name}: bejott a falubevetel. +${moneyGain} $.`,
     { messageType: "event" },
   );
   saveGame(true);
   sceneRef?.refreshHUD();
   hideWorldPlayerWheel();
-  void openAuxPanel("world");
+  if (activeWorldRivalCityProfileId === cityId) {
+    renderWorldRivalCityProfile(cityId, activeWorldRivalStructureId || "");
+  } else {
+    void openAuxPanel("world");
+  }
   return true;
 }
 
@@ -2262,7 +2909,7 @@ function postGameEvent(eventType, title, body, payload = {}) {
   void fetch("/api/events", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ profileName: state.profileName, eventType, title, body, payload }),
+    body: JSON.stringify({ eventType, title, body, payload }),
   });
 }
 
@@ -2299,7 +2946,7 @@ function renderLeaderboardPanel(saves) {
               </span>
               <span class="leaderboard__value">${entry.level}</span>
               <span class="leaderboard__value">${entry.fame}</span>
-              <span class="leaderboard__value">${entry.cityLevel}</span>
+              <span class="leaderboard__value">${entry.cityLevel}. szint · ${Math.max(0, Math.round(Number(entry.npcVillageVictories) || 0))} város</span>
             </article>
           `).join("")}
         </div>
@@ -2328,8 +2975,13 @@ function getMarketPanelHtml() {
         </div>
       </article>
       <div class="market-panel__grid">
-        ${stock.map((entry) => `
-          <article class="market-item">
+        ${stock.map((entry) => {
+          const alreadyOwned = Array.isArray(state.itemInventory?.[entry.slot])
+            && state.itemInventory[entry.slot].some((ownedItem) => ownedItem.id === entry.item.id);
+          const cannotAfford = state.money < entry.price;
+          const disabled = alreadyOwned || cannotAfford;
+          return `
+          <article class="market-item${alreadyOwned ? " is-owned" : ""}">
             <img class="market-item__art" src="${entry.item.image || getEquipmentArt(entry.slot)}" alt="${escapeHtml(entry.item.name)}">
             <div class="market-item__meta">
               <strong>${escapeHtml(entry.item.name)}</strong>
@@ -2344,11 +2996,12 @@ function getMarketPanelHtml() {
               class="market-item__buy"
               type="button"
               data-market-buy="${entry.item.id}"
-              ${state.money < entry.price ? "disabled" : ""}>
-              ${state.money < entry.price ? "Nincs eleg penz" : "Megveszem"}
+              ${disabled ? "disabled" : ""}>
+              ${alreadyOwned ? "Elkelt" : cannotAfford ? "Nincs eleg penz" : "Megveszem"}
             </button>
           </article>
-        `).join("")}
+        `;
+        }).join("")}
       </div>
       <div class="market-panel__footnote">A megvett item bekerul a felszereleseid koze, es a karakterlapodon tudod felvenni.</div>
     </section>
@@ -2357,7 +3010,9 @@ function getMarketPanelHtml() {
 
 function bindMarketBuyButtons(rootElement, options = {}) {
   rootElement?.querySelectorAll("[data-market-buy]").forEach((button) => {
-    button.addEventListener("click", () => {
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
       buyMarketItem(button.dataset.marketBuy, options);
     });
   });
@@ -2409,7 +3064,6 @@ function buyMarketItem(itemId, options = {}) {
   }
   state.money -= offer.price;
   unlockEquipmentItem(offer.slot, offer.item);
-  state.marketStock = state.marketStock.filter((entry) => entry.item.id !== offer.item.id);
   if (options.rerender !== false) renderBlackMarketPanel();
   if (typeof options.afterBuy === "function") options.afterBuy();
   saveGame();
@@ -2479,7 +3133,8 @@ function selectWorldBaseLot(lotId) {
   saveGame(true);
   sceneRef?.refreshHUD();
   sceneRef?.refreshMap();
-  void openAuxPanel("world");
+  hideAuxPanel();
+  document.body.classList.remove("is-world-map-open");
 }
 
 function hideWorldPlayerWheel() {
@@ -2496,23 +3151,19 @@ function showWorldRivalCityWheel(city, clientX, clientY) {
   const stageRect = stage.getBoundingClientRect();
   const x = clamp(clientX - stageRect.left, 112, stageRect.width - 112);
   const y = clamp(clientY - stageRect.top, 112, stageRect.height - 112);
-  const captureChance = Math.round(getWorldRivalCaptureChance(city) * 100);
-  const attackChance = Math.round(getWorldRivalAttackChance(city) * 100);
+  const remainingStructures = getWorldRivalRemainingStructures(city).length;
+  const incomeState = getWorldRivalIncomeState(city);
   wheel.style.left = `${x}px`;
   wheel.style.top = `${y}px`;
   wheel.innerHTML = `
     <div class="world-player-wheel__ring world-player-wheel__ring--rival">
+      <button type="button" class="world-player-wheel__action world-player-wheel__action--profile" data-world-rival-action="profile">Profil</button>
       ${city.status === "captured"
-        ? `<button type="button" class="world-player-wheel__action world-player-wheel__action--profile" data-world-rival-action="tribute">Beszedes</button>`
-        : `<button type="button" class="world-player-wheel__action world-player-wheel__action--profile" data-world-rival-action="attack">Tamadas</button>`}
-      ${city.status === "captured"
-        ? `<button type="button" class="world-player-wheel__action world-player-wheel__action--pvp" data-world-rival-action="status">Adatai</button>`
-        : `<button type="button" class="world-player-wheel__action world-player-wheel__action--pvp" data-world-rival-action="capture">Elfoglalas</button>`}
-      <button type="button" class="world-player-wheel__action world-player-wheel__action--message" data-world-rival-action="close">Bezaras</button>
-      <button type="button" class="world-player-wheel__action world-player-wheel__action--close" data-world-rival-action="status">Info</button>
+        ? `<button type="button" class="world-player-wheel__action world-player-wheel__action--message" data-world-rival-action="tribute">Beszedes</button>`
+        : ``}
       <div class="world-player-wheel__core">
         <strong>${escapeHtml(city.name)}</strong>
-        <span>${city.status === "captured" ? `Sajat varos | +${city.tributeMoney} $` : `${city.level}. szintu rivalis | T ${attackChance}% / E ${captureChance}%`}</span>
+        <span>${city.status === "captured" ? `Sajat falu | ${incomeState.money} $ | ${incomeState.ready ? "beszedheto" : formatWorldRivalHoursMinutes(incomeState.remainingMs)}` : `${remainingStructures} haz all`}</span>
       </div>
     </div>
   `;
@@ -2522,19 +3173,9 @@ function showWorldRivalCityWheel(city, clientX, clientY) {
     button.addEventListener("click", (event) => {
       event.stopPropagation();
       const action = button.dataset.worldRivalAction;
-      if (action === "close" || action === "status") {
-        if (action === "status") {
-          sceneRef?.setMessage(getWorldRivalCityStatusText(city));
-        }
+      if (action === "profile") {
         hideWorldPlayerWheel();
-        return;
-      }
-      if (action === "attack") {
-        runWorldRivalAttack(city.id);
-        return;
-      }
-      if (action === "capture") {
-        runWorldRivalCapture(city.id);
+        openWorldRivalCityProfile(city.id);
         return;
       }
       if (action === "tribute") {
@@ -2649,7 +3290,7 @@ function bindWorldMapInteractions(occupiedLots, rivalCities, selectionMode) {
       button.classList.toggle("is-selected", isMatch);
       if (isMatch) activeButton = button;
     });
-    if (titleEl) titleEl.textContent = `${lot.code} / ${lot.coord}`;
+    if (titleEl) titleEl.textContent = owner?.profileName || `${lot.code} / ${lot.coord}`;
     if (textEl) {
       textEl.textContent = getWorldLotStatusText(owner, isOwn);
     }
@@ -2749,8 +3390,9 @@ function bindWorldMapInteractions(occupiedLots, rivalCities, selectionMode) {
       if (titleEl) titleEl.textContent = city.name;
       if (textEl) textEl.textContent = getWorldRivalCityStatusText(city);
       if (metaEl) {
+        const incomeState = getWorldRivalIncomeState(city);
         metaEl.textContent = city.status === "captured"
-          ? `Allapot: elfoglalt | Tribute: +${city.tributeMoney} $`
+          ? `Allapot: elfoglalt | Bevetel: ${incomeState.money} $ | ${incomeState.ready ? "beszedheto" : formatWorldRivalHoursMinutes(incomeState.remainingMs)}`
           : `Allapot: rivalis | Szint: ${city.level} | Ero: ${city.power}`;
       }
       if (chooseButton) chooseButton.disabled = true;
@@ -2793,14 +3435,13 @@ function bindWorldMapInteractions(occupiedLots, rivalCities, selectionMode) {
 const harborZoneDefs = [
   { id: "docks", title: "Dokkok", x: 1.5, y: 4.5, w: 29, h: 28, clip: "polygon(2% 48%, 18% 18%, 55% 4%, 91% 22%, 100% 58%, 75% 86%, 28% 96%, 0 72%)", note: "Csempesz fuvarok es hajos megbizasok." },
   { id: "warehouse", title: "Csempeszraktar", x: 76.5, y: 45, w: 20, h: 20, clip: "polygon(12% 24%, 58% 4%, 96% 25%, 100% 76%, 66% 100%, 13% 84%, 0 48%)", note: "Arukeszlet: hamis penz, drog, fegyver, papirok." },
-  { id: "bar", title: "Speakeasy", x: 27, y: 69, w: 20, h: 18, clip: "polygon(8% 32%, 42% 5%, 88% 14%, 100% 55%, 74% 95%, 20% 88%, 0 58%)", note: "Italok, eletero es energia toltes." },
+  { id: "bar", title: "Kocsma", x: 27, y: 69, w: 20, h: 18, clip: "polygon(8% 32%, 42% 5%, 88% 14%, 100% 55%, 74% 95%, 20% 88%, 0 58%)", note: "Italok, eletero es energia toltes." },
   { id: "office", title: "Kikotoi iroda", x: 36.5, y: 5, w: 18, h: 22, clip: "polygon(10% 28%, 43% 2%, 84% 8%, 100% 48%, 79% 87%, 28% 100%, 0 68%)", note: "Kapcsolatok es rendori lefizetes." },
   { id: "market", title: "Feketepiac", x: 82, y: 20, w: 17, h: 19, clip: "polygon(12% 30%, 48% 5%, 91% 12%, 100% 54%, 76% 92%, 24% 100%, 0 64%)", note: "Ritka aruk es csempesz cuccok." },
   { id: "customs", title: "Vam", x: 32, y: 26, w: 16, h: 18, clip: "polygon(7% 43%, 35% 10%, 76% 0, 100% 36%, 88% 78%, 42% 100%, 0 73%)", note: "Hamis penz es hamis papirok beszerzese." },
   { id: "rail", title: "Vasuti rakodo", x: 52, y: 31, w: 30, h: 15, clip: "polygon(3% 44%, 25% 14%, 86% 2%, 100% 38%, 86% 78%, 24% 100%, 0 72%)", note: "Drog es fegyver csempeszet." },
-  { id: "garage", title: "Garazs", x: 67.5, y: 50, w: 19, h: 16, clip: "polygon(9% 32%, 38% 6%, 84% 7%, 100% 48%, 78% 91%, 22% 100%, 0 66%)", note: "Jarmuvek kesobb." },
+  { id: "garage", title: "Garazs", x: 63.1, y: 53, w: 18, h: 15, clip: "polygon(9% 32%, 38% 6%, 84% 7%, 100% 48%, 78% 91%, 22% 100%, 0 66%)", note: "Jarmuvek kesobb." },
   { id: "fish", title: "Halpiac", x: 3.5, y: 35, w: 22, h: 20, clip: "polygon(2% 45%, 28% 12%, 78% 4%, 100% 43%, 83% 84%, 30% 100%, 0 74%)", note: "Halaskuldetesek: penz, XP, pihenes." },
-  { id: "storage", title: "Raktarsor", x: 55, y: 8, w: 23, h: 21, clip: "polygon(5% 37%, 30% 8%, 82% 3%, 100% 39%, 82% 84%, 25% 100%, 0 70%)", note: "Raktar es atadasi pontok." },
 ];
 
 const harborCargoDefs = {
@@ -2810,12 +3451,123 @@ const harborCargoDefs = {
   papers: { label: "Hamis papirok", image: "./csempészet/f5b63510-d9c7-469c-ac33-71343b294ab1.png" },
 };
 
+const harborGarageVehicleDefs = [
+  {
+    id: "sedan",
+    title: "Utcai sedan",
+    cost: 0,
+    requiredLevel: 1,
+    speed: 2,
+    stealth: 2,
+    load: 1,
+    accent: "Sedan",
+    image: "./garage-assets/sedan-1930.png",
+    description: "Kompakt menekuloauto. Kisebb utcai atjatszasokra jo, mindenbol keveset hoz.",
+    rewardProfile: "balanced",
+    lootText: "Kisebb penz, hamis papir es hamis penz.",
+  },
+  {
+    id: "van",
+    title: "Csempesz furgon",
+    cost: 520,
+    requiredLevel: 2,
+    speed: 1,
+    stealth: 2,
+    load: 3,
+    accent: "Furgon",
+    image: "./garage-assets/smuggler-van-1930.png",
+    description: "Megerositett rakteru furgon. Csempesz aruhoz kell, drogot, fegyvert es papirokat hoz jobban.",
+    rewardProfile: "cargo",
+    lootText: "Csempesz aru: drog, fegyver, hamis papirok.",
+  },
+  {
+    id: "armor",
+    title: "Pancelkocsi",
+    cost: 980,
+    requiredLevel: 3,
+    speed: 2,
+    stealth: 1,
+    load: 4,
+    accent: "Pancel",
+    image: "./garage-assets/armored-money-car-1930.png",
+    description: "Nehez pancelkocsi. Nagy penzes korokhoz kell, foleg hamis penzt es nagyobb kasszat hoz.",
+    rewardProfile: "cash",
+    lootText: "Nagy penz, hamis penz es vedettebb rakomany.",
+  },
+];
+
+const harborGarageMissionDefs = [
+  {
+    id: "alley-run",
+    title: "Sikatori atjatszas",
+    vehicleId: "sedan",
+    description: "Utcai sedan kell hozza. Kis csomag, kevesebb penz, de stabil kezdo fuvar.",
+    requiredLevel: 1,
+    rewardMoney: 140,
+    rewardXp: 18,
+    heatSuccess: 2,
+    heatFail: 7,
+    failurePenalty: 55,
+    cargoReward: { papers: 1, counterfeitMoney: 1 },
+    rounds: 3,
+    requiredHits: 2,
+    baseSafeWidth: 0.24,
+    baseSpeed: 0.032,
+  },
+  {
+    id: "night-convoy",
+    title: "Ejjeli konvoj",
+    vehicleId: "van",
+    description: "Csempesz furgon kell hozza. Rakteres fuvar, ahol a csempesz aru a fo jutalom.",
+    requiredLevel: 2,
+    rewardMoney: 240,
+    rewardXp: 31,
+    heatSuccess: 3,
+    heatFail: 10,
+    failurePenalty: 95,
+    cargoReward: { drugs: 2, papers: 1 },
+    rounds: 4,
+    requiredHits: 3,
+    baseSafeWidth: 0.2,
+    baseSpeed: 0.037,
+  },
+  {
+    id: "vault-route",
+    title: "Pancelkocsis kor",
+    vehicleId: "armor",
+    description: "Pancelkocsi kell hozza. Nagy penzes kor, nehezebb utvonallal es komolyabb kasszaval.",
+    requiredLevel: 3,
+    rewardMoney: 410,
+    rewardXp: 46,
+    heatSuccess: 4,
+    heatFail: 14,
+    failurePenalty: 155,
+    cargoReward: { weapons: 2, counterfeitMoney: 2, papers: 1 },
+    rounds: 5,
+    requiredHits: 4,
+    baseSafeWidth: 0.17,
+    baseSpeed: 0.043,
+  },
+];
+
 const harborMissionCatalog = Array.from({ length: 50 }, (_, index) => {
+  const batch = Math.floor(index / 4);
+  const customsVariants = [
+    { title: "Gyors vami boritek", gives: { papers: 4 + (batch % 3), counterfeitMoney: 2 + (batch % 2) }, rewardMoney: 45 + batch * 3, rewardXp: 14 + (batch % 4), durationMs: 35 * 60 * 1000, successChance: 0.94 },
+    { title: "Hamis papiros csere", gives: { papers: 8 + (batch % 4) }, rewardMoney: 72 + batch * 4, rewardXp: 20 + (batch % 5), durationMs: 35 * 60 * 1000, successChance: 0.88 },
+    { title: "Penzmoso pecset", gives: { counterfeitMoney: 9 + (batch % 5), papers: 2 + (batch % 2) }, rewardMoney: 96 + batch * 5, rewardXp: 24 + (batch % 6), durationMs: 35 * 60 * 1000, successChance: 0.8 },
+    { title: "Kockazatos vami atiras", gives: { counterfeitMoney: 13 + (batch % 6), papers: 6 + (batch % 3) }, rewardMoney: 142 + batch * 6, rewardXp: 32 + (batch % 7), durationMs: 35 * 60 * 1000, successChance: 0.68 },
+  ];
+  const railVariants = [
+    { title: "Kis rakomanyu vagon", gives: { drugs: 3 + (batch % 3), weapons: 1 }, rewardMoney: 62 + batch * 3, rewardXp: 17 + (batch % 4), durationMs: 35 * 60 * 1000, successChance: 0.92 },
+    { title: "Fegyveres lada", gives: { weapons: 5 + (batch % 4), papers: 1 + (batch % 2) }, rewardMoney: 105 + batch * 4, rewardXp: 25 + (batch % 5), durationMs: 35 * 60 * 1000, successChance: 0.84 },
+    { title: "Drogos tehervagon", gives: { drugs: 9 + (batch % 5), weapons: 2 + (batch % 2) }, rewardMoney: 128 + batch * 5, rewardXp: 30 + (batch % 6), durationMs: 35 * 60 * 1000, successChance: 0.77 },
+    { title: "Ejfeli vonatrablas", gives: { drugs: 12 + (batch % 6), weapons: 6 + (batch % 3), counterfeitMoney: 2 }, rewardMoney: 190 + batch * 7, rewardXp: 42 + (batch % 8), durationMs: 35 * 60 * 1000, successChance: 0.64 },
+  ];
   const profiles = [
     { zone: "docks", title: "Rakparti atadas", requires: { counterfeitMoney: 6 + (index % 4), weapons: 1 + (index % 3) }, rewardMoney: 170 + index * 5, rewardXp: 28 + (index % 8), durationMs: 30 * 60 * 1000 },
-    { zone: "storage", title: "Raktari csere", requires: { papers: 5 + (index % 5), drugs: 2 + (index % 3) }, rewardMoney: 190 + index * 6, rewardXp: 30 + (index % 9), durationMs: 35 * 60 * 1000 },
-    { zone: "customs", title: "Vami boritek", gives: { counterfeitMoney: 6 + (index % 5), papers: 3 + (index % 4) }, rewardMoney: 45 + index, rewardXp: 16 + (index % 5), durationMs: 30 * 60 * 1000 },
-    { zone: "rail", title: "Kodos vagon", gives: { drugs: 4 + (index % 5), weapons: 2 + (index % 4) }, rewardMoney: 60 + index, rewardXp: 18 + (index % 6), durationMs: 45 * 60 * 1000 },
+    { zone: "customs", ...customsVariants[batch % customsVariants.length] },
+    { zone: "rail", ...railVariants[batch % railVariants.length] },
     { zone: "fish", title: "Hajnali halaszat", gives: {}, rewardMoney: 90 + index * 3, rewardXp: 18 + (index % 10), heal: 20, energy: 20, durationMs: [60, 180, 360][index % 3] * 60 * 1000 },
   ];
   const profile = profiles[index % profiles.length];
@@ -2832,10 +3584,261 @@ const harborFishMissionDefs = [
   { id: "fish-6h", zone: "fish", title: "Ejszakai halaszat - 6 ora", gives: {}, rewardMoney: 330, rewardXp: 58, heal: 40, energy: 40, durationMs: 360 * 60 * 1000 },
 ];
 
+function replaceConfigArray(target, incoming, requiredKeys = ["id"]) {
+  if (!Array.isArray(incoming) || incoming.length === 0) return false;
+  const cleaned = incoming.filter((entry) =>
+    entry
+    && typeof entry === "object"
+    && requiredKeys.every((key) => typeof entry[key] === "string" && entry[key].trim()),
+  );
+  if (!cleaned.length) return false;
+  target.splice(0, target.length, ...cleaned.map((entry) => ({ ...entry })));
+  return true;
+}
+
+function replaceQuestTemplateConfig(incoming) {
+  if (!incoming || typeof incoming !== "object") return false;
+  const nextEarly = Array.isArray(incoming.early) ? incoming.early.filter((entry) => normalizeQuestTemplate(entry, null, "early")) : [];
+  const nextStandard = Array.isArray(incoming.standard) ? incoming.standard.filter((entry) => normalizeQuestTemplate(entry, null, "standard")) : [];
+  if (!nextEarly.length || !nextStandard.length) return false;
+  mainQuestTemplateDefs.early.splice(0, mainQuestTemplateDefs.early.length, ...nextEarly.map((entry) => ({ ...entry, goal: { ...entry.goal } })));
+  mainQuestTemplateDefs.standard.splice(0, mainQuestTemplateDefs.standard.length, ...nextStandard.map((entry) => ({ ...entry, goal: { ...entry.goal } })));
+  return true;
+}
+
+function normalizeEquipmentCatalogItem(slot, item) {
+  if (!equipmentSlotOrder.includes(slot) || !item || typeof item !== "object") return null;
+  const rarity = ["gray", "yellow", "red"].includes(item.rarity) ? item.rarity : "gray";
+  return {
+    id: typeof item.id === "string" && item.id.trim() ? item.id.trim() : `${slot}-${rarity}-${Math.random().toString(36).slice(2, 8)}`,
+    name: typeof item.name === "string" && item.name.trim() ? item.name.trim() : (equipmentSlotDefs[slot]?.label || "Item"),
+    power: Math.max(0, Math.round(Number(item.power) || 0)),
+    stat: item.stat === "defense" || item.stat === "attack" ? item.stat : (equipmentSlotDefs[slot]?.stat || "attack"),
+    rarity,
+    image: typeof item.image === "string" && item.image.trim() ? item.image.trim() : getEquipmentRarityImage(slot, rarity),
+  };
+}
+
+function replaceEquipmentCatalogConfig(incoming) {
+  if (!incoming || typeof incoming !== "object") return false;
+  let changed = false;
+  equipmentSlotOrder.forEach((slot) => {
+    const list = Array.isArray(incoming[slot]) ? incoming[slot] : [];
+    const normalized = list.map((item) => normalizeEquipmentCatalogItem(slot, item)).filter(Boolean);
+    if (!normalized.length) return;
+    equipmentCatalog[slot].splice(0, equipmentCatalog[slot].length, ...normalized);
+    changed = true;
+  });
+  return changed;
+}
+
+function replaceRankTableConfig(incoming) {
+  if (!Array.isArray(incoming)) return false;
+  const normalized = incoming
+    .map((entry) => ({
+      fame: Math.max(0, Math.round(Number(entry?.fame) || 0)),
+      name: typeof entry?.name === "string" && entry.name.trim() ? entry.name.trim() : "",
+    }))
+    .filter((entry) => entry.name)
+    .sort((a, b) => a.fame - b.fame);
+  if (!normalized.length || normalized[0].fame !== 0) return false;
+  rankTable.splice(0, rankTable.length, ...normalized);
+  return true;
+}
+
+function normalizeMentorStepConfig(step) {
+  if (!step || typeof step !== "object" || typeof step.id !== "string" || !step.id.trim()) return null;
+  const reward = step.reward && typeof step.reward === "object" ? step.reward : {};
+  const stepId = step.id.trim();
+  const rawText = typeof step.text === "string" && step.text.trim() ? step.text.trim() : "";
+  const mentorTextOverrides = {
+    base: rawText.includes("fo bazis") ? "Valaszd ki a lakohazadat." : rawText,
+    equip: "Szereld fel a fegyvert a karakteredre.",
+    quest: "Vegyel fel es adj le egy kuldetest.",
+  };
+  const mentorXpOverrides = {
+    base: 2,
+    crew: 2,
+    equip: 2,
+    robbery: 2,
+    protection: 2,
+    quest: 2,
+    rest: 1,
+    world: 2,
+    level5: 8,
+    harbor: 10,
+  };
+  return {
+    id: stepId,
+    title: typeof step.title === "string" && step.title.trim() ? step.title.trim() : "Mentor feladat",
+    text: mentorTextOverrides[stepId] || rawText,
+    reward: {
+      money: Math.max(0, Math.round(Number(reward.money) || 0)),
+      xp: mentorXpOverrides[stepId] ?? Math.max(0, Math.round(Number(reward.xp) || 0)),
+      item: false,
+    },
+  };
+}
+
+function replaceMentorStepsConfig(incoming) {
+  if (!Array.isArray(incoming)) return false;
+  const normalized = incoming.map(normalizeMentorStepConfig).filter(Boolean);
+  if (!normalized.length) return false;
+  mentorSteps.splice(0, mentorSteps.length, ...normalized);
+  return true;
+}
+
+function applyGameConfigPayload(configs = {}) {
+  replaceConfigArray(harborZoneDefs, configs.harbor_zones?.payload, ["id", "title"]);
+  replaceConfigArray(harborGarageVehicleDefs, configs.harbor_garage_vehicles?.payload, ["id", "title"]);
+  replaceConfigArray(harborGarageMissionDefs, configs.harbor_garage_missions?.payload, ["id", "title", "vehicleId"]);
+  replaceConfigArray(harborMissionCatalog, configs.harbor_missions?.payload, ["id", "title", "zone"]);
+  replaceConfigArray(harborFishMissionDefs, configs.harbor_fish_missions?.payload, ["id", "title", "zone"]);
+  replaceQuestTemplateConfig(configs.main_quest_templates?.payload);
+  replaceEquipmentCatalogConfig(configs.equipment_catalog?.payload);
+  replaceRankTableConfig(configs.rank_table?.payload);
+  replaceMentorStepsConfig(configs.mentor_steps?.payload);
+}
+
+async function loadGameConfigFromDatabase() {
+  try {
+    const response = await fetch(GAME_CONFIG_API, { cache: "no-store" });
+    if (!response.ok) return false;
+    const payload = await response.json();
+    if (!payload?.configs || typeof payload.configs !== "object") return false;
+    applyGameConfigPayload(payload.configs);
+    return true;
+  } catch (error) {
+    console.warn("Game config API unavailable, using bundled defaults.", error);
+    return false;
+  }
+}
+
 function normalizeSmuggledGoods(goods) {
   return Object.fromEntries(Object.keys(harborCargoDefs).map((key) => [
     key,
     Math.max(0, Math.round(Number(goods?.[key]) || 0)),
+  ]));
+}
+
+function normalizeHarborGarage(saved) {
+  const unlockedSet = new Set(
+    Array.isArray(saved?.unlockedVehicleIds)
+      ? saved.unlockedVehicleIds.map((entry) => String(entry || "").trim()).filter(Boolean)
+      : ["sedan"],
+  );
+  unlockedSet.add("sedan");
+  const unlockedVehicleIds = harborGarageVehicleDefs
+    .map((vehicle) => vehicle.id)
+    .filter((id) => unlockedSet.has(id));
+  const activeVehicleId = unlockedVehicleIds.includes(saved?.activeVehicleId)
+    ? saved.activeVehicleId
+    : (unlockedVehicleIds[0] || "sedan");
+  return {
+    level: clamp(Math.round(Number(saved?.level) || 1), 1, 3),
+    wins: Math.max(0, Math.round(Number(saved?.wins) || 0)),
+    losses: Math.max(0, Math.round(Number(saved?.losses) || 0)),
+    activeVehicleId,
+    unlockedVehicleIds,
+  };
+}
+
+function getGarageVehicleById(vehicleId) {
+  return harborGarageVehicleDefs.find((vehicle) => vehicle.id === vehicleId) || harborGarageVehicleDefs[0];
+}
+
+function getActiveGarageVehicle() {
+  return getGarageVehicleById(state.harborGarage?.activeVehicleId || "sedan");
+}
+
+function getHarborGarageStats() {
+  const garage = normalizeHarborGarage(state.harborGarage);
+  state.harborGarage = garage;
+  const vehicle = getGarageVehicleById(garage.activeVehicleId);
+  return {
+    speed: vehicle.speed,
+    stealth: vehicle.stealth,
+    load: vehicle.load,
+    quantityBonus: Math.max(0, garage.level - 1),
+  };
+}
+
+function getHarborGarageUpgradeCost() {
+  return 360 + (Math.max(1, state.harborGarage?.level || 1) - 1) * 290;
+}
+
+function scaleGarageCargoReward(cargo = {}, load = 1, quantityBonus = 0) {
+  const cargoBonus = Math.max(0, Math.round(Number(load) || 1) - 1)
+    + Math.max(0, Math.round(Number(quantityBonus) || 0));
+  return Object.fromEntries(Object.entries(cargo).map(([key, amount]) => [
+    key,
+    Math.max(0, Math.round(Number(amount) || 0) + cargoBonus),
+  ]));
+}
+
+function tuneCargoForVehicle(cargo = {}, vehicle) {
+  const tuned = { counterfeitMoney: 0, drugs: 0, weapons: 0, papers: 0 };
+  const normalizedCargo = normalizeSmuggledGoods(cargo);
+  const randomizeCargo = (maxPerType = 3, fallbackKeys = []) => {
+    const activeKeys = Object.keys(normalizedCargo).filter((key) => normalizedCargo[key] > 0);
+    const keys = activeKeys.length ? activeKeys : fallbackKeys;
+    keys.forEach((key) => {
+      tuned[key] = randomInt(1, Math.max(1, maxPerType));
+    });
+    return tuned;
+  };
+  if (!vehicle || vehicle.rewardProfile === "balanced") {
+    return randomizeCargo(3, ["papers", "counterfeitMoney"]);
+  }
+  if (vehicle.rewardProfile === "cargo") {
+    return randomizeCargo(6, ["drugs", "papers"]);
+  }
+  if (vehicle.rewardProfile === "cash") {
+    return randomizeCargo(3, ["counterfeitMoney", "papers"]);
+  }
+  return normalizedCargo;
+}
+
+function getGarageMissionRunConfig(mission, stats, vehicle = getActiveGarageVehicle()) {
+  const load = Math.max(1, Math.round(Number(stats?.load) || 1));
+  const quantityBonus = Math.max(0, Math.round(Number(stats?.quantityBonus) || 0));
+  const cargoRewardBase = scaleGarageCargoReward(mission.cargoReward, load, quantityBonus);
+  const cargoReward = tuneCargoForVehicle(cargoRewardBase, vehicle);
+  const moneyBase = mission.rewardMoney + Math.max(0, load - 1) * 20;
+  const xpBase = mission.rewardXp + Math.max(0, load - 1) * 3;
+  let rewardMoney = vehicle?.rewardProfile === "cash"
+    ? moneyBase + 160 + load * 20
+    : vehicle?.rewardProfile === "cargo"
+      ? moneyBase - 30
+      : moneyBase;
+  let rewardXp = vehicle?.rewardProfile === "cargo"
+    ? xpBase + 8
+    : xpBase;
+  if (mission.id === "night-convoy") {
+    rewardMoney = Math.round(rewardMoney * 0.5);
+    rewardXp = Math.round(rewardXp * 0.5);
+  }
+  if (vehicle?.id === "armor") {
+    rewardMoney = Math.min(666, rewardMoney);
+  }
+  return {
+    totalRounds: mission.rounds + Math.max(0, load - 1),
+    requiredHits: mission.requiredHits + Math.max(0, Math.min(2, load - 1)),
+    rewardMoney: Math.max(40, rewardMoney),
+    rewardXp: Math.max(10, rewardXp),
+    cargoReward,
+  };
+}
+
+function getGarageMissPenaltyFactor(misses = 0) {
+  return clamp(1 - Math.max(0, Math.round(Number(misses) || 0)) * 0.15, 0.45, 1);
+}
+
+function scaleGarageRewardCargoForMisses(cargo = {}, misses = 0) {
+  const factor = getGarageMissPenaltyFactor(misses);
+  return Object.fromEntries(Object.entries(normalizeSmuggledGoods(cargo)).map(([key, amount]) => [
+    key,
+    amount > 0 ? Math.max(1, Math.round(amount * factor)) : 0,
   ]));
 }
 
@@ -2844,6 +3847,78 @@ function formatCargoList(cargo = {}) {
     .filter(([, amount]) => Number(amount) > 0)
     .map(([key, amount]) => `${Math.round(amount)} ${harborCargoDefs[key]?.label || key}`);
   return entries.length ? entries.join(", ") : "-";
+}
+
+function stopGarageMiniGame(resetState = false) {
+  if (garageMiniGameTimer) {
+    window.clearInterval(garageMiniGameTimer);
+    garageMiniGameTimer = null;
+  }
+  if (resetState) {
+    garageMiniGameState = null;
+  }
+}
+
+function rollGarageCheckpoint(gameState) {
+  gameState.safeCenter = 0.22 + Math.random() * 0.56;
+  gameState.pointer = gameState.direction > 0 ? 0.08 : 0.92;
+}
+
+function getGarageRoundSafeWidth(gameState, mission) {
+  const baseWidth = Number(gameState?.baseSafeWidth) || Number(mission?.baseSafeWidth) || 0.2;
+  const clickCount = Math.max(0, Math.round(Number(gameState?.attempts) || 0));
+  return clamp(baseWidth - clickCount * 0.026, 0.075, 0.34);
+}
+
+function getGarageAttemptSpeed(gameState, mission) {
+  const baseSpeed = Number(gameState?.baseSpeed) || Number(mission?.baseSpeed) || 0.032;
+  const clickCount = Math.max(0, Math.round(Number(gameState?.attempts) || 0));
+  return clamp(baseSpeed + clickCount * 0.0038, 0.018, 0.068);
+}
+
+function getGarageMissionById(missionId) {
+  return harborGarageMissionDefs.find((mission) => mission.id === missionId) || null;
+}
+
+function startGarageMiniGameLoop() {
+  stopGarageMiniGame(false);
+  if (!garageMiniGameState) return;
+  garageMiniGameTimer = window.setInterval(() => {
+    if (!garageMiniGameState) {
+      stopGarageMiniGame(false);
+      return;
+    }
+    garageMiniGameState.pointer += garageMiniGameState.direction * garageMiniGameState.speed;
+    if (garageMiniGameState.pointer >= 0.96) {
+      garageMiniGameState.pointer = 0.96;
+      garageMiniGameState.direction = -1;
+    } else if (garageMiniGameState.pointer <= 0.04) {
+      garageMiniGameState.pointer = 0.04;
+      garageMiniGameState.direction = 1;
+    }
+    const needle = harborOperationPanel?.querySelector(".garage-minigame__needle");
+    if (needle) needle.style.left = `${garageMiniGameState.pointer * 100}%`;
+  }, 28);
+}
+
+function syncGarageNeedleFromDom(gameState) {
+  if (!gameState || !harborOperationPanel) return;
+  const meter = harborOperationPanel.querySelector(".garage-minigame__meter");
+  const needle = harborOperationPanel.querySelector(".garage-minigame__needle");
+  if (!meter || !needle) return;
+  const meterRect = meter.getBoundingClientRect();
+  const needleRect = needle.getBoundingClientRect();
+  if (!meterRect.width) return;
+  const visualCenter = ((needleRect.left + needleRect.width / 2) - meterRect.left) / meterRect.width;
+  gameState.pointer = clamp(visualCenter, 0, 1);
+}
+
+function isGarageCheckpointHit(gameState) {
+  syncGarageNeedleFromDom(gameState);
+  const safeLeft = gameState.safeCenter - gameState.safeWidth / 2;
+  const safeRight = gameState.safeCenter + gameState.safeWidth / 2;
+  const visualTolerance = 0.018;
+  return gameState.pointer >= safeLeft - visualTolerance && gameState.pointer <= safeRight + visualTolerance;
 }
 
 function canPayCargo(cargo = {}) {
@@ -2867,20 +3942,21 @@ function addCargo(cargo = {}) {
 
 function getHarborMissionsForZone(zoneId) {
   if (zoneId === "fish") return harborFishMissionDefs.map((mission) => ({ ...mission }));
-  const matching = harborMissionCatalog.filter((mission) => mission.zone === zoneId || (zoneId === "docks" && mission.zone === "storage"));
+  const matching = harborMissionCatalog.filter((mission) => mission.zone === zoneId);
   const offset = Math.abs((state.day * 7 + zoneId.length * 11) % Math.max(1, matching.length));
   return Array.from({ length: Math.min(6, matching.length) }, (_, index) => matching[(offset + index) % matching.length]);
 }
 
 function setHarborPanelContent(zone, bodyHtml) {
   if (!harborOperationPanel) return;
+  const lockClose = zone?.id === "garage" && Boolean(garageMiniGameState);
   harborOperationPanel.innerHTML = `
     <header class="harbor-operation-panel__header">
       <div>
         <span>Kikoto negyed</span>
         <strong>${escapeHtml(zone.title)}</strong>
       </div>
-      <button class="harbor-operation-panel__close" type="button" aria-label="Bezaras">x</button>
+      <button class="harbor-operation-panel__close${lockClose ? " hidden" : ""}" type="button" aria-label="Bezaras"${lockClose ? " disabled" : ""}>x</button>
     </header>
     ${bodyHtml}
   `;
@@ -2890,6 +3966,8 @@ function setHarborPanelContent(zone, bodyHtml) {
 }
 
 function hideHarborOperationPanel() {
+  if (garageMiniGameState) return;
+  stopGarageMiniGame(true);
   harborOperationPanel?.classList.add("hidden");
   harborOperationPanel?.setAttribute("aria-hidden", "true");
 }
@@ -2897,22 +3975,25 @@ function hideHarborOperationPanel() {
 function renderHarborBar(zone) {
   setHarborPanelContent(zone, `
     <section class="harbor-place">
-      <div class="harbor-bar-scene" aria-hidden="true">
-        <div class="harbor-bar-scene__shelves">
-          ${Array.from({ length: 18 }, (_, index) => `<i style="--bottle:${(index % 5) + 1}"></i>`).join("")}
+      <div class="harbor-hero harbor-hero--bar" aria-hidden="true">
+        <img class="harbor-hero__image" src="./assets/harbor/speakeasy-harbor.png" alt="">
+        <div class="harbor-hero__overlay">
+          <span>Esos estek, whisky, pihenes</span>
+          <strong>Kikotoi kocsma</strong>
         </div>
-        <div class="harbor-bar-scene__counter"></div>
       </div>
       <div class="harbor-service-grid">
         <article class="harbor-service-card">
           <strong>Orvosi whiskey</strong>
           <span>+35 eletero</span>
-          <button type="button" data-harbor-buy="health">Megveszem - 45 $</button>
+          <small>Ersebb ital a kikoto embereitol. Gyors foltozas, dragabb aron.</small>
+          <button type="button" data-harbor-buy="health">Megveszem - 75 $</button>
         </article>
         <article class="harbor-service-card">
           <strong>Fekete kave</strong>
           <span>+35 energia</span>
-          <button type="button" data-harbor-buy="energy">Megveszem - 45 $</button>
+          <small>Forro, eros fekete. Osszerantja az embert egy ujabb akciohoz.</small>
+          <button type="button" data-harbor-buy="energy">Megveszem - 75 $</button>
         </article>
         <article class="harbor-service-card harbor-service-card--locked">
           <strong>Mentor ital</strong>
@@ -2948,18 +4029,30 @@ function renderHarborWarehouse(zone) {
 function renderHarborOrders(zone, kind = "mixed") {
   const orders = getHarborMissionsForZone(zone.id);
   setHarborPanelContent(zone, `
-    <section class="harbor-orders">
+    <section class="harbor-orders${kind === "fish" ? " harbor-orders--fish" : ""}">
+      ${kind === "fish" ? `
+        <div class="harbor-hero harbor-hero--fish" aria-hidden="true">
+          <img class="harbor-hero__image" src="./assets/harbor/fish-market-harbor.png" alt="">
+          <div class="harbor-hero__overlay">
+            <span>Friss aru, gyors alku, nedves rakpart</span>
+            <strong>Halpiaci megbizasok</strong>
+          </div>
+        </div>
+      ` : ""}
       <div class="harbor-orders__header">
         <span>${kind === "fish" ? "Halpiaci megbizasok" : "Csempesz megbizasok"}</span>
         <strong>${escapeHtml(zone.title)}</strong>
       </div>
-      <p class="harbor-orders__intro">A munka a felso folyamat korbe kerul. Jutalom csak akkor jar, amikor lejar.</p>
+      ${kind === "fish" ? "" : `<p class="harbor-orders__intro">A munka a felso folyamat korbe kerul. Jutalom csak akkor jar, amikor lejar.</p>`}
       <div class="harbor-orders__table">
         <div class="harbor-orders__row harbor-orders__row--head"><span>Munka</span><span>Igeny / aru</span><span>Ido</span><span>Jutalom</span><span></span></div>
         ${orders.map((mission) => {
           const affordable = canPayCargo(mission.requires);
           const needs = mission.requires ? formatCargoList(mission.requires) : `Szerez: ${formatCargoList(mission.gives)}`;
-          const reward = `+${mission.rewardMoney} $, +${mission.rewardXp} XP${mission.heal ? ", pihenes" : ""}`;
+          const chanceText = Number.isFinite(Number(mission.successChance)) && mission.successChance < 1
+            ? `, ${Math.round(Number(mission.successChance) * 100)}% esely`
+            : "";
+          const reward = `+${mission.rewardMoney} $, +${mission.rewardXp} XP${mission.heal ? ", pihenes" : ""}${chanceText}`;
           return `
           <div class="harbor-orders__row">
             <strong>${escapeHtml(mission.title)}</strong>
@@ -3018,12 +4111,378 @@ function renderHarborMarket(zone) {
   });
 }
 
+function upgradeHarborGarage() {
+  state.harborGarage = normalizeHarborGarage(state.harborGarage);
+  if (state.harborGarage.level >= 3) {
+    sceneRef?.setMessage("A muhely mar a legjobb szinten van.");
+    return false;
+  }
+  const cost = getHarborGarageUpgradeCost();
+  if (!canAfford(cost)) {
+    sceneRef?.setMessage("Nincs eleg penz a muhely fejlesztesere.");
+    return false;
+  }
+  state.money -= cost;
+  state.harborGarage.level += 1;
+  sceneRef?.refreshHUD();
+  sceneRef?.pushLog(`Garazs fejlesztve. Uj szint: ${state.harborGarage.level}.`);
+  sceneRef?.setMessage("A garazs muhelye fejlesztve lett.");
+  saveGame();
+  return true;
+}
+
+function activateGarageVehicle(vehicleId) {
+  state.harborGarage = normalizeHarborGarage(state.harborGarage);
+  const vehicle = getGarageVehicleById(vehicleId);
+  if (!vehicle) return false;
+  if (!state.harborGarage.unlockedVehicleIds.includes(vehicle.id)) {
+    if (state.harborGarage.level < vehicle.requiredLevel) {
+      sceneRef?.setMessage(`Ehhez a jarmuhhoz ${vehicle.requiredLevel}. szintu garazs kell.`);
+      return false;
+    }
+    if (!canAfford(vehicle.cost)) {
+      sceneRef?.setMessage("Nincs eleg penz a jarmuhoz.");
+      return false;
+    }
+    state.money -= vehicle.cost;
+    state.harborGarage.unlockedVehicleIds.push(vehicle.id);
+    state.harborGarage.unlockedVehicleIds = Array.from(new Set(state.harborGarage.unlockedVehicleIds));
+    sceneRef?.pushLog(`${vehicle.title} bekerult a garazsba.`);
+  }
+  state.harborGarage.activeVehicleId = vehicle.id;
+  sceneRef?.refreshHUD();
+  sceneRef?.setMessage(`${vehicle.title} lett az aktiv menekuloauto.`);
+  saveGame();
+  return true;
+}
+
+function getHarborGarageSceneHtml(vehicle, stats) {
+  const image = vehicle.image || "./garage-assets/sedan-1930.png";
+  return `
+    <div class="harbor-garage-scene" aria-hidden="true">
+      <img class="harbor-garage-scene__main-image" src="${escapeHtml(image)}" alt="${escapeHtml(vehicle.title)}">
+      <div class="harbor-garage-scene__glow"></div>
+      <div class="harbor-garage-scene__smoke harbor-garage-scene__smoke--one"></div>
+      <div class="harbor-garage-scene__smoke harbor-garage-scene__smoke--two"></div>
+      <div class="harbor-garage-scene__hud">
+        <strong>${escapeHtml(vehicle.title)}</strong>
+        <span>Sebesseg ${stats.speed} | Rejtettseg ${stats.stealth} | Teher ${stats.load} | Muhely mennyiseg +${stats.quantityBonus}</span>
+      </div>
+    </div>
+  `;
+}
+
+function renderGarageMissionList(stats) {
+  const activeVehicle = getActiveGarageVehicle();
+  return harborGarageMissionDefs.map((mission) => {
+    const requiredVehicle = getGarageVehicleById(mission.vehicleId);
+    const canRun = activeVehicle.id === requiredVehicle.id;
+    const missionStats = {
+      ...stats,
+      speed: requiredVehicle.speed,
+      stealth: requiredVehicle.stealth,
+      load: requiredVehicle.load,
+    };
+    const runConfig = getGarageMissionRunConfig(mission, missionStats, requiredVehicle);
+    const rewardText = `+${runConfig.rewardMoney} $, +${runConfig.rewardXp} XP, rakomany: ${formatCargoList(runConfig.cargoReward)}`;
+    return `
+      <article class="harbor-garage-mission${canRun ? "" : " is-locked"}">
+        <span>${escapeHtml(requiredVehicle.title)} kell</span>
+        <strong>${escapeHtml(mission.title)}</strong>
+        <small>${escapeHtml(mission.description)}</small>
+        <div class="harbor-garage-mission__meta">
+          <em>${runConfig.requiredHits}/${runConfig.totalRounds} tiszta atjutas</em>
+          <em>Muhely bonusz: +${stats.quantityBonus} mennyiseg minden jutalomra</em>
+          <em>${escapeHtml(rewardText)}</em>
+        </div>
+        <button type="button" data-garage-mission="${mission.id}" ${canRun ? "" : "disabled"}>
+          ${canRun ? "Mini-jatek inditasa" : `${requiredVehicle.title} kell`}
+        </button>
+      </article>
+    `;
+  }).join("");
+}
+
+function renderGarageVehicleList() {
+  return harborGarageVehicleDefs.map((vehicle) => {
+    const unlocked = state.harborGarage.unlockedVehicleIds.includes(vehicle.id);
+    const active = state.harborGarage.activeVehicleId === vehicle.id;
+    const levelLocked = state.harborGarage.level < vehicle.requiredLevel;
+    let buttonLabel = active ? "Aktiv" : (unlocked ? "Hasznalom" : `${vehicle.cost} $`);
+    if (levelLocked && !unlocked) buttonLabel = `${vehicle.requiredLevel}. szint kell`;
+    return `
+      <article class="harbor-garage-vehicle${active ? " is-active" : ""}${unlocked ? "" : " is-locked"}">
+        <img class="harbor-garage-vehicle__image" src="${escapeHtml(vehicle.image || "./assets/garage/sedan.svg")}" alt="${escapeHtml(vehicle.title)}">
+        <span>${escapeHtml(vehicle.accent)}</span>
+        <strong>${escapeHtml(vehicle.title)}</strong>
+        <small>${escapeHtml(vehicle.description)}</small>
+        <small>${escapeHtml(vehicle.lootText || "")}</small>
+        <small>Seb. ${vehicle.speed} | Rejt. ${vehicle.stealth} | Teher ${vehicle.load} | Muhely: csak mennyiseg bonusz</small>
+        <button type="button" data-garage-vehicle="${vehicle.id}" ${active || levelLocked ? "disabled" : ""}>${escapeHtml(buttonLabel)}</button>
+      </article>
+    `;
+  }).join("");
+}
+
+function bindHarborGarageControls(zone) {
+  if (!harborOperationPanel) return;
+  harborOperationPanel.querySelectorAll("[data-garage-vehicle]").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (activateGarageVehicle(button.dataset.garageVehicle)) {
+        renderHarborGarage(zone);
+      }
+    });
+  });
+  harborOperationPanel.querySelectorAll("[data-garage-upgrade]").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (upgradeHarborGarage()) {
+        renderHarborGarage(zone);
+      }
+    });
+  });
+  harborOperationPanel.querySelectorAll("[data-garage-mission]").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      startGarageMission(button.dataset.garageMission);
+    });
+  });
+  harborOperationPanel.querySelectorAll("[data-garage-hit]").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      resolveGarageCheckpoint();
+    });
+  });
+  harborOperationPanel.querySelectorAll("[data-garage-abort]").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      stopGarageMiniGame(true);
+      renderHarborGarage(zone);
+      sceneRef?.setMessage("A fuvar megszakadt, visszafordultal a garazsba.");
+    });
+  });
+}
+
+function renderGarageMiniGame(zone, mission) {
+  const vehicle = getActiveGarageVehicle();
+  const stats = getHarborGarageStats();
+  const gameState = garageMiniGameState;
+  const checkpointLabel = `${Math.min(gameState.round, gameState.totalRounds)}/${gameState.totalRounds}`;
+  const penaltyPercent = Math.round((1 - getGarageMissPenaltyFactor(gameState.misses)) * 100);
+  setHarborPanelContent(zone, `
+    <section class="harbor-garage">
+      ${getHarborGarageSceneHtml(vehicle, stats)}
+      <div class="harbor-operation-panel__stats">
+        <div><span>Mission</span><strong>${escapeHtml(mission.title)}</strong></div>
+        <div><span>Tiszta pont</span><strong>${gameState.hits}/${gameState.requiredHits}</strong></div>
+        <div><span>Ellenorzes</span><strong>${checkpointLabel}</strong></div>
+        <div><span>Felrenyomas</span><strong>${gameState.misses}</strong></div>
+      </div>
+      <div class="garage-minigame">
+        <p class="harbor-operation-panel__muted">Akkor nyomj ra, amikor a jelolo a zold savban van. Minden kattintas utan szukul a zold sav, a felrenyomas pedig csokkenti a jutalmat.</p>
+        <div class="garage-minigame__meter">
+          <div class="garage-minigame__safe-zone" style="left:${(gameState.safeCenter - gameState.safeWidth / 2) * 100}%; width:${gameState.safeWidth * 100}%"></div>
+          <div class="garage-minigame__needle" style="left:${gameState.pointer * 100}%"></div>
+        </div>
+        <div class="garage-minigame__status">
+          <strong>${escapeHtml(gameState.statusText)}</strong>
+          <span>${escapeHtml(gameState.logText)}${penaltyPercent > 0 ? ` Jutalomlevonas: ${penaltyPercent}%.` : ""}</span>
+        </div>
+        <div class="garage-minigame__actions">
+          <button type="button" data-garage-hit>Atcsuszas</button>
+        </div>
+      </div>
+    </section>
+  `);
+  bindHarborGarageControls(zone);
+  startGarageMiniGameLoop();
+}
+
+function finishGarageMission(success, reason = "") {
+  const gameState = garageMiniGameState;
+  if (!gameState) return false;
+  const mission = getGarageMissionById(gameState.missionId);
+  const zone = harborZoneDefs.find((entry) => entry.id === "garage") || { id: "garage", title: "Garazs", note: "Jarmuvek kesobb." };
+  stopGarageMiniGame(true);
+  if (!mission) {
+    renderHarborGarage(zone);
+    return false;
+  }
+  if (success) {
+    const penaltyFactor = getGarageMissPenaltyFactor(gameState.misses);
+    const finalRewardMoney = Math.max(20, Math.round(gameState.rewardMoney * penaltyFactor));
+    const finalRewardXp = Math.max(6, Math.round(gameState.rewardXp * penaltyFactor));
+    const finalCargoReward = scaleGarageRewardCargoForMisses(gameState.cargoReward, gameState.misses);
+    state.money += finalRewardMoney;
+    applyFame(finalRewardXp);
+    const heatGain = applyHeat(mission.heatSuccess);
+    addCargo(finalCargoReward);
+    state.smugglerFame = Math.max(0, Math.round(Number(state.smugglerFame) || 0) + Math.max(2, Math.round(finalRewardXp / 4)));
+    state.harborGarage.wins = Math.max(0, Math.round(Number(state.harborGarage.wins) || 0)) + 1;
+    sceneRef?.pushLog(`${mission.title} sikeres auto-csempeszet volt. +${finalRewardMoney} $, +${finalRewardXp} XP, felrenyomas: ${gameState.misses}.`);
+    sceneRef?.setMessage(`${mission.title} sikerult. Felrenyomas: ${gameState.misses}, a jutalom ehhez igazodott.`);
+    queueRewardModal({
+      title: "Auto csempeszet sikeres",
+      text: `${mission.title} lefutott. Felrenyomas: ${gameState.misses}. Zsakmany: ${formatCargoList(finalCargoReward)}.`,
+      money: finalRewardMoney,
+      xp: finalRewardXp,
+      fame: finalRewardXp,
+    });
+    addLocalNotification(
+      "Feladat vege",
+      `${mission.title} sikerult. Felrenyomas: ${gameState.misses}. Jutalom: +${finalRewardMoney} $, +${finalRewardXp} XP, rakomany: ${formatCargoList(finalCargoReward)}. Korozes +${heatGain}%.`,
+      { messageType: "event" },
+    );
+  } else {
+    const penalty = Math.min(state.money, mission.failurePenalty);
+    state.money = Math.max(0, state.money - penalty);
+    const heatGain = applyHeat(mission.heatFail);
+    state.harborGarage.losses = Math.max(0, Math.round(Number(state.harborGarage.losses) || 0)) + 1;
+    sceneRef?.pushLog(`${mission.title} megbukott. -${penalty} $, +${heatGain}% korozes.`);
+    sceneRef?.setMessage(reason || "A csempeszut balul sult el, a rendorseg rajtad maradt.");
+    queueRewardModal({
+      title: "Auto csempeszet elbukott",
+      text: mission.title,
+      money: -penalty,
+      xp: 0,
+      fame: 0,
+      showZeroValues: true,
+    });
+    addLocalNotification(
+      "Feladat vege",
+      `${mission.title} elbukott. Veszteseg: -${penalty} $, korozes +${heatGain}%.`,
+      { messageType: "event" },
+    );
+  }
+  sceneRef?.refreshHUD();
+  saveGame();
+  renderHarborGarage(zone);
+  return success;
+}
+
+function resolveGarageCheckpoint() {
+  const gameState = garageMiniGameState;
+  const mission = gameState ? getGarageMissionById(gameState.missionId) : null;
+  if (!gameState || !mission) return false;
+  const success = isGarageCheckpointHit(gameState);
+  gameState.attempts = Math.max(0, Math.round(Number(gameState.attempts) || 0)) + 1;
+  if (success) {
+    gameState.hits += 1;
+    gameState.statusText = "Tiszta atjutas";
+    gameState.logText = "A rendororseg nem vette eszre a valtast, de a kovetkezo sav mar szukebb es gyorsabb.";
+  } else {
+    gameState.misses = Math.max(0, Math.round(Number(gameState.misses) || 0)) + 1;
+    gameState.statusText = "Tul kozel voltal";
+    gameState.logText = "A konvoj megakadt, ez levon a jutalombol, es a kovetkezo kor gyorsabb lesz.";
+  }
+  gameState.round += 1;
+  if (gameState.round > gameState.totalRounds) {
+    return finishGarageMission(gameState.hits >= gameState.requiredHits, "A konvoj lebukott az utolso ellenorzesnel.");
+  }
+  gameState.direction = Math.random() > 0.5 ? 1 : -1;
+  gameState.safeWidth = getGarageRoundSafeWidth(gameState, mission);
+  gameState.speed = getGarageAttemptSpeed(gameState, mission);
+  rollGarageCheckpoint(gameState);
+  renderGarageMiniGame(harborZoneDefs.find((entry) => entry.id === "garage") || { id: "garage", title: "Garazs" }, mission);
+  return success;
+}
+
+function startGarageMission(missionId) {
+  state.harborGarage = normalizeHarborGarage(state.harborGarage);
+  const mission = getGarageMissionById(missionId);
+  if (!mission) return false;
+  const vehicle = getActiveGarageVehicle();
+  const requiredVehicle = getGarageVehicleById(mission.vehicleId);
+  if (vehicle.id !== requiredVehicle.id) {
+    sceneRef?.setMessage(`${mission.title} csak ezzel indulhat: ${requiredVehicle.title}.`);
+    return false;
+  }
+  const stats = getHarborGarageStats();
+  const runConfig = getGarageMissionRunConfig(mission, stats, vehicle);
+  garageMiniGameState = {
+    missionId: mission.id,
+    round: 1,
+    hits: 0,
+    misses: 0,
+    attempts: 0,
+    totalRounds: runConfig.totalRounds,
+    requiredHits: runConfig.requiredHits,
+    rewardMoney: runConfig.rewardMoney,
+    rewardXp: runConfig.rewardXp,
+    cargoReward: runConfig.cargoReward,
+    direction: 1,
+    pointer: 0.08,
+    safeCenter: 0.5,
+    baseSafeWidth: clamp(mission.baseSafeWidth + stats.stealth * 0.018, 0.14, 0.34),
+    safeWidth: clamp(mission.baseSafeWidth + stats.stealth * 0.018, 0.14, 0.34),
+    baseSpeed: Math.max(0.018, mission.baseSpeed - stats.speed * 0.0022),
+    speed: Math.max(0.018, mission.baseSpeed - stats.speed * 0.0022),
+    statusText: "Motorok indulnak",
+    logText: "Vidd at a jelolot a zold savon a megfelelo pillanatban.",
+  };
+  rollGarageCheckpoint(garageMiniGameState);
+  renderGarageMiniGame(harborZoneDefs.find((entry) => entry.id === "garage") || { id: "garage", title: "Garazs" }, mission);
+  sceneRef?.setMessage(`${mission.title} elindult. Most a menekuloauto reakcioja dont.`);
+  return true;
+}
+
+function renderHarborGarage(zone) {
+  state.harborGarage = normalizeHarborGarage(state.harborGarage);
+  const vehicle = getActiveGarageVehicle();
+  const stats = getHarborGarageStats();
+  const upgradeCost = getHarborGarageUpgradeCost();
+  if (garageMiniGameState) {
+    const mission = getGarageMissionById(garageMiniGameState.missionId);
+    if (mission) {
+      renderGarageMiniGame(zone, mission);
+      return;
+    }
+  }
+  setHarborPanelContent(zone, `
+    <section class="harbor-garage">
+      ${getHarborGarageSceneHtml(vehicle, stats)}
+      <div class="harbor-operation-panel__stats">
+        <div><span>Muhely</span><strong>${state.harborGarage.level}. szint</strong></div>
+        <div><span>Sikeres utak</span><strong>${state.harborGarage.wins}</strong></div>
+        <div><span>Bukott utak</span><strong>${state.harborGarage.losses}</strong></div>
+      </div>
+      <div class="harbor-garage-workshop">
+        <div>
+          <span>Muhely fejlesztes</span>
+          <strong>${state.harborGarage.level >= 3 ? "A garazs teljesen ki van epitve." : `Kovetkezo fejlesztes: ${upgradeCost} $`}</strong>
+          <small>A muhely nem nyit uj fuvar tipust, csak a jutalmak mennyiseget noveli: jelenleg +${stats.quantityBonus}.</small>
+        </div>
+        <button type="button" data-garage-upgrade ${state.harborGarage.level >= 3 ? "disabled" : ""}>${state.harborGarage.level >= 3 ? "Max" : "Muhely fejlesztese"}</button>
+      </div>
+      <div class="harbor-garage-grid">
+        <section class="harbor-garage-section">
+          <header><span>Autok</span><strong>Aktiv menekulojarmuvek</strong></header>
+          <div class="harbor-garage-vehicles">${renderGarageVehicleList()}</div>
+        </section>
+        <section class="harbor-garage-section">
+          <header><span>Fuvarok</span><strong>Auto-csempesz mini-jatekok</strong></header>
+          <div class="harbor-garage-missions">${renderGarageMissionList(stats)}</div>
+        </section>
+      </div>
+    </section>
+  `);
+  bindHarborGarageControls(zone);
+}
+
 function renderHarborZonePanel(zone) {
+  if (zone.id !== "garage") stopGarageMiniGame(true);
   if (zone.id === "bar") return renderHarborBar(zone);
   if (zone.id === "warehouse") return renderHarborWarehouse(zone);
   if (zone.id === "office") return renderHarborOffice(zone);
   if (zone.id === "market") return renderHarborMarket(zone);
-  if (["docks", "customs", "rail", "fish", "storage"].includes(zone.id)) return renderHarborOrders(zone, zone.id === "fish" ? "fish" : "mixed");
+  if (zone.id === "garage") return renderHarborGarage(zone);
+  if (["docks", "customs", "rail", "fish"].includes(zone.id)) return renderHarborOrders(zone, zone.id === "fish" ? "fish" : "mixed");
   setHarborPanelContent(zone, `
     <section class="harbor-place">
       <p class="harbor-operation-panel__muted">${escapeHtml(zone.note)}</p>
@@ -3061,7 +4520,7 @@ function startHarborMission(missionId) {
       rewardXp: mission.rewardXp,
       heal: mission.heal || 0,
       energy: mission.energy || 0,
-      successChance: mission.zone === "fish" ? 1 : 0.86,
+      successChance: Number.isFinite(Number(mission.successChance)) ? Number(mission.successChance) : (mission.zone === "fish" ? 1 : 0.86),
     },
   }, "harbor");
   if (!queued) return false;
@@ -3073,6 +4532,32 @@ function startHarborMission(missionId) {
 }
 
 function handleHarborPanelClick(event) {
+  event.preventDefault();
+  event.stopPropagation();
+  const garageHitButton = event.target.closest("[data-garage-hit]");
+  if (garageHitButton) {
+    resolveGarageCheckpoint();
+    return;
+  }
+  const garageVehicleButton = event.target.closest("[data-garage-vehicle]");
+  if (garageVehicleButton) {
+    if (activateGarageVehicle(garageVehicleButton.dataset.garageVehicle)) {
+      renderHarborGarage(harborZoneDefs.find((zone) => zone.id === "garage") || { id: "garage", title: "Garazs", note: "Jarmuvek kesobb." });
+    }
+    return;
+  }
+  const garageUpgradeButton = event.target.closest("[data-garage-upgrade]");
+  if (garageUpgradeButton) {
+    if (upgradeHarborGarage()) {
+      renderHarborGarage(harborZoneDefs.find((zone) => zone.id === "garage") || { id: "garage", title: "Garazs", note: "Jarmuvek kesobb." });
+    }
+    return;
+  }
+  const garageMissionButton = event.target.closest("[data-garage-mission]");
+  if (garageMissionButton) {
+    startGarageMission(garageMissionButton.dataset.garageMission);
+    return;
+  }
   const missionButton = event.target.closest("[data-harbor-mission]");
   if (missionButton) {
     startHarborMission(missionButton.dataset.harborMission);
@@ -3082,7 +4567,7 @@ function handleHarborPanelClick(event) {
   const buyButton = event.target.closest("[data-harbor-buy]");
   if (buyButton) {
     const kind = buyButton.dataset.harborBuy;
-    const cost = 45;
+    const cost = 75;
     if (!canAfford(cost)) {
       sceneRef?.setMessage("Nincs eleg penz az italra.");
       return;
@@ -3169,6 +4654,8 @@ function showHarborMapView() {
 }
 
 function hideHarborMapView() {
+  stopGarageMiniGame(true);
+  hideQuestCard();
   hideHarborOperationPanel();
   hideAuxPanel();
   hideMessagesDialog();
@@ -3204,7 +4691,7 @@ async function openAuxPanel(kind) {
   if (kind === "market") {
     try {
       if (state.profileName) {
-        const response = await fetch(`/api/market-items?profileName=${encodeURIComponent(state.profileName)}&limit=50`, {
+        const response = await fetch("/api/market-items?limit=50", {
           headers: { Accept: "application/json" },
         });
         const payload = response.ok ? await response.json() : { items: [] };
@@ -3377,6 +4864,35 @@ function normalizeOfferedQuestList(quests) {
   return normalized.filter((quest) => quest.status === "offered").slice(0, 3);
 }
 
+function removeQuestFromActiveList(targetQuest) {
+  const quests = Array.isArray(state.activeQuests)
+    ? state.activeQuests.map(normalizeQuest).filter(Boolean)
+    : [];
+  if (!targetQuest) {
+    state.activeQuests = quests;
+    return;
+  }
+
+  const exactIndex = quests.findIndex((entry) =>
+    entry.id === targetQuest.id
+    && entry.spotId === targetQuest.spotId
+    && entry.createdAt === targetQuest.createdAt,
+  );
+
+  const fallbackIndex = exactIndex >= 0
+    ? exactIndex
+    : quests.findIndex((entry) => entry.id === targetQuest.id);
+
+  if (fallbackIndex >= 0) {
+    quests.splice(fallbackIndex, 1);
+  }
+
+  state.activeQuests = quests.slice(0, 2);
+  if (state.activeQuest?.id === targetQuest.id) {
+    state.activeQuest = null;
+  }
+}
+
 
 function buildQuestReward(questType, difficulty) {
   if (isEarlyGameAccelerated()) {
@@ -3459,16 +4975,16 @@ function getQuestAtSpot(spotId) {
 }
 
 const mentorSteps = [
-  { id: "base", title: "Elso munka", text: "Valaszd ki a fo bazisod.", reward: { money: 80, xp: 10 } },
-  { id: "crew", title: "Ember a bandaba", text: "Vegyel fel vagy fejlessz egy bandatagot.", reward: { money: 90, xp: 12 } },
-  { id: "equip", title: "Oltozz munkahoz", text: "Szerelj fel egy targyat a karakteredre.", reward: { money: 70, xp: 12, item: true } },
-  { id: "robbery", title: "Zold celpont", text: "Rabolj ki egy konnyu hazat.", reward: { money: 110, xp: 16 } },
-  { id: "protection", title: "Utcai ado", text: "Szedj vedelmi penzt egy hazbol.", reward: { money: 120, xp: 16 } },
-  { id: "quest", title: "Atadas", text: "Fejezz be es adj at egy kuldetest.", reward: { money: 130, xp: 20 } },
-  { id: "rest", title: "Biztos hely", text: "Pihenj a fo bazisodon.", reward: { money: 90, xp: 14 } },
-  { id: "world", title: "Nagyvilag", text: "Nezd meg a vilagterkepet.", reward: { money: 100, xp: 15 } },
-  { id: "level5", title: "Nevet szerzel", text: "Erd el az 5. szintet.", reward: { money: 180, xp: 30, item: true } },
-  { id: "harbor", title: "Kikotoi kapu", text: "Lepj be a kikoto negyedbe.", reward: { money: 220, xp: 35 } },
+  { id: "base", title: "Elso munka", text: "Valaszd ki a lakohazadat.", reward: { money: 80, xp: 2 } },
+  { id: "crew", title: "Ember a bandaba", text: "Vegyel fel vagy fejlessz egy bandatagot.", reward: { money: 90, xp: 2 } },
+  { id: "equip", title: "Oltozz munkahoz", text: "Szereld fel a fegyvert a karakteredre.", reward: { money: 70, xp: 2 } },
+  { id: "robbery", title: "Zold celpont", text: "Rabolj ki egy konnyu hazat.", reward: { money: 110, xp: 2 } },
+  { id: "protection", title: "Utcai ado", text: "Szedj vedelmi penzt egy hazbol.", reward: { money: 120, xp: 2 } },
+  { id: "quest", title: "Atadas", text: "Vegyel fel es adj le egy kuldetest.", reward: { money: 130, xp: 2 } },
+  { id: "rest", title: "Biztos hely", text: "Pihenj a fo bazisodon.", reward: { money: 90, xp: 1 } },
+  { id: "world", title: "Nagyvilag", text: "Nezd meg a vilagterkepet.", reward: { money: 100, xp: 2 } },
+  { id: "level5", title: "Nevet szerzel", text: "Erd el az 5. szintet.", reward: { money: 180, xp: 8 } },
+  { id: "harbor", title: "Kikotoi kapu", text: "Lepj be a kikoto negyedbe.", reward: { money: 220, xp: 10 } },
 ];
 
 function getCurrentMentorStep() {
@@ -3479,7 +4995,6 @@ function getCurrentMentorStep() {
 function shouldShowMentorHud() {
   return Boolean(state.registered)
     && !state.mentorCompleted
-    && getRankLevel(state.fame) <= 1
     && Boolean(getCurrentMentorStep());
 }
 
@@ -3488,13 +5003,15 @@ function getMentorRewardText(step) {
   const parts = [];
   if (step.reward.money) parts.push(`+${step.reward.money} $`);
   if (step.reward.xp) parts.push(`+${step.reward.xp} XP`);
-  if (step.reward.item) parts.push("szurke targy");
   return `Jutalom: ${parts.join(", ")}`;
 }
 
 function updateMentorPanel() {
   const visible = shouldShowMentorHud();
   const step = getCurrentMentorStep();
+  if (visible && step && hudMentorCard?.dataset.userClosed !== "true") {
+    mentorCardOpen = true;
+  }
   hudMentorToggle?.classList.toggle("hidden", !visible);
   hudMentorToggle?.classList.toggle("is-attention", visible && !mentorCardOpen);
   hudMentorCard?.classList.toggle("hidden", !(visible && mentorCardOpen));
@@ -3510,28 +5027,12 @@ function grantMentorReward(step) {
   if (!step?.reward) return;
   if (step.reward.money) state.money += step.reward.money;
   if (step.reward.xp) applyFame(step.reward.xp);
-  let unlockedItemName = "";
-  if (step.reward.item) {
-    const rewardItem = step.id === "level5"
-      ? {
-        ...equipmentCatalog.weapon[1],
-        id: `mentor-thompson-${Date.now()}`,
-      }
-      : {
-        ...equipmentCatalog.hat[1],
-        id: `mentor-fedora-${Date.now()}`,
-      };
-    const rewardSlot = step.id === "level5" ? "weapon" : "hat";
-    const unlockedItem = unlockEquipmentItem(rewardSlot, rewardItem);
-    unlockedItemName = unlockedItem?.name || rewardItem.name;
-  }
   queueRewardModal({
     title: "Mentor jutalom",
     text: `${step.title} teljesitve.`,
     money: step.reward.money || 0,
     xp: step.reward.xp || 0,
     fame: step.reward.xp || 0,
-    itemName: unlockedItemName,
   });
 }
 
@@ -3548,6 +5049,9 @@ function completeMentorStep(stepId) {
   if (state.mentorStep >= mentorSteps.length) {
     state.mentorCompleted = true;
     mentorCardOpen = false;
+  } else {
+    mentorCardOpen = true;
+    if (hudMentorCard) delete hudMentorCard.dataset.userClosed;
   }
   sceneRef?.pushLog(`Mentor feladat teljesitve: ${step.title}.`);
   updateMentorPanel();
@@ -3638,10 +5142,24 @@ function hideQuestCard() {
   setQuestCardVisible(false);
 }
 
+function refreshOpenQuestCard() {
+  if (!questCardQuestId) return;
+  const quest =
+    normalizeOfferedQuestList(state.offeredQuests).find((entry) => entry.id === questCardQuestId)
+    || normalizeQuestList(state.activeQuests).find((entry) => entry.id === questCardQuestId)
+    || (state.activeQuest?.id === questCardQuestId ? normalizeQuest(state.activeQuest) : null);
+  if (!quest) {
+    hideQuestCard();
+    return;
+  }
+  showQuestCard(quest);
+}
+
 function updateQuestHud() {
   state.activeQuests = normalizeQuestList(state.activeQuests);
   const quests = state.activeQuests;
   if (hudQuestTab1) {
+    hudQuestTab1.classList.toggle("is-ready", quests[0]?.status === "completed");
     const label = quests[0]
       ? `I: ${quests[0].title}${quests[0].status === "completed" ? " [Kesz]" : ` (${quests[0].goal.progress}/${quests[0].goal.target})`}`
       : "I: nincs felvett kuldetes";
@@ -3650,6 +5168,7 @@ function updateQuestHud() {
     hudQuestTab1.setAttribute("aria-label", label);
   }
   if (hudQuestTab2) {
+    hudQuestTab2.classList.toggle("is-ready", quests[1]?.status === "completed");
     const label = quests[1]
       ? `II: ${quests[1].title}${quests[1].status === "completed" ? " [Kesz]" : ` (${quests[1].goal.progress}/${quests[1].goal.target})`}`
       : "II: nincs felvett kuldetes";
@@ -3657,6 +5176,7 @@ function updateQuestHud() {
     hudQuestTab2.dataset.label = label;
     hudQuestTab2.setAttribute("aria-label", label);
   }
+  refreshOpenQuestCard();
 }
 
 function acceptActiveQuest() {
@@ -3708,7 +5228,7 @@ function grantQuestReward(quest) {
   applyFame(quest.xpReward);
   applyHeat(4);
   completeMentorStep("quest");
-  state.activeQuests = normalizeQuestList(state.activeQuests).filter((entry) => entry.id !== quest.id);
+  removeQuestFromActiveList(quest);
   state.selectedQuestSlot = clamp(state.selectedQuestSlot, 0, Math.max(0, state.activeQuests.length - 1));
   sceneRef?.pushLog(
     modernReward
@@ -3741,7 +5261,7 @@ function deleteQuest(quest) {
     sceneRef?.setMessage("Ezt a kuldetest most nem lehet torolni.");
     return false;
   }
-  state.activeQuests = normalizeQuestList(state.activeQuests).filter((entry) => entry.id !== quest.id);
+  removeQuestFromActiveList(quest);
   state.selectedQuestSlot = clamp(state.selectedQuestSlot, 0, Math.max(0, state.activeQuests.length - 1));
   sceneRef?.pushLog(`Kuldetes torolve: ${quest.spotName}.`);
   sceneRef?.setMessage(`${quest.spotName} kuldetese torolve lett.`);
@@ -3774,6 +5294,106 @@ function handleQuestCardAction() {
   sceneRef?.setMessage("Elobb teljesitsd a feladatot.");
 }
 
+const mainQuestTemplateDefs = {
+  early: [
+    {
+      type: "robbery",
+      title: "Gyors kassza",
+      description: "Rabolj ki 1 boltot a varosban.",
+      objective: "1 sikeres bolti kirablas.",
+      goal: { action: "robbery", mode: "shop", target: 1, progress: 0 },
+      xp: 5,
+      money: 150,
+    },
+    {
+      type: "robbery",
+      title: "Utcai villanas",
+      description: "Hajts vegre 2 sikeres kirablast.",
+      objective: "2 sikeres kirablas barmelyik epuletnel.",
+      goal: { action: "robbery", mode: "any", target: 2, progress: 0 },
+      xp: 5,
+      money: 165,
+    },
+    {
+      type: "protection",
+      title: "Elso boritek",
+      description: "Szedj be vedelmi penzt 1 helyrol.",
+      objective: "1 sikeres vedelmi penz beszedese.",
+      goal: { action: "protection", mode: "any", target: 1, progress: 0 },
+      xp: 5,
+      money: 145,
+    },
+  ],
+  standard: [
+    {
+      type: "robbery",
+      title: "Bolti szuret",
+      description: "Rabolj ki 2 boltot a varosban.",
+      objective: "Sikeres kirablas 2 shop/bolt tipusu hazon.",
+      goal: { action: "robbery", mode: "shop", target: 2, progress: 0 },
+      xp: 32,
+      money: 140,
+    },
+    {
+      type: "robbery",
+      title: "Negy utcai meló",
+      description: "Hajts vegre 4 sikeres kirablast barmelyik hazon.",
+      objective: "4 sikeres kirablas barmelyik epuletnel.",
+      goal: { action: "robbery", mode: "any", target: 4, progress: 0 },
+      xp: 46,
+      money: 210,
+    },
+    {
+      type: "protection",
+      title: "Vedett kirakatok",
+      description: "Szedj be vedelmi penzt 3 helyrol.",
+      objective: "3 sikeres vedelmi penz beszedese.",
+      goal: { action: "protection", mode: "any", target: 3, progress: 0 },
+      xp: 36,
+      money: 170,
+    },
+    {
+      type: "robbery",
+      title: "Gazdag celpont",
+      description: "Rabolj ki egy boltot a(z) {district} kornyeken.",
+      objective: "1 sikeres bolti kirablas.",
+      goal: { action: "robbery", mode: "shop", target: 1, progress: 0 },
+      xp: 24,
+      money: 110,
+    },
+  ],
+};
+
+function normalizeQuestTemplate(template, spot, phase = "standard") {
+  if (!template || typeof template !== "object") return null;
+  const districtName = districtDefs[spot?.districtIndex]?.name || "kerulet";
+  const goal = template.goal && typeof template.goal === "object" ? template.goal : null;
+  if (!goal || !goal.action || !goal.mode) return null;
+  return {
+    type: template.type === "protection" ? "protection" : "robbery",
+    title: typeof template.title === "string" ? template.title : "Kuldetes",
+    description: String(template.description || "").replaceAll("{district}", districtName),
+    objective: typeof template.objective === "string" ? template.objective : "",
+    goal: {
+      action: goal.action === "protection" ? "protection" : "robbery",
+      mode: goal.mode === "shop" ? "shop" : "any",
+      target: Math.max(1, Math.round(Number(goal.target) || 1)),
+      progress: 0,
+    },
+    xp: phase === "early"
+      ? Math.min(5, Math.max(0, Math.round(Number(template.xp) || 0)))
+      : Math.max(0, Math.round(Number(template.xp) || 0)),
+    money: Math.max(0, Math.round(Number(template.money) || 0)),
+  };
+}
+
+function getMainQuestTemplates(spot) {
+  const phase = isEarlyGameAccelerated() ? "early" : "standard";
+  const templates = Array.isArray(mainQuestTemplateDefs[phase]) ? mainQuestTemplateDefs[phase] : [];
+  const normalized = templates.map((template) => normalizeQuestTemplate(template, spot, phase)).filter(Boolean);
+  return normalized.length ? normalized : mainQuestTemplateDefs.standard.map((template) => normalizeQuestTemplate(template, spot, "standard")).filter(Boolean);
+}
+
 function scheduleNextQuestSpawn(baseDelay = null) {
   const delay = Number.isFinite(baseDelay)
     ? baseDelay
@@ -3792,80 +5412,16 @@ function spawnRandomQuest() {
   const spots = clickableBuildingDefs.filter((spot) => spot.id !== state.mainBaseSpotId && !occupiedSpotIds.has(spot.id));
   if (!spots.length) return false;
   const spot = spots[randomInt(0, spots.length - 1)];
-  const questTemplates = isEarlyGameAccelerated()
-    ? [
-      {
-        type: "robbery",
-        title: "Gyors kassza",
-        description: "Rabolj ki 1 boltot a varosban.",
-        objective: "1 sikeres bolti kirablas.",
-        goal: { action: "robbery", mode: "shop", target: 1, progress: 0 },
-        xp: 38,
-        money: 150,
-      },
-      {
-        type: "robbery",
-        title: "Utcai villanas",
-        description: "Hajts vegre 2 sikeres kirablast.",
-        objective: "2 sikeres kirablas barmelyik epuletnel.",
-        goal: { action: "robbery", mode: "any", target: 2, progress: 0 },
-        xp: 42,
-        money: 165,
-      },
-      {
-        type: "protection",
-        title: "Elso boritek",
-        description: "Szedj be vedelmi penzt 1 helyrol.",
-        objective: "1 sikeres vedelmi penz beszedese.",
-        goal: { action: "protection", mode: "any", target: 1, progress: 0 },
-        xp: 34,
-        money: 145,
-      },
-    ]
-    : [
-      {
-        type: "robbery",
-        title: "Bolti szuret",
-        description: "Rabolj ki 2 boltot a varosban.",
-        objective: "Sikeres kirablas 2 shop/bolt tipusu hazon.",
-        goal: { action: "robbery", mode: "shop", target: 2, progress: 0 },
-        xp: 32,
-        money: 140,
-      },
-      {
-        type: "robbery",
-        title: "Negy utcai meló",
-        description: "Hajts vegre 4 sikeres kirablast barmelyik hazon.",
-        objective: "4 sikeres kirablas barmelyik epuletnel.",
-        goal: { action: "robbery", mode: "any", target: 4, progress: 0 },
-        xp: 46,
-        money: 210,
-      },
-      {
-        type: "protection",
-        title: "Vedett kirakatok",
-        description: "Szedj be vedelmi penzt 3 helyrol.",
-        objective: "3 sikeres vedelmi penz beszedese.",
-        goal: { action: "protection", mode: "any", target: 3, progress: 0 },
-        xp: 36,
-        money: 170,
-      },
-      {
-        type: "robbery",
-        title: "Gazdag celpont",
-        description: `Rabolj ki egy boltot a(z) ${districtDefs[spot.districtIndex]?.name || "kerulet"} kornyeken.`,
-        objective: "1 sikeres bolti kirablas.",
-        goal: { action: "robbery", mode: "shop", target: 1, progress: 0 },
-        xp: 24,
-        money: 110,
-      },
-    ];
+  const questTemplates = getMainQuestTemplates(spot);
+  if (!questTemplates.length) return false;
   const template = questTemplates[randomInt(0, questTemplates.length - 1)];
   const questType = template.type;
   const difficulty = getBuildingDifficulty(spot);
   const reward = Math.random() < (isEarlyGameAccelerated() ? 0.78 : 0.45) ? buildQuestReward(questType, difficulty) : null;
   const offeredQuest = {
-    id: `quest-${Date.now()}-${randomInt(1000, 9999)}`,
+    id: typeof crypto?.randomUUID === "function"
+      ? `quest-${crypto.randomUUID()}`
+      : `quest-${Date.now()}-${randomInt(1000, 9999)}-${randomInt(1000, 9999)}`,
     spotId: spot.id,
     spotName: spot.name,
     districtName: districtDefs[spot.districtIndex]?.name || "Kerulet",
@@ -3876,7 +5432,7 @@ function spawnRandomQuest() {
     objective: template.objective,
     reward,
     moneyReward: template.money + Math.round(difficulty * 1.4),
-    xpReward: template.xp + Math.floor(difficulty / 5),
+    xpReward: template.xp + Math.floor(difficulty / (isEarlyGameAccelerated() ? 18 : 5)),
     goal: template.goal,
     createdAt: Date.now(),
   };
@@ -3888,7 +5444,6 @@ function spawnRandomQuest() {
   saveGame();
   sceneRef?.refreshHUD();
   sceneRef?.refreshMap();
-  showQuestCard(offeredQuest);
   return true;
 }
 
@@ -3929,12 +5484,7 @@ function completeQuest(actionType, spot) {
   state.selectedQuestSlot = clamp(state.selectedQuestSlot, 0, Math.max(0, state.activeQuests.length - 1));
   if (reachedCompletion) {
     scheduleNextQuestSpawn(randomInt(18000, 36000));
-    const currentQuest = getQuestSlot();
-    if (currentQuest?.status === "completed") {
-      showQuestCard(currentQuest);
-    } else {
-      updateQuestHud();
-    }
+    updateQuestHud();
   }
   saveGame();
   sceneRef?.refreshHUD();
@@ -4230,34 +5780,55 @@ function ensureProcessQueueStarted(kind = "main", now = Date.now()) {
 
 function renderProcessTasks(now = Date.now()) {
   if (!hudProcessTasks) return;
-  const renderGroup = (kind) => {
-    ensureProcessQueueStarted(kind, now);
-    const tasks = normalizeProcessTasks(getProcessTaskQueue(kind));
-    const slots = Array.from({ length: MAX_PROCESS_TASKS }, (_, index) => {
-      const task = tasks[index];
-      if (!task) {
-        return `<button class="hud-process-task hud-process-task--empty" type="button" title="${escapeHtml(getProcessTaskLabel(kind))}: szabad feladat hely"><span>+</span><strong>ures</strong></button>`;
-      }
-      const isActive = index === 0;
-      const elapsed = isActive && task.startedAt ? Math.max(0, now - task.startedAt) : 0;
-      const progress = isActive ? clamp((elapsed / task.durationMs) * 100, 0, 100) : 0;
-      const remaining = isActive ? Math.max(0, task.durationMs - elapsed) : task.durationMs;
-      return `
-        <button class="hud-process-task${isActive ? "" : " hud-process-task--waiting"}" type="button" title="${escapeHtml(getProcessTaskLabel(kind))}: ${escapeHtml(task.title)}" style="--process:${progress}%">
-          <span>${escapeHtml(task.icon)}</span>
-          <strong>${isActive ? formatCountdown(remaining) : "var"}</strong>
-          <em>${escapeHtml(task.title)}</em>
-        </button>
-      `;
-    }).join("");
+  const kind = "harbor";
+  ensureProcessQueueStarted(kind, now);
+  const tasks = normalizeProcessTasks(getProcessTaskQueue(kind));
+  const slots = Array.from({ length: MAX_PROCESS_TASKS }, (_, index) => {
+    const task = tasks[index];
+    if (!task) {
+      return `<button class="hud-process-task hud-process-task--empty" type="button" title="${escapeHtml(getProcessTaskLabel(kind))}: szabad feladat hely"><span>+</span><strong>ures</strong></button>`;
+    }
+    const isActive = index === 0;
+    const elapsed = isActive && task.startedAt ? Math.max(0, now - task.startedAt) : 0;
+    const progress = isActive ? clamp((elapsed / task.durationMs) * 100, 0, 100) : 0;
+    const remaining = isActive ? Math.max(0, task.durationMs - elapsed) : task.durationMs;
     return `
-      <div class="hud-process-group hud-process-group--${kind}">
-        <b>${escapeHtml(getProcessTaskLabel(kind))}</b>
-        <div class="hud-process-group__bubbles">${slots}</div>
-      </div>
+      <button
+        class="hud-process-task${isActive ? "" : " hud-process-task--waiting"}"
+        type="button"
+        data-process-kind="${kind}"
+        data-process-index="${index}"
+        title="${escapeHtml(getProcessTaskLabel(kind))}: ${escapeHtml(task.title)} - kattintasra torles"
+        style="--process:${progress}%">
+        <span>${escapeHtml(task.icon)}</span>
+        <strong>${isActive ? formatCountdown(remaining) : "var"}</strong>
+        <em>${escapeHtml(task.title)}</em>
+      </button>
     `;
-  };
-  hudProcessTasks.innerHTML = `${renderGroup("main")}${renderGroup("harbor")}`;
+  }).join("");
+  hudProcessTasks.innerHTML = `
+    <div class="hud-process-group hud-process-group--${kind}">
+      <b>${escapeHtml(getProcessTaskLabel(kind))}</b>
+      <div class="hud-process-group__bubbles">${slots}</div>
+    </div>
+  `;
+}
+
+function cancelProcessTask(kind = "harbor", index = 0) {
+  const normalizedKind = kind === "main" ? "main" : "harbor";
+  const taskIndex = Math.max(0, Math.round(Number(index) || 0));
+  const tasks = normalizeProcessTasks(getProcessTaskQueue(normalizedKind));
+  const [removed] = tasks.splice(taskIndex, 1);
+  if (!removed) return false;
+  if (tasks[0] && !tasks[0].startedAt) {
+    tasks[0].startedAt = Date.now();
+  }
+  setProcessTaskQueue(normalizedKind, tasks);
+  renderProcessTasks();
+  saveGame();
+  sceneRef?.setMessage(`${removed.title} torolve. A feladat helye felszabadult.`);
+  sceneRef?.pushLog(`${getProcessTaskLabel(normalizedKind)} feladat torolve: ${removed.title}.`);
+  return true;
 }
 
 function enqueueProcessTask(task, kind = task?.type === "harbor" ? "harbor" : "main") {
@@ -4403,9 +5974,7 @@ function syncProcessQueue(kind = "main", now = Date.now()) {
 }
 
 function syncProcessTasks(now = Date.now(), options = {}) {
-  const mainChanged = syncProcessQueue("main", now);
-  const harborChanged = syncProcessQueue("harbor", now);
-  const changed = mainChanged || harborChanged;
+  const changed = syncProcessQueue("harbor", now);
   if (!options.skipRender) renderProcessTasks(now);
   return changed;
 }
@@ -4717,6 +6286,7 @@ function syncTimedActions(now = Date.now()) {
     }
   });
 
+  if (syncWorldRivalStructureRepairs(now)) changed = true;
   if (syncProcessTasks(now)) changed = true;
   if (resolvePendingProtectionRewards(now)) changed = true;
   if (syncRivalEvent(now)) changed = true;
@@ -4734,7 +6304,10 @@ function canStartCombat(actionLabel = "Ezt a harcot") {
 
 function getEncounterEnemyPower(encounter = activeRobberyGame) {
   if (!encounter?.defenders?.length) return 0;
-  return encounter.defenders.reduce((sum, defender) => sum + Math.max(0, defender.attack || Math.round(defender.maxHealth * 0.4)), 0);
+  return encounter.defenders.reduce(
+    (sum, defender) => sum + Math.max(0, (defender.attack || 0) + (defender.defense || 0) + (defender.level || 1) * 3),
+    0,
+  );
 }
 
 function startRecovery(stat) {
@@ -5286,15 +6859,19 @@ function normalizeCrewMembers(members) {
   const savedMembers = Array.isArray(members) ? members : [];
   return crewMemberTemplates.map((template, index) => {
     const saved = savedMembers.find((member) => member?.id === template.id) || {};
+    const hasSavedMember = Boolean(savedMembers.find((member) => member?.id === template.id));
     const level = clamp(Number.isFinite(saved.level) ? Math.round(saved.level) : 1, 1, 20);
     const defenseLevel = clamp(Number.isFinite(saved.defenseLevel) ? Math.round(saved.defenseLevel) : 1, 1, 20);
-    const legacyOwned = index === 0
-      || saved.hired === true
-      || level > 1
-      || defenseLevel > 1
-      || Number(saved.attackBonus) > 0
-      || Number(saved.defenseBonus) > 0
-      || Number.isFinite(saved.health);
+    const hasEquipment = saved.equipment && typeof saved.equipment === "object"
+      && Object.values(saved.equipment).some((item) => item && typeof item === "object");
+    const legacyOwned = saved.hired === true
+      || (hasSavedMember && (
+        level > 1
+        || defenseLevel > 1
+        || Number(saved.attackBonus) > 0
+        || Number(saved.defenseBonus) > 0
+        || hasEquipment
+      ));
     return {
       ...template,
       hired: Boolean(legacyOwned),
@@ -5698,9 +7275,11 @@ function refreshCrewMemberPanel() {
       return `
         <button class="crew-member-equipment-slot${active ? " is-active" : ""}" type="button" data-crew-slot="${slot}">
           <img src="${item?.image || getEquipmentArt(slot)}" alt="">
-          <span>${equipmentSlotDefs[slot]?.label || slot}</span>
-          <strong>${item?.name || "Ures"}</strong>
-          <small>${item ? getEquipmentBonusText(slot, item.power, item.stat) : "Valassz targyat"}</small>
+          <span class="crew-member-equipment-copy">
+            <span>${equipmentSlotDefs[slot]?.label || slot}</span>
+            <strong>${item?.name || "Ures"}</strong>
+            <small>${item ? getEquipmentBonusText(slot, item.power, item.stat) : "Valassz targyat"}</small>
+          </span>
         </button>
       `;
     }).join("");
@@ -5783,8 +7362,12 @@ const robberyDefenderTemplates = {
   boss: { role: "Helyi főnök", icon: "B" },
 };
 
-function createRobberyDefenders(spot, difficulty) {
-  const count = difficulty >= 72 ? 4 : difficulty >= 44 ? 3 : 2;
+function createRobberyDefenders(spot, difficulty, forcedCount = null) {
+  const count = clamp(
+    Number.isFinite(Number(forcedCount)) ? Math.round(Number(forcedCount)) : (difficulty >= 72 ? 4 : difficulty >= 44 ? 3 : 2),
+    1,
+    4,
+  );
   const types = ["watcher", "bodyguard", "boss", "bodyguard"];
   const names = ["Salvatore", "Tommy", "Vincent", "Giovanni"];
 
@@ -5824,7 +7407,7 @@ function refreshRobberyGame() {
   if (robberyAlertText) robberyAlertText.textContent = `${Math.round(encounter.alert)}%`;
   if (robberyAlertFill) robberyAlertFill.style.width = `${encounter.alert}%`;
   if (robberyRound) robberyRound.textContent = `${encounter.round}. kör`;
-  if (robberyLoot) robberyLoot.textContent = `Zsákmány: ${encounter.loot} $`;
+  if (robberyLoot) robberyLoot.textContent = `Jutalom: ${getRobberyProjectedMoney(encounter)} $`;
   if (robberyInstruction) {
     const selected = encounter.defenders.find((defender) => defender.id === encounter.selectedDefenderId);
     robberyInstruction.textContent = selected?.health > 0
@@ -5883,13 +7466,22 @@ function showRobberyResult(success, title, text) {
   if (robberyAttack) robberyAttack.disabled = true;
 }
 
+function getRobberyProjectedMoney(encounter) {
+  if (!encounter) return 0;
+  const baseGain = encounter.mode === "shop" ? 30 : 18;
+  const rewardMultiplier = Number.isFinite(Number(encounter.rewardMultiplier)) ? Number(encounter.rewardMultiplier) : 1;
+  return Math.max(
+    5,
+    Math.round((baseGain + (Number(encounter.loot) || 0) + state.cityLevel * 4 + encounter.difficulty * 0.16) * rewardMultiplier),
+  );
+}
+
 function finishRobberySuccess() {
   const encounter = activeRobberyGame;
   if (!encounter || encounter.ended) return;
 
   const target = encounter.targetDistrict;
-  const baseGain = encounter.mode === "shop" ? 52 : 30;
-  const gain = Math.round(baseGain + encounter.loot + state.cityLevel * 8 + encounter.difficulty * 0.35);
+  const gain = getRobberyProjectedMoney(encounter);
   const fameGain = encounter.mode === "shop" ? 8 : 5;
   const heatGain = Math.round(7 + encounter.alert * 0.15);
   const actualHealthLost = Math.max(0, encounter.healthAtStart - state.health);
@@ -5922,11 +7514,10 @@ function finishRobberySuccess() {
   saveGame();
   sceneRef?.refreshHUD();
   sceneRef?.refreshMap();
-  showRobberyResult(
-    true,
-    "A rajtaütés sikerült",
-    `Zsákmány: +${gain} $ · XP: +${fameGain} · Sérülés: -${healthLost} · Körözés: +${appliedHeat}%`,
-  );
+  encounter.ended = true;
+  encounter.autoPlay = false;
+  clearRobberyAutoPlay();
+  closeRobberyGame();
 }
 
 function finishRobberyFailure(reason) {
@@ -6007,7 +7598,7 @@ function playRobberyTurn() {
   );
   defender.health = Math.max(0, defender.health - damage);
   const defeated = defender.health <= 0;
-  const lootGain = randomInt(7, 16) + (defeated ? randomInt(12, 24) : 0);
+  const lootGain = randomInt(4, 9) + (defeated ? randomInt(7, 15) : 0);
   encounter.loot += lootGain;
   encounter.alert = clamp(
     encounter.alert + tactic.alert + Math.round(encounter.difficulty / 22) + randomInt(0, 5) - (isStrong ? 4 : 0),
@@ -6063,6 +7654,8 @@ function retreatFromRobbery() {
 function closeRobberyGame() {
   clearRobberyAutoPlay();
   robberyGame?.classList.add("hidden");
+  robberyGame?.classList.remove("is-solo-battle");
+  robberyGame?.classList.remove("is-team-selection");
   robberyGame?.setAttribute("aria-hidden", "true");
   document.body.classList.remove("is-robbery-open");
   robberyResult?.classList.add("hidden");
@@ -6083,17 +7676,29 @@ function hideEquipmentPicker() {
 function equipInventoryItem(slot, itemId) {
   const item = state.itemInventory?.[slot]?.find((entry) => entry.id === itemId);
   if (!item) return;
+  if (state.equipment?.[slot]?.id === itemId) {
+    state.equipment[slot] = null;
+    recalculateGearPower();
+    sceneRef?.setMessage(`${item.name} leveve a karakteredrol.`);
+    refreshCharacterPanel();
+    saveGame();
+    if (activeEquipmentSlot === slot) showEquipmentPicker(slot);
+    return;
+  }
   if (isItemEquippedAnywhere(item.id, { owner: "player" })) {
     sceneRef?.setMessage("Ezt a targyat mar mas viseli.");
     return;
   }
   state.equipment[slot] = { ...item };
   recalculateGearPower();
-  state.mentorFlags.equippedItem = true;
-  completeMentorStep("equip");
+  if (slot === "weapon") {
+    state.mentorFlags.equippedItem = true;
+    completeMentorStep("equip");
+  }
   sceneRef?.setMessage(`${item.name} felveve a(z) ${equipmentSlotDefs[slot]?.label?.toLowerCase() || "felszereles"} helyere.`);
   refreshCharacterPanel();
   saveGame();
+  if (activeEquipmentSlot === slot) showEquipmentPicker(slot);
 }
 
 function showEquipmentPicker(slot) {
@@ -6137,7 +7742,7 @@ function refreshCharacterPanel() {
   if (characterDefense) characterDefense.textContent = String(getPlayerDefenseStat());
   if (characterFame) characterFame.textContent = String(state.fame);
   if (characterHeat) characterHeat.textContent = `${state.heat}%`;
-  if (characterCrew) characterCrew.textContent = String(getHiredCrewMembers().length || state.crew || 1);
+  if (characterCrew) characterCrew.textContent = String(getHiredCrewMembers().length);
   if (characterCityLevel) characterCityLevel.textContent = String(state.cityLevel || 1);
   if (characterXpSummary) {
     characterXpSummary.textContent = nextRankFame > state.fame
@@ -6235,11 +7840,16 @@ function showChoiceWheel(spot) {
   activeChoiceSpot = spot;
   if (!choiceWheel || !choiceWheelPanel) return;
   syncTimedActions();
+  hideQuestCard();
 
   const panelWidth = 188;
   const panelHeight = 224;
-  const x = clamp(spot.x, panelWidth / 2 + 16, window.innerWidth - panelWidth / 2 - 16);
-  const y = clamp(spot.y, panelHeight / 2 + 16, window.innerHeight - panelHeight / 2 - 16);
+  const viewportCenterX = window.innerWidth / 2;
+  const viewportCenterY = window.innerHeight / 2;
+  const inwardOffsetX = spot.x >= viewportCenterX ? -(panelWidth * 0.42) : panelWidth * 0.42;
+  const inwardOffsetY = spot.y >= viewportCenterY ? -(panelHeight * 0.18) : panelHeight * 0.18;
+  const x = clamp(spot.x + inwardOffsetX, panelWidth / 2 + 16, window.innerWidth - panelWidth / 2 - 16);
+  const y = clamp(spot.y + inwardOffsetY, panelHeight / 2 + 16, window.innerHeight - panelHeight / 2 - 16);
 
   choiceWheel.classList.remove("hidden");
   choiceWheel.setAttribute("aria-hidden", "false");
@@ -6607,20 +8217,33 @@ function rememberLastProfileName(name) {
   }
 }
 
+async function setActiveProfileSession(profileName) {
+  const normalizedProfileName = String(profileName || "").trim().slice(0, 18);
+  if (!normalizedProfileName) throw new Error("missing_profile");
+  const response = await fetch("/api/session", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ profileName: normalizedProfileName }),
+  });
+  if (!response.ok) {
+    throw new Error(`Session API error: ${response.status}`);
+  }
+  return response.json();
+}
+
+async function clearActiveProfileSession() {
+  try {
+    await fetch("/api/session", { method: "DELETE" });
+  } catch {
+    // Ignore session cleanup issues during reset.
+  }
+}
+
 function getRememberedProfileName() {
   try {
     return window.localStorage.getItem(LAST_PROFILE_KEY) || "";
   } catch {
     return "";
-  }
-}
-
-function getLegacyLocalSave() {
-  try {
-    const raw = LEGACY_STORAGE_KEYS.map((key) => window.localStorage.getItem(key)).find(Boolean);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
   }
 }
 
@@ -6646,6 +8269,7 @@ function createSaveSnapshot() {
     worldBaseLotId: state.worldBaseLotId,
     worldBaseLevel: state.worldBaseLevel,
     worldRivalCities: state.worldRivalCities,
+    npcVillageVictories: state.npcVillageVictories,
     needsWorldBaseSelection: state.needsWorldBaseSelection,
     territories: state.territories,
     buildingDifficulties: state.buildingDifficulties,
@@ -6663,6 +8287,7 @@ function createSaveSnapshot() {
     localNotifications: state.localNotifications,
     smuggledGoods: state.smuggledGoods,
     smugglerFame: state.smugglerFame,
+    harborGarage: state.harborGarage,
     rivalEvent: state.rivalEvent,
     rivalNextSpawnAt: state.rivalNextSpawnAt,
     mentorStep: state.mentorStep,
@@ -6689,6 +8314,7 @@ function hydrateState(saved) {
   if (!saved || typeof saved !== "object") return false;
   Object.assign(state, saved);
   state.profileStartedAt = Number.isFinite(Number(state.profileStartedAt)) ? Number(state.profileStartedAt) : Date.now();
+  state.npcVillageVictories = Math.max(0, Math.round(Number(state.npcVillageVictories) || 0));
   if (!Array.isArray(state.districts) || state.districts.length === 0) {
     state.districts = makeDistricts();
   }
@@ -6703,7 +8329,7 @@ function hydrateState(saved) {
   state.crew = getHiredCrewMembers().length;
   state.activeCrewMemberId = state.crewMembers.some((member) => member.hired && member.id === state.activeCrewMemberId)
     ? state.activeCrewMemberId
-    : (getHiredCrewMembers()[0]?.id || state.crewMembers[0]?.id || "luca");
+    : (getHiredCrewMembers()[0]?.id || null);
   state.territories = normalizeTerritories(state.territories);
   state.buildingDifficulties = normalizeBuildingDifficulties(state.buildingDifficulties, state.buildingDifficultyCycle);
   state.marketStock = normalizeMarketStock(state.marketStock);
@@ -6713,6 +8339,10 @@ function hydrateState(saved) {
   state.worldBaseLotId = normalizeWorldBaseLotId(state.worldBaseLotId);
   state.worldBaseLevel = Math.max(1, Math.round(Number(state.worldBaseLevel) || 1));
   state.worldRivalCities = normalizeWorldRivalCities(state.worldRivalCities);
+  state.npcVillageVictories = Math.max(
+    state.npcVillageVictories,
+    state.worldRivalCities.filter((city) => city.status === "captured").length,
+  );
   state.needsWorldBaseSelection = Boolean(state.needsWorldBaseSelection);
   if (state.mainBaseSpotId && !getSpotById(state.mainBaseSpotId)) {
     state.mainBaseSpotId = null;
@@ -6739,7 +8369,7 @@ function hydrateState(saved) {
   state.pendingProtectionRewards = normalizePendingProtectionRewards(state.pendingProtectionRewards);
   const loadedMainTasks = normalizeProcessTasks(state.processTasks);
   const loadedHarborTasks = normalizeProcessTasks(state.harborProcessTasks);
-  state.processTasks = loadedMainTasks.filter((task) => task.type !== "harbor");
+  state.processTasks = [];
   state.harborProcessTasks = [
     ...loadedHarborTasks,
     ...loadedMainTasks.filter((task) => task.type === "harbor"),
@@ -6747,13 +8377,11 @@ function hydrateState(saved) {
   state.localNotifications = normalizeLocalNotifications(state.localNotifications);
   state.smuggledGoods = normalizeSmuggledGoods(state.smuggledGoods);
   state.smugglerFame = Math.max(0, Math.round(Number(state.smugglerFame) || 0));
+  state.harborGarage = normalizeHarborGarage(state.harborGarage);
   state.rivalEvent = normalizeRivalEvent(state.rivalEvent);
   state.rivalNextSpawnAt = normalizeRivalNextSpawnAt(state.rivalNextSpawnAt);
   state.mentorStep = clamp(Math.round(Number(state.mentorStep) || 0), 0, mentorSteps.length);
   state.mentorCompleted = Boolean(state.mentorCompleted || state.mentorStep >= mentorSteps.length);
-  if (getRankLevel(state.fame) > 1) {
-    state.mentorCompleted = true;
-  }
   state.mentorFlags = {
     equippedItem: Boolean(state.mentorFlags?.equippedItem),
     sawWorld: Boolean(state.mentorFlags?.sawWorld),
@@ -6769,11 +8397,15 @@ function hydrateState(saved) {
   syncWorldRivalCities();
   state.mainBaseClaimDay = Number.isFinite(Number(state.mainBaseClaimDay)) ? Math.floor(Number(state.mainBaseClaimDay)) : 0;
   state.registered = Boolean(state.profileName);
+  if (shouldShowMentorHud()) {
+    mentorCardOpen = true;
+    if (hudMentorCard) delete hudMentorCard.dataset.userClosed;
+  }
   return state.registered;
 }
 
-async function requestSaveApi(profileName, method = "GET", body = null, keepalive = false) {
-  const response = await fetch(`${SAVE_API_BASE}/${encodeURIComponent(profileName)}`, {
+async function requestSaveApi(method = "GET", body = null, keepalive = false) {
+  const response = await fetch(SAVE_API_BASE, {
     method,
     headers: body ? { "Content-Type": "application/json" } : undefined,
     body: body ? JSON.stringify(body) : undefined,
@@ -6790,7 +8422,7 @@ async function flushQueuedSave(forceKeepalive = false) {
   if (saveRequestInFlight || !latestQueuedSave?.profileName) return saveRequestInFlight;
   const snapshot = latestQueuedSave;
   latestQueuedSave = null;
-  saveRequestInFlight = requestSaveApi(snapshot.profileName, "PUT", { state: snapshot }, forceKeepalive)
+  saveRequestInFlight = requestSaveApi("PUT", { state: snapshot }, forceKeepalive)
     .catch(() => {
       // The live game continues even if the remote save endpoint is temporarily unavailable.
     })
@@ -6823,7 +8455,8 @@ function queueSaveSnapshot(snapshot, immediate = false) {
 async function deleteRemoteSave(profileName) {
   if (!profileName) return;
   try {
-    await requestSaveApi(profileName, "DELETE");
+    await setActiveProfileSession(profileName);
+    await requestSaveApi("DELETE");
   } catch {
     // Ignore delete failures so the UI reset can still complete locally.
   }
@@ -6833,7 +8466,8 @@ async function loadGame(profileName = "") {
   const normalizedProfileName = profileName.trim().slice(0, 18);
   if (!normalizedProfileName) return false;
   try {
-    const response = await fetch(`${PROFILE_API_BASE}/${encodeURIComponent(normalizedProfileName)}`, {
+    await setActiveProfileSession(normalizedProfileName);
+    const response = await fetch(PROFILE_API_BASE, {
       headers: { Accept: "application/json" },
     });
     const remoteSave = response.ok ? await response.json() : { found: false };
@@ -6843,13 +8477,7 @@ async function loadGame(profileName = "") {
       return true;
     }
   } catch {
-    // Fall back to legacy local data if the database is not reachable yet.
-  }
-
-  const legacySave = getLegacyLocalSave();
-  if (legacySave?.profileName === normalizedProfileName && hydrateState(legacySave)) {
-    queueSaveSnapshot(createSaveSnapshot(), true);
-    return true;
+    // The game now loads exclusively from the server-managed database state.
   }
   return false;
 }
@@ -7002,65 +8630,38 @@ function restAtBase(spot) {
   saveGame();
 }
 
+function getDistrictRobberySpot(targetDistrict, mode = "street", targetSpot = null) {
+  if (targetSpot) return targetSpot;
+  const selectedDistrictIndex = Number.isFinite(Number(targetDistrict?.index))
+    ? Number(targetDistrict.index)
+    : Number.isFinite(Number(state.selectedDistrictIndex))
+      ? Number(state.selectedDistrictIndex)
+      : 0;
+  const candidates = clickableBuildingDefs.filter((spot) =>
+    Number(spot.districtIndex) === selectedDistrictIndex && String(spot.mode || "street") === String(mode || "street"),
+  );
+  if (!candidates.length) return null;
+  const exact = candidates.find((spot) => spot.id === state.lastRobberySpotId);
+  if (exact) return exact;
+  return candidates[randomInt(0, candidates.length - 1)];
+}
+
 function raidDistrict(targetDistrict, mode = "street", targetSpot = null) {
   if (!state.registered) {
     sceneRef?.setMessage("Elobb regisztralj.");
     return;
   }
-  if (!canStartCombat("A tamadast")) return;
-  if (!spendEnergy(mode === "shop" ? 18 : 12)) return;
-
   const target = targetDistrict || getSelectedDistrict();
-  const difficulty = targetSpot ? getBuildingDifficulty(targetSpot) : Math.round((target?.security ?? 50) * 0.8);
-  const difficultyInfo = getDifficultyInfo(difficulty);
-  const label = targetSpot?.name || target?.name || "Utcai celpont";
-  if (Math.random() > difficultyInfo.successChance) {
-    const healthLoss = applyActionDamage(difficultyInfo.label === "Veszelyes" ? 12 : 7, difficultyInfo.label === "Veszelyes" ? 25 : 18);
-    applyHeat(mode === "shop" ? 14 : 9);
-    sceneRef?.pushLog(`${label}: a buntett nem sikerult. -${healthLoss} eletero.`);
-    sceneRef?.setMessage(`${label} tul eros volt. A tamadas sikertelen.`);
-    saveGame();
+  const robberySpot = getDistrictRobberySpot(target, mode, targetSpot);
+  if (!robberySpot) {
+    sceneRef?.setMessage("Ebben a keruletben most nincs megfelelo haz a kirablashoz.");
     return;
   }
-  const security = target?.security ?? 50;
-  const controlled = Boolean(target?.controlled);
-  const securityFactor = clamp((100 - security) / 100, 0.35, 1);
-  const controlFactor = controlled ? 0.78 : 1.08;
-  const baseGain = mode === "shop" ? 72 : 38;
-  const cityGain = state.cityLevel * (mode === "shop" ? 12 : 7);
-  const variance = Math.random() * (mode === "shop" ? 28 : 16);
-  const gain = Math.max(
-    mode === "shop" ? 45 : 22,
-    Math.round((baseGain + cityGain + variance) * (0.85 + securityFactor * 0.45) * controlFactor),
-  );
-
-  state.money += gain;
-  applyFame(mode === "shop" ? 8 : 4);
-  applyHeat(mode === "shop" ? 18 : 10);
-  const healthLoss = applyActionDamage();
-
-  if (target) {
-    target.loyalty = clamp(target.loyalty + (mode === "shop" ? 9 : 5), 0, 100);
-    if (!target.controlled && target.loyalty >= 65) {
-      target.controlled = true;
-      sceneRef?.pushLog(`${target.name} most mar a bandadhoz tartozik.`);
-    }
-  }
-
-  sceneRef?.pushLog(`${label} kirabolva: +${gain} $, -${healthLoss} eletero.`);
-  sceneRef?.setMessage(`${label} kirabolva. Serules: -${healthLoss} eletero.`);
-  queueRewardModal({
-    title: "Akcio vege",
-    text: `${label} kirablasa sikerult.`,
-    money: gain,
-    xp: mode === "shop" ? 8 : 4,
-    fame: mode === "shop" ? 8 : 4,
+  state.lastRobberySpotId = robberySpot.id;
+  startRobberyMinigame({
+    ...robberySpot,
+    districtIndex: Number.isFinite(Number(robberySpot.districtIndex)) ? Number(robberySpot.districtIndex) : state.selectedDistrictIndex,
   });
-  if (targetSpot) {
-    completeQuest("robbery", targetSpot);
-  }
-  completeMentorStep("robbery");
-  saveGame();
 }
 
 function collectProtectionMoney(targetDistrict, buildingName = "Haz", targetSpot = null) {
@@ -7069,11 +8670,6 @@ function collectProtectionMoney(targetDistrict, buildingName = "Haz", targetSpot
     return false;
   }
   if (!canStartCombat("A vedelmi penz beszedest")) return false;
-  if (!hasProcessTaskSlot()) {
-    sceneRef?.setMessage("Nincs szabad feladat kor a vedelmi penzhez.");
-    renderProcessTasks();
-    return false;
-  }
   if (targetSpot && getProtectionCooldownRemaining(targetSpot.id) > 0) {
     sceneRef?.setMessage(`Innen meg nem szedhetsz vedelmi penzt. Hatralevo ido: ${formatCountdown(getProtectionCooldownRemaining(targetSpot.id))}.`);
     return false;
@@ -7103,7 +8699,7 @@ function collectProtectionMoney(targetDistrict, buildingName = "Haz", targetSpot
     }
   }
 
-  const queued = queueProtectionReward({
+  const reward = {
     spotId: targetSpot?.id || null,
     buildingName,
     districtIndex: state.selectedDistrictIndex,
@@ -7115,14 +8711,14 @@ function collectProtectionMoney(targetDistrict, buildingName = "Haz", targetSpot
     failHealthLossMax: difficultyInfo.label === "Veszelyes" ? 18 : 11,
     failHeatGain: difficultyInfo.label === "Veszelyes" ? 10 : difficultyInfo.label === "Kockazatos" ? 7 : 5,
     completesQuest: Boolean(targetSpot),
-  });
-  if (!queued) return false;
-  sceneRef?.pushLog(`${buildingName}: vedelmi penz beszedese elindult, ${formatCountdown(PROTECTION_REWARD_DELAY_MS)} mulva erkezik.`);
-  sceneRef?.setMessage(`${buildingName}: a vedelmi penz beszedese elindult. Az eredmeny a folyamat vegen derul ki.`);
+  };
   if (targetSpot) {
     state.protectionCooldowns[targetSpot.id] = Date.now() + PROTECTION_COOLDOWN_MS;
   }
+  applyProtectionReward(reward);
   saveGame();
+  sceneRef?.refreshHUD();
+  sceneRef?.refreshMap();
   return true;
 }
 
@@ -7207,7 +8803,7 @@ function advanceDistrictLoyalty() {
 function triggerBust() {
   const loss = Math.floor(state.money * 0.22);
   state.money = Math.max(0, state.money - loss);
-  state.crew = Math.max(1, Math.ceil(state.crew / 2));
+  state.crew = getHiredCrewMembers().length;
   state.heat = clamp(state.heat - 15, 0, 100);
   sceneRef?.pushLog(`Rajtaütés történt. -${loss} $, a banda fele kiesett, -15% körözés.`);
   sceneRef?.setMessage("A rendőrök elkaptak, de a körözésed 15%-kal csökkent.");
@@ -7229,17 +8825,21 @@ function handleShopRaid() {
 }
 
 function handleRecruit() {
-  const cost = 60 + state.crew * 15;
+  const nextMember = (Array.isArray(state.crewMembers) ? state.crewMembers : []).find((member) => !member.hired);
+  if (!nextMember) {
+    sceneRef?.setMessage("Minden elerheto bandatag mar csatlakozott.");
+    return;
+  }
+  const cost = getCrewHireCost(nextMember);
   if (!canAfford(cost)) {
     sceneRef?.setMessage("Nincs eleg penz uj emberek toborzasahoz.");
     return;
   }
   if (!spendEnergy(10)) return;
-  state.money -= cost;
-  state.crew += 1;
+  hireCrewMember(nextMember.id);
   applyFame(6);
   completeMentorStep("crew");
-  sceneRef?.pushLog(`Uj ember csatlakozott. -${cost} $, crew +1.`);
+  sceneRef?.pushLog(`${nextMember.name} csatlakozott. -${cost} $.`);
   sceneRef?.setMessage("A banda erosodik.");
 }
 
@@ -7338,7 +8938,7 @@ function startNewGame(name) {
   state.profileStartedAt = Date.now();
   state.money = 120;
   state.fame = 0;
-  state.crew = 1;
+  state.crew = 0;
   state.heat = 0;
   state.health = 100;
   state.energy = 100;
@@ -7347,12 +8947,13 @@ function startNewGame(name) {
   state.itemInventory = getDefaultItemInventory();
   recalculateGearPower();
   state.crewMembers = makeCrewMembers();
-  state.crew = getHiredCrewMembers().length || 1;
-  state.activeCrewMemberId = "luca";
+  state.crew = getHiredCrewMembers().length;
+  state.activeCrewMemberId = null;
   state.mainBaseSpotId = null;
   state.worldBaseLotId = null;
   state.worldBaseLevel = 1;
   state.worldRivalCities = [];
+  state.npcVillageVictories = 0;
   state.needsWorldBaseSelection = true;
   state.territories = {};
   state.activeQuest = null;
@@ -7365,6 +8966,7 @@ function startNewGame(name) {
   state.harborProcessTasks = [];
   state.smuggledGoods = normalizeSmuggledGoods();
   state.smugglerFame = 0;
+  state.harborGarage = normalizeHarborGarage();
   state.rivalEvent = null;
   state.rivalNextSpawnAt = Date.now() + randomInt(RIVAL_SPAWN_MIN_MS, RIVAL_SPAWN_MAX_MS);
   state.mentorStep = 0;
@@ -7394,6 +8996,7 @@ function startNewGame(name) {
   hideChoiceWheel();
   hideQuestCard();
   mentorCardOpen = true;
+  if (hudMentorCard) delete hudMentorCard.dataset.userClosed;
   updateMentorPanel();
   sceneRef?.resetLogs();
   sceneRef?.refreshScene();
@@ -7413,7 +9016,7 @@ function resetGame() {
   closeRobberyGame();
   resetMapPan();
   hideAuxPanel();
-  [...LEGACY_STORAGE_KEYS, LAST_PROFILE_KEY].forEach((key) => {
+  [LAST_PROFILE_KEY].forEach((key) => {
     try {
       window.localStorage.removeItem(key);
     } catch {
@@ -7429,11 +9032,12 @@ function resetGame() {
       }
     }
     await deleteRemoteSave(profileNameToDelete);
+    await clearActiveProfileSession();
   })();
   state.profileName = "";
   state.money = 120;
   state.fame = 0;
-  state.crew = 1;
+  state.crew = 0;
   state.heat = 0;
   state.health = 100;
   state.energy = 100;
@@ -7442,12 +9046,13 @@ function resetGame() {
   state.itemInventory = getDefaultItemInventory();
   recalculateGearPower();
   state.crewMembers = makeCrewMembers();
-  state.crew = getHiredCrewMembers().length || 1;
-  state.activeCrewMemberId = "luca";
+  state.crew = getHiredCrewMembers().length;
+  state.activeCrewMemberId = null;
   state.mainBaseSpotId = null;
   state.worldBaseLotId = null;
   state.worldBaseLevel = 1;
   state.worldRivalCities = [];
+  state.npcVillageVictories = 0;
   state.needsWorldBaseSelection = false;
   state.territories = {};
   state.buildingDifficulties = {};
@@ -7461,6 +9066,7 @@ function resetGame() {
   state.harborProcessTasks = [];
   state.smuggledGoods = normalizeSmuggledGoods();
   state.smugglerFame = 0;
+  state.harborGarage = normalizeHarborGarage();
   state.rivalEvent = null;
   state.rivalNextSpawnAt = 0;
   state.mentorStep = 0;
@@ -7486,6 +9092,7 @@ function resetGame() {
   hideChoiceWheel();
   hideQuestCard();
   mentorCardOpen = false;
+  if (hudMentorCard) delete hudMentorCard.dataset.userClosed;
   updateMentorPanel();
   playerNameInput.value = "";
   sceneRef?.resetLogs();
@@ -7546,6 +9153,7 @@ class CityScene extends Phaser.Scene {
           saveGame();
           this.refreshHUD();
         }
+        refreshWorldRivalRepairTimers();
         if (activeChoiceSpot) showChoiceWheel(activeChoiceSpot);
       },
     });
@@ -8168,19 +9776,22 @@ const config = {
   scene: [CityScene],
 };
 
-createRobberyDefenders = function createThreeDefenders(spot, difficulty) {
+createRobberyDefenders = function createThreeDefenders(spot, difficulty, count = 3) {
   const names = ["Salvatore", "Vincent", "Tommy"];
   const types = ["watcher", "boss", "bodyguard"];
-  return names.map((name, index) => {
-    const maxHealth = Math.round(42 + difficulty * 0.28 + index * 6);
+  const defenderCount = clamp(Math.round(Number(count) || 3), 1, names.length);
+  const defenderLevel = clamp(Math.round(difficulty / 12), 1, 18);
+  return names.slice(0, defenderCount).map((name, index) => {
+    const maxHealth = Math.round(34 + defenderLevel * 4 + difficulty * 0.06 + index * 4);
     return {
       id: `${spot.id}-guard-${index}`,
       name,
       type: types[index],
+      level: defenderLevel + index,
       maxHealth,
       health: maxHealth,
-      attack: Math.round(5 + difficulty * 0.08 + index),
-      defense: Math.round(3 + difficulty * 0.055 + index),
+      attack: Math.round(6 + defenderLevel * 1.55 + index * 2),
+      defense: Math.round(4 + defenderLevel * 1.3 + index),
     };
   });
 };
@@ -8188,12 +9799,13 @@ createRobberyDefenders = function createThreeDefenders(spot, difficulty) {
 function createBattleAllies(selectedMemberIds) {
   const members = selectedMemberIds
     .map((memberId) => state.crewMembers.find((member) => member.id === memberId))
-    .filter(Boolean)
+    .filter((member) => member?.hired)
     .slice(0, 2)
     .map((member) => ({
       id: member.id,
       name: member.name,
       role: member.role,
+      level: Math.max(1, Math.round(Number(member.level) || 1)),
       maxHealth: member.baseHealth,
       health: member.health,
       attack: getCrewMemberAttack(member),
@@ -8204,50 +9816,141 @@ function createBattleAllies(selectedMemberIds) {
     id: "player",
     name: state.profileName || "Fonok",
     role: "Te",
+    level: getRankLevel(state.fame),
     maxHealth: 100,
     health: state.health,
     attack: Math.max(6, getPlayerAttackStat()),
     defense: Math.max(4, getPlayerDefenseStat()),
     isPlayer: true,
   };
-  return [members[0], player, members[1]];
+  return [members[0], player, members[1]].filter(Boolean);
+}
+
+function getRobberyBattleMode(allyCount) {
+  if (allyCount <= 1) return "lone";
+  if (allyCount === 2) return "solo";
+  return "full";
+}
+
+function getRobberyRewardMultiplier(battleMode) {
+  if (battleMode === "lone") return 0.52;
+  if (battleMode === "solo") return 0.76;
+  return 1;
+}
+
+function canStartRobberySelection(encounter) {
+  return Boolean(encounter) && !encounter.battleStarted;
+}
+
+function getRobberyTierProfile(difficultyInfo, battleMode = "full") {
+  const modeProfile = battleMode === "lone"
+    ? { stat: 0.97, health: 0.97, enemyDamage: 0.95 }
+    : battleMode === "solo"
+      ? { stat: 0.99, health: 0.99, enemyDamage: 0.98 }
+      : { stat: 1, health: 1, enemyDamage: 1 };
+  if (difficultyInfo?.label === "Veszelyes") {
+    return {
+      color: "red",
+      attack: 1.12 * modeProfile.stat,
+      defense: 1.08 * modeProfile.stat,
+      health: 1.12 * modeProfile.health,
+      enemyDamage: 1.08 * modeProfile.enemyDamage,
+      levelOffset: 1,
+    };
+  }
+  if (difficultyInfo?.label === "Kockazatos") {
+    return {
+      color: "yellow",
+      attack: 0.98 * modeProfile.stat,
+      defense: 0.98 * modeProfile.stat,
+      health: 1 * modeProfile.health,
+      enemyDamage: 0.98 * modeProfile.enemyDamage,
+      levelOffset: 0,
+    };
+  }
+  return {
+    color: "green",
+    attack: 0.82 * modeProfile.stat,
+    defense: 0.82 * modeProfile.stat,
+    health: 0.84 * modeProfile.health,
+    enemyDamage: 0.84 * modeProfile.enemyDamage,
+    levelOffset: -1,
+  };
+}
+
+function getRobberyUnderdogBonus(encounter) {
+  const battleMode = encounter?.battleMode || "full";
+  if (battleMode === "lone") {
+    return { playerDamageBoost: 1.08, enemyDamageReduction: 0.94, defenseIgnore: 0.08 };
+  }
+  if (battleMode === "solo") {
+    return { playerDamageBoost: 1.04, enemyDamageReduction: 0.97, defenseIgnore: 0.04 };
+  }
+  return {
+    playerDamageBoost: 1,
+    enemyDamageReduction: 1,
+    defenseIgnore: 0,
+  };
+}
+
+function getBattleUnitReadiness(unit) {
+  if (!unit?.maxHealth) return 1;
+  return clamp((Number(unit.health) || 0) / Math.max(1, Number(unit.maxHealth) || 1), 0, 1);
+}
+
+function getBattleUnitEffectiveAttack(unit) {
+  const readiness = getBattleUnitReadiness(unit);
+  return Math.max(1, Math.round((Number(unit?.attack) || 0) * (0.65 + readiness * 0.35)));
+}
+
+function getBattleUnitEffectiveDefense(unit) {
+  const readiness = getBattleUnitReadiness(unit);
+  return Math.max(1, Math.round((Number(unit?.defense) || 0) * (0.6 + readiness * 0.4)));
 }
 
 function rebalanceDefendersForEncounter(encounter) {
   if (!encounter?.allies?.length || !encounter?.defenders?.length) return;
-  const averageAttack = encounter.allies.reduce((sum, ally) => sum + ally.attack, 0) / encounter.allies.length;
-  const averageDefense = encounter.allies.reduce((sum, ally) => sum + ally.defense, 0) / encounter.allies.length;
+  const averageAttack = encounter.allies.reduce((sum, ally) => sum + getBattleUnitEffectiveAttack(ally), 0) / encounter.allies.length;
+  const averageDefense = encounter.allies.reduce((sum, ally) => sum + getBattleUnitEffectiveDefense(ally), 0) / encounter.allies.length;
   const averageHealth = encounter.allies.reduce((sum, ally) => sum + ally.maxHealth, 0) / encounter.allies.length;
+  const averageLevel = encounter.allies.reduce((sum, ally) => sum + Math.max(1, Number(ally.level) || 1), 0) / encounter.allies.length;
   const difficultyInfo = getDifficultyInfo(encounter.difficulty);
-  const tierMultiplier = difficultyInfo.label === "Veszelyes"
-    ? { attack: 1.2, defense: 1.16, health: 1.14 }
-    : difficultyInfo.label === "Kockazatos"
-      ? { attack: 0.98, defense: 0.96, health: 1 }
-      : { attack: 0.76, defense: 0.72, health: 0.86 };
-  const attackWeights = [0.92, 1.01, 0.92];
-  const defenseWeights = [0.9, 1.08, 0.94];
-  const healthWeights = [0.89, 1.08, 0.89];
+  const tierProfile = getRobberyTierProfile(difficultyInfo, encounter.battleMode);
+  const roleWeights = {
+    watcher: { attack: 0.94, defense: 0.92, health: 0.92, level: 0 },
+    boss: { attack: 1.06, defense: 1.02, health: 1.04, level: 1 },
+    bodyguard: { attack: 1, defense: 1.04, health: 1, level: 1 },
+  };
 
   encounter.defenders = encounter.defenders.map((defender, index) => {
-    const attackVariance = 0.93 + hash2(index + 1, encounter.spot.id.length, state.day) * 0.1;
-    const defenseVariance = 0.94 + hash2(index + 4, encounter.spot.id.length, state.day) * 0.09;
-    const healthVariance = 0.94 + hash2(index + 7, encounter.spot.id.charCodeAt(0), state.fame) * 0.09;
-    const maxHealth = Math.max(38, Math.round(
-      averageHealth * tierMultiplier.health * (healthWeights[index] || 1) * healthVariance,
+    const weights = roleWeights[defender.type] || roleWeights.watcher;
+    const attackVariance = 0.95 + hash2(index + 1, encounter.spot.id.length, state.day) * 0.1;
+    const defenseVariance = 0.95 + hash2(index + 4, encounter.spot.id.length, state.day) * 0.1;
+    const healthVariance = 0.95 + hash2(index + 7, encounter.spot.id.charCodeAt(0), state.fame) * 0.1;
+    const enemyLevelBase = averageLevel + tierProfile.levelOffset + weights.level + (index * 0.5);
+    const enemyLevel = clamp(
+      Math.round(enemyLevelBase),
+      1,
+      25,
+    );
+    const maxHealth = Math.max(24, Math.round(
+      averageHealth * tierProfile.health * weights.health * healthVariance + enemyLevel * 2,
     ));
     return {
       ...defender,
+      level: enemyLevel,
       maxHealth,
       health: maxHealth,
-      attack: Math.max(5, Math.round(
-        averageAttack * tierMultiplier.attack * (attackWeights[index] || 1) * attackVariance,
+      attack: Math.max(4, Math.round(
+        averageAttack * tierProfile.attack * weights.attack * attackVariance + enemyLevel * 0.7,
       )),
       defense: Math.max(3, Math.round(
-        averageDefense * tierMultiplier.defense * (defenseWeights[index] || 1) * defenseVariance,
+        averageDefense * tierProfile.defense * weights.defense * defenseVariance + enemyLevel * 0.5,
       )),
     };
   });
   encounter.difficultyInfo = difficultyInfo;
+  encounter.enemyDamageScale = tierProfile.enemyDamage;
 }
 
 function chooseEnemyTarget(livingAllies) {
@@ -8294,7 +9997,7 @@ function queueRobberyAutoPlay(encounter, delay = 420) {
     if (!encounter || activeRobberyGame !== encounter || encounter.ended || !encounter.autoPlay) return;
     if (encounter.turnLocked || encounter.finalizing) return;
     if (!encounter.battleStarted) {
-      if (encounter.selectedMemberIds.length === 2) playRobberyTurn();
+      if (canStartRobberySelection(encounter)) playRobberyTurn();
       return;
     }
     const target = pickAutoRobberyTarget(encounter);
@@ -8325,12 +10028,20 @@ function resolveEnemyCounterattack(encounter, enemyAttackerId, allyTargetId) {
     return;
   }
 
+  const underdogBonus = getRobberyUnderdogBonus(encounter);
+  const effectiveEnemyAttack = getBattleUnitEffectiveAttack(enemyAttacker);
+  const effectiveAllyDefense = getBattleUnitEffectiveDefense(allyTarget);
   const rawRetaliation = clamp(
-    Math.round(enemyAttacker.attack + randomInt(-4, 5)),
-    Math.max(4, Math.round(enemyAttacker.attack * 0.7)),
-    Math.round(enemyAttacker.attack * 1.34),
+    Math.round(effectiveEnemyAttack + (enemyAttacker.level || 1) * 0.8 + encounter.alert * 0.015 + randomInt(-3, 4)),
+    Math.max(2, Math.round(effectiveEnemyAttack * 0.62)),
+    Math.round(effectiveEnemyAttack * 1.08 + (enemyAttacker.level || 1) * 0.7),
   );
-  const mitigatedDamage = Math.max(2, rawRetaliation - Math.round((allyTarget.defense || 0) * 0.55));
+  const mitigatedDamage = Math.max(
+    encounter.difficultyInfo?.label === "Konnyu" ? 2 : 1,
+    Math.round(rawRetaliation * (encounter.enemyDamageScale || 1) * underdogBonus.enemyDamageReduction)
+      - Math.round(effectiveAllyDefense * 0.34)
+      - Math.round((allyTarget.level || 1) * 0.12),
+  );
   allyTarget.health = Math.max(0, allyTarget.health - mitigatedDamage);
   encounter.actionAnimation = {
     actorId: enemyAttacker.id,
@@ -8406,7 +10117,10 @@ function scheduleEnemyCounterattack(encounter) {
   }, 520);
 }
 
-function getBattleBackground(defenders = []) {
+function getBattleBackground(encounter) {
+  const defenders = encounter?.defenders || [];
+  if (encounter?.battleMode === "lone") return "./assets/battle/solo-raid.png";
+  if (encounter?.battleMode === "solo") return "./assets/battle/battle-duo.png";
   const defeatedKey = defenders.map((defender) => defender.health <= 0 ? "1" : "0").join("");
   const backgroundsByDefeatedEnemy = {
     "000": "./assets/battle/battle.png",
@@ -8441,16 +10155,24 @@ refreshRobberyGame = function refreshThreeVsThreeBattle() {
   const animation = encounter.actionAnimation || {};
 
   if (arena) {
-    arena.style.backgroundImage = `linear-gradient(180deg, rgba(4, 3, 2, 0.08), rgba(4, 3, 2, 0.34)), url("${getBattleBackground(encounter.defenders)}")`;
+    arena.style.backgroundImage = `linear-gradient(180deg, rgba(4, 3, 2, 0.08), rgba(4, 3, 2, 0.34)), url("${getBattleBackground(encounter)}")`;
     arena.style.backgroundPosition = "center center";
-    arena.style.backgroundSize = "contain";
+    arena.style.backgroundSize = (encounter.battleMode === "solo" || encounter.battleMode === "lone") ? "cover" : "contain";
     arena.classList.toggle("is-enemy-thinking", animation.side === "enemy" && animation.type === "thinking");
   }
   robberyGame.style.setProperty("--encounter-accent", difficultyColorToCss(encounter.difficultyInfo?.color || 0xd6ad42));
+  robberyGame.classList.toggle("is-team-selection", !encounter.battleStarted);
+  robberyGame.classList.toggle("is-solo-battle", encounter.battleMode === "solo" || encounter.battleMode === "lone");
   if (robberyGameTitle) robberyGameTitle.textContent = encounter.spot.name;
   if (robberyGameSubtitle) robberyGameSubtitle.textContent = encounter.battleStarted
-    ? `${encounter.difficultyInfo.label} 3v3 harc - az ero es a vedelem is szamit`
-    : "Valassz ket embert magad melle";
+    ? `${encounter.difficultyInfo.label} harc - ${
+      encounter.battleMode === "lone"
+        ? "egyedul, nagyon kis zsakmany"
+        : encounter.battleMode === "solo"
+          ? "kisebb csapat, kisebb zsakmany"
+          : "teljes csapat"
+    }`
+    : (getHiredCrewMembers().length ? "Valassz 1 vagy 2 embert magad melle" : "Nincs felvett embered, egyedul indulsz");
   if (robberyHealthText) robberyHealthText.textContent = `${state.health}%`;
   if (robberyHealthFill) robberyHealthFill.style.width = `${state.health}%`;
   if (robberyControlText) robberyControlText.textContent = `${control}%`;
@@ -8462,8 +10184,10 @@ refreshRobberyGame = function refreshThreeVsThreeBattle() {
   if (robberyRound) robberyRound.textContent = `${encounter.round}. kor`;
   if (robberyInstruction) robberyInstruction.textContent = encounter.battleStarted
     ? `Celpont: ${selectedDefender?.name || "valassz ellenseget"}`
-    : `Csapattarsak: ${encounter.selectedMemberIds.length}/2`;
-  if (robberyLoot) robberyLoot.textContent = `Zsakmany: ${encounter.loot} $`;
+    : (getHiredCrewMembers().length
+      ? `Csapattarsak: ${encounter.selectedMemberIds.length}/2 - 1 emberrel is indithato`
+      : "Nincs felvett embered: egyedul indulsz, kisebb jutalommal");
+  if (robberyLoot) robberyLoot.textContent = `Jutalom: ${getRobberyProjectedMoney(encounter)} $`;
   if (robberyBattleLog) robberyBattleLog.textContent = encounter.message;
 
   robberyDefenders?.replaceChildren();
@@ -8471,7 +10195,7 @@ refreshRobberyGame = function refreshThreeVsThreeBattle() {
     const healthPercent = clamp(Math.round((defender.health / defender.maxHealth) * 100), 0, 100);
     const button = document.createElement("button");
     button.type = "button";
-    button.className = `battle-unit battle-unit--enemy battle-unit--enemy-${index + 1}`;
+    button.className = `battle-unit battle-unit--enemy battle-unit--enemy-count-${encounter.defenders.length} battle-unit--enemy-${index + 1}`;
     button.dataset.unitId = defender.id;
     button.classList.toggle("is-selected", encounter.selectedDefenderId === defender.id);
     button.classList.toggle("is-defeated", defender.health <= 0);
@@ -8482,7 +10206,7 @@ refreshRobberyGame = function refreshThreeVsThreeBattle() {
     button.innerHTML = `
       <span class="battle-unit__name">${defender.name}</span>
       <span class="battle-unit__role">${robberyDefenderTemplates[defender.type].role}</span>
-      <span class="battle-unit__combat">Ero ${defender.attack} · Vedelem ${defender.defense}</span>
+      <span class="battle-unit__combat">Szint ${defender.level || 1} · Ero ${defender.attack} · Vedelem ${defender.defense}</span>
       <span class="battle-unit__health"><i style="width:${healthPercent}%"></i></span>
       <em>${healthPercent}%</em>
     `;
@@ -8499,7 +10223,7 @@ refreshRobberyGame = function refreshThreeVsThreeBattle() {
   (encounter.allies || []).forEach((ally, index) => {
     const healthPercent = clamp(Math.round((ally.health / ally.maxHealth) * 100), 0, 100);
     const unit = document.createElement("div");
-    unit.className = `battle-unit battle-unit--ally battle-unit--ally-${index + 1}${ally.health <= 0 ? " is-defeated" : ""}${ally.isPlayer ? " is-player" : ""}`;
+    unit.className = `battle-unit battle-unit--ally battle-unit--ally-count-${encounter.allies.length} battle-unit--ally-${index + 1}${ally.health <= 0 ? " is-defeated" : ""}${ally.isPlayer ? " is-player" : ""}`;
     unit.dataset.unitId = ally.id;
     unit.classList.toggle("is-attacking", animation.actorId === ally.id && animation.type === "attack");
     unit.classList.toggle("is-targeted", animation.targetId === ally.id);
@@ -8507,7 +10231,7 @@ refreshRobberyGame = function refreshThreeVsThreeBattle() {
     unit.innerHTML = `
       <span class="battle-unit__name">${ally.name}</span>
       <span class="battle-unit__role">${ally.role}</span>
-      <span class="battle-unit__combat">Ero ${ally.attack} · Vedelem ${ally.defense}</span>
+      <span class="battle-unit__combat">Szint ${ally.level || 1} · Ero ${ally.attack} · Vedelem ${ally.defense}</span>
       <span class="battle-unit__health"><i style="width:${healthPercent}%"></i></span>
       <em>${healthPercent}%</em>
     `;
@@ -8516,7 +10240,8 @@ refreshRobberyGame = function refreshThreeVsThreeBattle() {
 
   robberyTeamPicker?.classList.toggle("is-hidden", encounter.battleStarted);
   robberyTeamPicker?.replaceChildren();
-  getHiredCrewMembers().forEach((member) => {
+  const hiredMembers = getHiredCrewMembers();
+  hiredMembers.forEach((member) => {
     const selected = encounter.selectedMemberIds.includes(member.id);
     const locked = encounter.battleStarted || (!selected && encounter.selectedMemberIds.length >= 2);
     const attack = getCrewMemberAttack(member);
@@ -8557,16 +10282,22 @@ refreshRobberyGame = function refreshThreeVsThreeBattle() {
       activeRobberyGame.selectedMemberIds = selected
         ? activeRobberyGame.selectedMemberIds.filter((id) => id !== member.id)
         : [...activeRobberyGame.selectedMemberIds, member.id];
-      activeRobberyGame.message = `${activeRobberyGame.selectedMemberIds.length}/2 csapattars kivalasztva.`;
+      activeRobberyGame.message = `${activeRobberyGame.selectedMemberIds.length}/2 csapattars kivalasztva. Egy emberrel kisebb jutalom jar.`;
       refreshRobberyGame();
-      if (activeRobberyGame.autoPlay && activeRobberyGame.selectedMemberIds.length === 2) {
+      if (activeRobberyGame.autoPlay && canStartRobberySelection(activeRobberyGame)) {
         queueRobberyAutoPlay(activeRobberyGame, 260);
-      } else if (activeRobberyGame.selectedMemberIds.length !== 2) {
+      } else if (activeRobberyGame.selectedMemberIds.length < 1) {
         clearRobberyAutoPlay();
       }
     });
     robberyTeamPicker?.appendChild(button);
   });
+  if (!hiredMembers.length && !encounter.battleStarted) {
+    const note = document.createElement("div");
+    note.className = "robbery-team-empty";
+    note.textContent = "Nincs felvett embered. A fonok egyedul megy be, a jutalom erosen csokkentett.";
+    robberyTeamPicker?.appendChild(note);
+  }
 
   robberyTactics.forEach((button) => button.classList.remove("is-selected"));
   robberyTactics.forEach((button) => {
@@ -8579,9 +10310,11 @@ refreshRobberyGame = function refreshThreeVsThreeBattle() {
     robberyAuto.textContent = encounter.autoPlay ? "Automata: BE" : "Automata: KI";
   }
   if (robberyAttack) {
-    robberyAttack.disabled = encounter.ended || encounter.finalizing || encounter.turnLocked || (!encounter.battleStarted && encounter.selectedMemberIds.length !== 2);
+    robberyAttack.disabled = encounter.ended || encounter.finalizing || encounter.turnLocked || (!encounter.battleStarted && !canStartRobberySelection(encounter));
     robberyAttack.textContent = !encounter.battleStarted
-      ? "Harc inditasa"
+      ? (!hiredMembers.length || encounter.selectedMemberIds.length === 0
+        ? "Egyeduli rajtautes"
+        : (encounter.selectedMemberIds.length === 1 ? "Kis csapat inditasa" : "Harc inditasa"))
       : encounter.turnLocked
         ? "Ellenseg lep..."
         : encounter.autoPlay
@@ -8596,7 +10329,7 @@ startRobberyMinigame = function startThreeVsThreeBattle(spot) {
   const energyCost = spot.mode === "shop" ? 18 : 12;
   if (!spendEnergy(energyCost)) return;
   const difficulty = getBuildingDifficulty(spot);
-  const defenders = createRobberyDefenders(spot, difficulty);
+  const defenders = createRobberyDefenders(spot, difficulty, 1);
   activeRobberyGame = {
     spot,
     targetDistrict: state.districts[spot.districtIndex] || getSelectedDistrict(),
@@ -8608,12 +10341,16 @@ startRobberyMinigame = function startThreeVsThreeBattle(spot) {
     selectedMemberIds: [],
     selectedDefenderId: defenders[0].id,
     battleStarted: false,
+    battleMode: getHiredCrewMembers().length ? "full" : "lone",
+    rewardMultiplier: 1,
     allyTurnIndex: 0,
     alert: 0,
     loot: 0,
     round: 1,
     healthAtStart: state.health,
-    message: "Valassz ket embert a harc megkezdesehez.",
+    message: getHiredCrewMembers().length
+      ? "Valassz 1 vagy 2 embert a harc megkezdesehez. Egy emberrel kevesebb jutalom jar."
+      : "Nincs felberelt embered, egyedul mesz be. A jutalom erosen csokkentett.",
     turnLocked: false,
     actionAnimation: null,
     ended: false,
@@ -8635,11 +10372,20 @@ playRobberyTurn = function playThreeVsThreeTurn() {
   const encounter = activeRobberyGame;
   if (!encounter || encounter.ended) return;
   if (!encounter.battleStarted) {
-    if (encounter.selectedMemberIds.length !== 2) return;
+    if (!canStartRobberySelection(encounter)) return;
     encounter.allies = createBattleAllies(encounter.selectedMemberIds);
+    encounter.battleMode = getRobberyBattleMode(encounter.allies.length);
+    encounter.rewardMultiplier = getRobberyRewardMultiplier(encounter.battleMode);
+    const defenderCount = clamp(encounter.allies.length, 1, 3);
+    encounter.defenders = createRobberyDefenders(encounter.spot, encounter.difficulty, defenderCount);
+    encounter.selectedDefenderId = encounter.defenders[0]?.id || null;
     rebalanceDefendersForEncounter(encounter);
     encounter.battleStarted = true;
-    encounter.message = "A harc elkezdodott. Valassz ellenseget, majd tamadj!";
+    encounter.message = encounter.battleMode === "lone"
+      ? "Egyedul indultal. Az ellenfel is egyedul van, de a jutalom nagyon kicsi."
+      : encounter.battleMode === "solo"
+        ? "Kis csapat indult. Ketten vagytok ket ellenfel ellen, a jutalom joval kisebb."
+        : "A harc elkezdodott. Valassz ellenseget, majd tamadj!";
     refreshRobberyGame();
     queueRobberyAutoPlay(encounter, 520);
     return;
@@ -8661,15 +10407,22 @@ playRobberyTurn = function playThreeVsThreeTurn() {
   if (!attacker || !target) return;
 
   const tactic = robberyTacticDefs[encounter.selectedTactic] || robberyTacticDefs.stealth;
+  const underdogBonus = getRobberyUnderdogBonus(encounter);
   const tacticBonus = tactic.strongAgainst === target.type ? 1.16 : 1;
-  const rawDamage = Math.round((attacker.attack + randomInt(-3, 4)) * tacticBonus);
+  const effectiveAttack = getBattleUnitEffectiveAttack(attacker);
+  const targetDefense = getBattleUnitEffectiveDefense(target);
+  const rawDamage = Math.round(
+    (effectiveAttack + (attacker.level || 1) * 1.05 + randomInt(-4, 5)) * tacticBonus * underdogBonus.playerDamageBoost,
+  );
   const damage = clamp(
-    rawDamage - Math.round((target.defense || 0) * 0.55),
-    2,
-    Math.max(3, Math.round(attacker.attack * 1.28)),
+    rawDamage
+      - Math.round(targetDefense * Math.max(0.4, 0.62 - underdogBonus.defenseIgnore))
+      - Math.round((target.level || 1) * 0.46),
+    3,
+    Math.max(4, Math.round(effectiveAttack * 0.94 + (attacker.level || 1) * 0.8)),
   );
   target.health = Math.max(0, target.health - damage);
-  encounter.loot += randomInt(5, 12) + (target.health <= 0 ? randomInt(12, 22) : 0);
+  encounter.loot += randomInt(3, 7) + (target.health <= 0 ? randomInt(6, 12) : 0);
   encounter.alert = clamp(encounter.alert + Math.round(tactic.alert * 0.45) + randomInt(1, 4), 0, 100);
   encounter.turnLocked = true;
   encounter.actionAnimation = {
@@ -8747,16 +10500,26 @@ function bindHudActions() {
   hudQuickMessages?.addEventListener("click", () => openAuxPanel("messages"));
   hudQuickDock?.addEventListener("click", () => openAuxPanel("harbor"));
   hudMainMapButton?.addEventListener("click", hideHarborMapView);
+  hudProcessTasks?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-process-index]");
+    if (!button) return;
+    event.preventDefault();
+    event.stopPropagation();
+    cancelProcessTask(button.dataset.processKind || "harbor", button.dataset.processIndex);
+  });
   harborMapZones?.addEventListener("click", (event) => {
     const button = event.target.closest("[data-harbor-zone]");
     if (!button) {
+      if (garageMiniGameState) return;
       hideHarborOperationPanel();
       return;
     }
+    if (garageMiniGameState) return;
     const zone = harborZoneDefs.find((entry) => entry.id === button.dataset.harborZone);
     if (zone) renderHarborZonePanel(zone);
   });
   harborMapView?.addEventListener("click", (event) => {
+    if (garageMiniGameState) return;
     if (event.target.closest?.(".harbor-operation-panel, [data-harbor-zone]")) return;
     hideHarborOperationPanel();
   });
@@ -8768,6 +10531,42 @@ function bindHudActions() {
   messagesDialogBackdrop?.addEventListener("click", hideMessagesDialog);
   publicProfileDialogClose?.addEventListener("click", hidePublicProfileDialog);
   publicProfileDialogBackdrop?.addEventListener("click", hidePublicProfileDialog);
+  publicProfileDialogBody?.addEventListener("click", (event) => {
+    const focusButton = event.target.closest("[data-rival-structure-focus]");
+    if (focusButton && activeWorldRivalCityProfileId) {
+      renderWorldRivalCityProfile(activeWorldRivalCityProfileId, focusButton.dataset.rivalStructureFocus || "");
+      return;
+    }
+    const attackButton = event.target.closest("[data-rival-structure-attack]");
+    if (attackButton && activeWorldRivalCityProfileId) {
+      runWorldRivalStructureAttack(activeWorldRivalCityProfileId, attackButton.dataset.rivalStructureAttack || "");
+      return;
+    }
+    const repairButton = event.target.closest("[data-rival-structure-repair]");
+    if (repairButton && activeWorldRivalCityProfileId) {
+      repairWorldRivalStructure(
+        activeWorldRivalCityProfileId,
+        repairButton.dataset.rivalStructureRepair || "",
+        repairButton.dataset.rivalRepairSpecialization || "defense",
+      );
+      return;
+    }
+    const captureButton = event.target.closest("[data-rival-city-capture]");
+    if (captureButton) {
+      runWorldRivalCapture(captureButton.dataset.rivalCityCapture || "");
+      return;
+    }
+    const tributeButton = event.target.closest("[data-rival-city-tribute]");
+    if (tributeButton) {
+      runWorldRivalTribute(tributeButton.dataset.rivalCityTribute || "");
+      return;
+    }
+    const cityAttackButton = event.target.closest("[data-rival-city-attack]");
+    if (cityAttackButton) {
+      runWorldRivalAttack(cityAttackButton.dataset.rivalCityAttack || "");
+      return;
+    }
+  });
   policeRaidClose?.addEventListener("click", hidePoliceRaidPanel);
   policeRaidBackdrop?.addEventListener("click", hidePoliceRaidPanel);
   rewardModalClose?.addEventListener("click", hideRewardModal);
@@ -8817,12 +10616,12 @@ function bindHudActions() {
   hudQuestClose?.addEventListener("click", hideQuestCard);
   hudMentorToggle?.addEventListener("click", () => {
     mentorCardOpen = true;
+    if (hudMentorCard) delete hudMentorCard.dataset.userClosed;
     updateMentorPanel();
   });
   hudMentorClose?.addEventListener("click", (event) => {
     event.stopPropagation();
-    mentorCardOpen = false;
-    updateMentorPanel();
+    hideMentorPanel(true);
   });
   characterPanelClose?.addEventListener("click", hideCharacterPanel);
   characterPanelBackdrop?.addEventListener("click", hideCharacterPanel);
@@ -8901,6 +10700,14 @@ function bindHudActions() {
   choiceWheelBackdrop?.addEventListener("click", () => {
     hideChoiceWheel();
   });
+  [mapBackgroundLayer, mapSvgOverlay, lotHouseLayer, document.querySelector("#gameRoot canvas")]
+    .filter(Boolean)
+    .forEach((layer) => {
+      layer.addEventListener("click", () => {
+        hideQuestCard();
+        hideMentorPanel(true);
+      });
+    });
 
   choiceWheelAction1?.addEventListener("click", () => runChoiceAction("robbery"));
   choiceWheelAction2?.addEventListener("click", () => runChoiceAction("protection"));
@@ -8970,20 +10777,23 @@ registerForm.addEventListener("submit", async (event) => {
   }
 
   registerForm.querySelector('button[type="submit"]')?.setAttribute("disabled", "disabled");
-  const saved = await loadGame(name);
-  if (saved && state.profileName === name) {
-    overlay.classList.add("hidden");
-    setHudVisible(true);
-    void refreshMessageBadge();
-    sceneRef?.refreshScene();
-    if (state.needsWorldBaseSelection) {
-      void openAuxPanel("world");
+  try {
+    await setActiveProfileSession(name);
+    const saved = await loadGame(name);
+    if (saved && state.profileName === name) {
+      overlay.classList.add("hidden");
+      setHudVisible(true);
+      void refreshMessageBadge();
+      sceneRef?.refreshScene();
+      if (state.needsWorldBaseSelection) {
+        void openAuxPanel("world");
+      }
+      return;
     }
-    registerForm.querySelector('button[type="submit"]')?.removeAttribute("disabled");
-    return;
+    startNewGame(name);
+  } catch {
+    sceneRef?.setMessage("A szerver most nem elérhető. Próbáld meg újra.");
   }
-
-  startNewGame(name);
   registerForm.querySelector('button[type="submit"]')?.removeAttribute("disabled");
 });
 
@@ -8991,14 +10801,16 @@ playerNameInput.value = getRememberedProfileName();
 
 bindHudActions();
 setHudVisible(false);
-new Phaser.Game(config);
+loadGameConfigFromDatabase().finally(() => {
+  new Phaser.Game(config);
+});
 
 window.addEventListener("beforeunload", () => {
   const snapshot = state.registered ? createSaveSnapshot() : null;
   if (!snapshot?.profileName) return;
   try {
     navigator.sendBeacon(
-      `${SAVE_API_BASE}/${encodeURIComponent(snapshot.profileName)}`,
+      SAVE_API_BASE,
       new Blob([JSON.stringify({ state: snapshot })], { type: "application/json" }),
     );
   } catch {

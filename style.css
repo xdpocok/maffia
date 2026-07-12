@@ -264,7 +264,7 @@ body.is-harbor-map-open .lot-house-layer {
   top: 50%;
   z-index: 45;
   width: min(720px, calc(100vw - 56px));
-  max-height: min(78vh, 760px);
+  max-height: min(82vh, 760px);
   overflow: auto;
   padding: 14px;
   transform: translate(-50%, -50%);
@@ -417,6 +417,60 @@ body.is-harbor-map-open .lot-house-layer {
   gap: 12px;
 }
 
+.harbor-hero {
+  position: relative;
+  min-height: 172px;
+  overflow: hidden;
+  border-radius: 14px;
+  border: 1px solid rgba(214, 173, 102, 0.22);
+  background: #0d0907;
+  box-shadow: inset 0 0 44px rgba(0, 0, 0, 0.38);
+}
+
+.harbor-hero__image {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  filter: saturate(0.94) contrast(1.04) brightness(0.84);
+}
+
+.harbor-hero__overlay {
+  position: absolute;
+  inset: auto 0 0 0;
+  display: grid;
+  gap: 4px;
+  padding: 16px 18px;
+  background:
+    linear-gradient(180deg, rgba(4, 3, 2, 0) 0%, rgba(4, 3, 2, 0.82) 72%, rgba(4, 3, 2, 0.94) 100%);
+}
+
+.harbor-hero__overlay span {
+  color: #caa66a;
+  font-size: 0.62rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.harbor-hero__overlay strong {
+  color: #f6e6c0;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 1.08rem;
+  text-transform: uppercase;
+}
+
+.harbor-place__lead {
+  margin: 0;
+  padding: 11px 12px;
+  border-radius: 11px;
+  border: 1px solid rgba(214, 173, 102, 0.14);
+  background: rgba(255, 245, 220, 0.035);
+  color: #d7c097;
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
 .harbor-bar-scene {
   position: relative;
   min-height: 168px;
@@ -552,6 +606,470 @@ body.is-harbor-map-open .lot-house-layer {
   background:
     radial-gradient(circle at 50% 0%, rgba(214, 173, 102, 0.12), transparent 42%),
     linear-gradient(180deg, rgba(42, 29, 20, 0.96), rgba(15, 10, 7, 0.98));
+}
+
+.harbor-garage {
+  display: grid;
+  gap: 10px;
+}
+
+.harbor-garage-scene {
+  position: relative;
+  min-height: 178px;
+  height: 178px;
+  aspect-ratio: 16 / 6;
+  overflow: hidden;
+  border-radius: 10px;
+  border: 1px solid rgba(214, 173, 102, 0.24);
+  background: #0d0907;
+  box-shadow: inset 0 0 48px rgba(0, 0, 0, 0.48);
+}
+
+.harbor-garage-scene::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, rgba(0, 0, 0, 0.12), rgba(0, 0, 0, 0.32)),
+    radial-gradient(circle at 50% 100%, rgba(0, 0, 0, 0) 40%, rgba(0, 0, 0, 0.34) 100%);
+}
+
+.harbor-garage-scene__main-image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  object-position: center 58%;
+  filter: saturate(0.96) contrast(1.04) brightness(0.86);
+}
+
+.harbor-garage-scene__glow,
+.harbor-garage-scene__lamp,
+.harbor-garage-scene__floor,
+.harbor-garage-scene__smoke,
+.harbor-garage-scene__crate,
+.harbor-garage-scene__hud,
+.harbor-garage-car {
+  position: absolute;
+}
+
+.harbor-garage-scene__glow {
+  inset: 0 22% auto;
+  height: 84px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(242, 199, 120, 0.16), transparent 68%);
+  filter: blur(14px);
+  animation: garagePulse 3.6s ease-in-out infinite;
+}
+
+.harbor-garage-scene__lamp {
+  top: 14px;
+  left: 50%;
+  width: 170px;
+  height: 16px;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(255, 236, 188, 0.92), rgba(206, 151, 63, 0.35));
+  box-shadow: 0 0 18px rgba(240, 191, 94, 0.5);
+}
+
+.harbor-garage-scene__floor {
+  left: -5%;
+  right: -5%;
+  bottom: -16px;
+  height: 80px;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(255,255,255,0.06), transparent 30%),
+    repeating-linear-gradient(90deg, rgba(255,255,255,0.03) 0 1px, transparent 1px 40px),
+    linear-gradient(180deg, rgba(52, 39, 29, 0.8), rgba(8, 6, 5, 0.98));
+  transform: perspective(180px) rotateX(76deg);
+  transform-origin: top;
+}
+
+.harbor-garage-scene__smoke {
+  width: 110px;
+  height: 72px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(198, 188, 164, 0.14), transparent 70%);
+  filter: blur(12px);
+  animation: garageSmoke 7.2s linear infinite;
+}
+
+.harbor-garage-scene__smoke--one { left: 18%; bottom: 58px; }
+.harbor-garage-scene__smoke--two { right: 12%; bottom: 52px; animation-delay: -3.4s; }
+
+.harbor-garage-scene__crate {
+  bottom: 42px;
+  width: 44px;
+  height: 34px;
+  border: 1px solid rgba(195, 145, 73, 0.26);
+  border-radius: 8px;
+  background:
+    repeating-linear-gradient(90deg, rgba(255,255,255,0.05) 0 2px, transparent 2px 14px),
+    linear-gradient(180deg, rgba(81, 54, 28, 0.96), rgba(21, 12, 9, 0.98));
+}
+
+.harbor-garage-scene__crate--one { left: 9%; }
+.harbor-garage-scene__crate--two { right: 11%; width: 56px; height: 40px; }
+
+.harbor-garage-car {
+  left: 50%;
+  bottom: 44px;
+  width: 260px;
+  height: 96px;
+  transform: translateX(-50%);
+}
+
+.harbor-garage-car__body,
+.harbor-garage-car__roof,
+.harbor-garage-car__window,
+.harbor-garage-car__frontlight,
+.harbor-garage-car__backlight,
+.harbor-garage-car__wheel {
+  position: absolute;
+}
+
+.harbor-garage-car__body {
+  left: 24px;
+  right: 18px;
+  bottom: 18px;
+  height: 38px;
+  border-radius: 18px 26px 12px 16px;
+  background:
+    linear-gradient(90deg, rgba(14, 15, 18, 0.98), rgba(42, 47, 55, 0.98) 45%, rgba(14, 15, 18, 0.98));
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.12),
+    0 14px 18px rgba(0, 0, 0, 0.36);
+}
+
+.harbor-garage-car__roof {
+  left: 68px;
+  right: 76px;
+  bottom: 44px;
+  height: 26px;
+  border-radius: 24px 24px 8px 8px;
+  background: linear-gradient(180deg, rgba(27, 29, 34, 0.98), rgba(8, 10, 13, 0.98));
+}
+
+.harbor-garage-car__window {
+  left: 92px;
+  right: 104px;
+  bottom: 49px;
+  height: 16px;
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(121, 145, 169, 0.62), rgba(36, 45, 55, 0.84));
+}
+
+.harbor-garage-car__frontlight,
+.harbor-garage-car__backlight {
+  bottom: 32px;
+  width: 20px;
+  height: 8px;
+  border-radius: 999px;
+}
+
+.harbor-garage-car__frontlight {
+  right: 10px;
+  background: radial-gradient(circle at right, rgba(255, 225, 171, 0.98), rgba(255, 190, 82, 0.16) 74%, transparent 78%);
+  box-shadow: 0 0 16px rgba(255, 206, 112, 0.42);
+  animation: garageHeadlight 2.8s ease-in-out infinite;
+}
+
+.harbor-garage-car__backlight {
+  left: 18px;
+  background: radial-gradient(circle at left, rgba(255, 108, 88, 0.86), rgba(156, 31, 19, 0.22) 72%, transparent 78%);
+}
+
+.harbor-garage-car__wheel {
+  bottom: 4px;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: 4px solid rgba(16, 16, 16, 0.98);
+  background:
+    radial-gradient(circle at center, rgba(170, 170, 170, 0.66) 0 18%, rgba(40, 40, 40, 0.96) 22% 62%, rgba(10, 10, 10, 0.98) 66%);
+  animation: garageWheelTurn 2.4s linear infinite;
+}
+
+.harbor-garage-car__wheel--front { right: 44px; }
+.harbor-garage-car__wheel--rear { left: 54px; }
+
+.harbor-garage-car--van {
+  width: 274px;
+}
+
+.harbor-garage-car--van .harbor-garage-car__body {
+  border-radius: 14px 18px 12px 12px;
+  height: 42px;
+}
+
+.harbor-garage-car--van .harbor-garage-car__roof {
+  left: 74px;
+  right: 66px;
+  height: 30px;
+}
+
+.harbor-garage-car--armor .harbor-garage-car__body {
+  background: linear-gradient(90deg, rgba(20, 26, 30, 0.98), rgba(53, 61, 68, 0.98) 45%, rgba(20, 26, 30, 0.98));
+}
+
+.harbor-garage-scene__hud {
+  left: 12px;
+  top: 12px;
+  z-index: 2;
+  display: grid;
+  gap: 4px;
+  max-width: min(310px, calc(100% - 24px));
+  padding: 7px 9px;
+  border-radius: 8px;
+  border: 1px solid rgba(214, 173, 102, 0.16);
+  background: rgba(7, 6, 5, 0.58);
+}
+
+.harbor-garage-scene__hud strong {
+  color: #f5e3bf;
+  font-size: 0.76rem;
+  text-transform: uppercase;
+}
+
+.harbor-garage-scene__hud span {
+  color: #cbab73;
+  font-size: 0.58rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.harbor-garage-workshop,
+.harbor-garage-section {
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(214, 173, 102, 0.18);
+  background: linear-gradient(180deg, rgba(42, 29, 20, 0.96), rgba(15, 10, 7, 0.98));
+}
+
+.harbor-garage-workshop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.harbor-garage-workshop span,
+.harbor-garage-section header span {
+  display: block;
+  color: #caa66a;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.harbor-garage-workshop strong,
+.harbor-garage-section header strong {
+  display: block;
+  margin-top: 4px;
+  color: #f5e3bf;
+  font-size: 0.92rem;
+}
+
+.harbor-garage-workshop small {
+  display: block;
+  margin-top: 5px;
+  color: #d1bb91;
+  font-size: 0.71rem;
+  line-height: 1.4;
+}
+
+.harbor-garage-workshop button,
+.harbor-garage-vehicle button,
+.harbor-garage-mission button,
+.garage-minigame__actions button {
+  min-height: 34px;
+  border-radius: 9px;
+  border: 1px solid rgba(214, 173, 102, 0.28);
+  background: linear-gradient(180deg, #a6762b, #6f4719);
+  color: #fff0c9;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.harbor-garage-workshop button:disabled,
+.harbor-garage-vehicle button:disabled,
+.harbor-garage-mission button:disabled,
+.garage-minigame__actions button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.harbor-garage-grid {
+  display: grid;
+  grid-template-columns: 1.05fr 1fr;
+  gap: 12px;
+}
+
+.harbor-garage-section {
+  display: grid;
+  gap: 10px;
+}
+
+.harbor-garage-vehicles,
+.harbor-garage-missions {
+  display: grid;
+  gap: 8px;
+}
+
+.harbor-garage-vehicle,
+.harbor-garage-mission {
+  display: grid;
+  gap: 5px;
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(214, 173, 102, 0.14);
+  background: rgba(255, 245, 220, 0.045);
+}
+
+.harbor-garage-vehicle.is-active,
+.harbor-garage-mission:not(.is-locked) {
+  box-shadow: inset 0 0 0 1px rgba(214, 173, 102, 0.06);
+}
+
+.harbor-garage-vehicle__image {
+  width: 100%;
+  height: 92px;
+  display: block;
+  object-fit: cover;
+  border-radius: 10px;
+  border: 1px solid rgba(214, 173, 102, 0.18);
+  background: linear-gradient(180deg, rgba(33, 24, 17, 0.94), rgba(8, 6, 5, 0.98));
+}
+
+.harbor-garage-vehicle.is-active {
+  border-color: rgba(230, 188, 103, 0.34);
+}
+
+.harbor-garage-vehicle span,
+.harbor-garage-mission span {
+  color: #caa66a;
+  font-size: 0.56rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.harbor-garage-vehicle strong,
+.harbor-garage-mission strong {
+  color: #f3ddb0;
+  font-size: 0.82rem;
+}
+
+.harbor-garage-vehicle small,
+.harbor-garage-mission small,
+.harbor-garage-mission__meta em {
+  color: #d1bb91;
+  font-size: 0.67rem;
+  line-height: 1.35;
+  font-style: normal;
+}
+
+.harbor-garage-mission__meta {
+  display: grid;
+  gap: 3px;
+}
+
+.harbor-garage-vehicle.is-locked,
+.harbor-garage-mission.is-locked {
+  opacity: 0.76;
+}
+
+.garage-minigame {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(214, 173, 102, 0.18);
+  background: linear-gradient(180deg, rgba(42, 29, 20, 0.96), rgba(15, 10, 7, 0.98));
+}
+
+.garage-minigame__meter {
+  position: relative;
+  height: 38px;
+  overflow: hidden;
+  border-radius: 999px;
+  border: 1px solid rgba(214, 173, 102, 0.22);
+  background:
+    linear-gradient(90deg, rgba(87, 26, 21, 0.82), rgba(53, 50, 21, 0.86) 30%, rgba(31, 86, 42, 0.76) 50%, rgba(53, 50, 21, 0.86) 70%, rgba(87, 26, 21, 0.82));
+}
+
+.garage-minigame__safe-zone {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(132, 198, 101, 0.88), rgba(55, 112, 48, 0.86));
+  box-shadow:
+    inset 0 0 0 1px rgba(225, 255, 191, 0.28),
+    0 0 18px rgba(123, 183, 95, 0.32);
+}
+
+.garage-minigame__needle {
+  position: absolute;
+  top: -5px;
+  bottom: -5px;
+  width: 10px;
+  margin-left: -5px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(255, 239, 209, 0.98), rgba(243, 184, 77, 0.96));
+  box-shadow: 0 0 14px rgba(255, 214, 128, 0.35);
+}
+
+.garage-minigame__status {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(214, 173, 102, 0.14);
+  background: rgba(255, 245, 220, 0.04);
+}
+
+.garage-minigame__status strong {
+  color: #f3ddb0;
+  font-size: 0.8rem;
+}
+
+.garage-minigame__status span {
+  color: #d1bb91;
+  font-size: 0.72rem;
+}
+
+.garage-minigame__actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+}
+
+@keyframes garageSmoke {
+  0% { transform: translateY(12px) scale(0.92); opacity: 0; }
+  20% { opacity: 1; }
+  100% { transform: translateY(-54px) scale(1.24); opacity: 0; }
+}
+
+@keyframes garagePulse {
+  0%, 100% { opacity: 0.68; transform: scale(0.96); }
+  50% { opacity: 1; transform: scale(1.04); }
+}
+
+@keyframes garageHeadlight {
+  0%, 100% { opacity: 0.68; }
+  45% { opacity: 1; }
+}
+
+@keyframes garageWheelTurn {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
 .harbor-warehouse {
@@ -765,6 +1283,33 @@ body.is-harbor-map-open .lot-house-layer {
 .harbor-orders {
   display: grid;
   gap: 12px;
+}
+
+.harbor-orders--fish {
+  gap: 14px;
+}
+
+.harbor-fishmarket-note {
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(214, 173, 102, 0.18);
+  background:
+    radial-gradient(circle at top right, rgba(86, 129, 143, 0.16), transparent 36%),
+    linear-gradient(135deg, rgba(30, 24, 20, 0.94), rgba(10, 7, 5, 0.98));
+}
+
+.harbor-fishmarket-note strong {
+  color: #f4ddb0;
+  font-size: 0.86rem;
+  text-transform: uppercase;
+}
+
+.harbor-fishmarket-note span {
+  color: #d7c097;
+  font-size: 0.75rem;
+  line-height: 1.45;
 }
 
 .harbor-orders__header {
@@ -2204,9 +2749,10 @@ body.is-harbor-map-open .lot-house-layer {
 .character-equipment__slot {
   position: relative;
   min-height: 0;
+  height: 100%;
   padding: 0;
   display: grid;
-  grid-template-rows: 1fr auto;
+  grid-template-rows: 72px 58px;
   cursor: pointer;
   overflow: hidden;
   border: 1px solid rgba(214, 173, 102, 0.46);
@@ -2235,7 +2781,8 @@ body.is-harbor-map-open .lot-house-layer {
 }
 
 .character-equipment__art {
-  min-height: 54px;
+  min-height: 72px;
+  height: 72px;
   background-repeat: no-repeat;
   background-position: center;
   background-size: contain;
@@ -2252,8 +2799,11 @@ body.is-harbor-map-open .lot-house-layer {
 }
 
 .character-equipment__copy {
+  min-height: 58px;
   padding: 5px 7px 6px;
   display: grid;
+  grid-template-rows: 12px 18px 14px;
+  align-content: start;
   gap: 2px;
   border-top: 1px solid rgba(214, 173, 102, 0.28);
   background: linear-gradient(180deg, rgba(15, 11, 8, 0.9), rgba(5, 4, 3, 0.98));
@@ -2270,11 +2820,21 @@ body.is-harbor-map-open .lot-house-layer {
 .character-equipment__slot strong {
   color: #f0dfbd;
   font-size: 0.72rem;
+  line-height: 1.05;
+  max-height: 18px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .character-equipment__slot small {
   color: #7fa04c;
   font-size: 0.64rem;
+  line-height: 1;
+  max-height: 14px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .character-figure {
@@ -2636,6 +3196,8 @@ body.is-harbor-map-open .lot-house-layer {
 }
 
 .crew-member-equipment-slot {
+  min-height: 64px;
+  height: 64px;
   padding: 9px 10px;
   display: grid;
   grid-template-columns: 44px 1fr;
@@ -2656,11 +3218,20 @@ body.is-harbor-map-open .lot-house-layer {
 .crew-member-equipment-slot img {
   width: 44px;
   height: 44px;
+  min-width: 44px;
+  min-height: 44px;
   object-fit: contain;
   border-radius: 8px;
   padding: 4px;
   background: rgba(17, 11, 8, 0.92);
   border: 1px solid rgba(214, 173, 102, 0.14);
+}
+
+.crew-member-equipment-copy {
+  min-width: 0;
+  display: grid;
+  grid-template-rows: auto auto auto;
+  gap: 2px;
 }
 
 .crew-member-equipment-slot span {
@@ -2674,6 +3245,10 @@ body.is-harbor-map-open .lot-house-layer {
 .crew-member-equipment-slot strong {
   display: block;
   margin-top: 2px;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   color: #f2dfb9;
   font-size: 0.78rem;
 }
@@ -2681,6 +3256,10 @@ body.is-harbor-map-open .lot-house-layer {
 .crew-member-equipment-slot small {
   display: block;
   margin-top: 2px;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   color: #d7b476;
   font-size: 0.62rem;
 }
@@ -3165,14 +3744,15 @@ body.is-harbor-map-open .hud-harbor-shortcut {
   top: 0;
   left: 50%;
   transform: translateX(-50%);
-  width: min(1120px, calc(100vw - 18px));
+  width: fit-content;
+  max-width: calc(100vw - 18px);
   min-height: 66px;
   border-radius: 0 0 20px 20px;
-  padding: 9px 14px 10px;
+  padding: 9px 10px 10px;
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   pointer-events: none;
   background:
     linear-gradient(180deg, rgba(47, 33, 22, 0.98), rgba(19, 13, 9, 0.98)),
@@ -3337,8 +3917,8 @@ body.is-harbor-map-open .hud-harbor-shortcut {
 
 .hud-resources {
   justify-content: center;
-  width: 100%;
-  gap: 6px;
+  width: auto;
+  gap: 5px;
   flex-wrap: nowrap;
 }
 
@@ -3350,7 +3930,7 @@ body.is-harbor-map-open .hud-harbor-shortcut {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 7px;
   background:
     linear-gradient(180deg, rgba(255, 246, 226, 0.06), rgba(255, 246, 226, 0.02)),
     rgba(255, 244, 220, 0.05);
@@ -3361,6 +3941,8 @@ body.is-harbor-map-open .hud-harbor-shortcut {
 }
 
 .hud-pill strong {
+  flex: 0 0 auto;
+  white-space: nowrap;
   font-size: 0.96rem;
   color: #fff6e2;
 }
@@ -3755,6 +4337,16 @@ body.is-harbor-map-open .hud-harbor-shortcut {
   }
 }
 
+@keyframes mentorCardFloat {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
 .hud-mentor-envelope img {
   width: 100%;
   height: 100%;
@@ -3775,6 +4367,7 @@ body.is-harbor-map-open .hud-harbor-shortcut {
   background:
     radial-gradient(circle at 18% 0%, rgba(232, 188, 96, 0.16), transparent 38%),
     linear-gradient(180deg, rgba(38, 27, 18, 0.97), rgba(11, 8, 6, 0.98));
+  animation: mentorCardFloat 3.4s ease-in-out infinite;
 }
 
 .hud-mentor-card.hidden,
@@ -3937,6 +4530,41 @@ body.is-harbor-map-open .hud-harbor-shortcut {
   color: #180f0a;
 }
 
+.hud-quest-tab.is-ready {
+  animation: quest-tab-ready-pulse 1.15s ease-in-out infinite;
+  border-color: rgba(244, 211, 134, 0.72);
+  box-shadow:
+    0 0 0 1px rgba(244, 211, 134, 0.22),
+    0 0 16px rgba(235, 194, 95, 0.3);
+}
+
+.hud-quest-tab.is-ready:not(.is-active) {
+  background:
+    linear-gradient(180deg, rgba(121, 94, 39, 0.98), rgba(69, 45, 16, 0.98));
+}
+
+.hud-quest-tab.is-ready::before {
+  color: #ffe4a6;
+}
+
+@keyframes quest-tab-ready-pulse {
+  0%, 100% {
+    transform: scale(1);
+    filter: brightness(1);
+    box-shadow:
+      0 0 0 1px rgba(244, 211, 134, 0.16),
+      0 0 12px rgba(235, 194, 95, 0.2);
+  }
+
+  50% {
+    transform: scale(1.08);
+    filter: brightness(1.18);
+    box-shadow:
+      0 0 0 1px rgba(255, 231, 172, 0.42),
+      0 0 22px rgba(246, 209, 117, 0.52);
+  }
+}
+
 .hud-quest-card {
   top: 360px;
   left: 74px;
@@ -4070,11 +4698,13 @@ body.is-harbor-map-open .hud-harbor-shortcut {
 .crew-panel {
   top: 76px;
   right: 16px;
-  width: 248px;
+  width: 272px;
+  max-height: calc(100vh - 92px);
+  overflow-y: auto;
   display: block;
   z-index: 8;
-  padding: 10px;
-  border-radius: 14px;
+  padding: 12px;
+  border-radius: 16px;
   pointer-events: auto;
   background:
     linear-gradient(180deg, rgba(33, 23, 16, 0.96), rgba(10, 8, 6, 0.98)),
@@ -4111,17 +4741,18 @@ body.is-harbor-map-open .hud-harbor-shortcut {
 
 .crew-cards {
   display: grid;
-  gap: 7px;
+  gap: 10px;
 }
 
 .crew-card {
   position: relative;
-  min-height: 104px;
+  min-height: 170px;
+  height: 170px;
   display: grid;
-  grid-template-columns: 74px 1fr;
+  grid-template-columns: 74px minmax(0, 1fr);
   gap: 8px;
   overflow: hidden;
-  padding: 7px;
+  padding: 8px;
   border-radius: 10px;
   border: 1px solid rgba(173, 129, 74, 0.42);
   background:
@@ -4156,7 +4787,7 @@ body.is-harbor-map-open .hud-harbor-shortcut {
 
 .crew-card__portrait {
   position: relative;
-  min-height: 90px;
+  min-height: 154px;
   overflow: hidden;
   padding: 0;
   border-radius: 8px;
@@ -4203,6 +4834,7 @@ body.is-harbor-map-open .hud-harbor-shortcut {
 
 .crew-card__body {
   min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
@@ -4210,22 +4842,30 @@ body.is-harbor-map-open .hud-harbor-shortcut {
 }
 
 .crew-card__header {
-  margin-bottom: 4px;
+  min-height: 32px;
+  margin-bottom: 5px;
 }
 
 .crew-card__name {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   color: #f6e7c5;
   font-family: Georgia, "Times New Roman", serif;
-  font-size: 0.84rem;
-  line-height: 1.05;
+  font-size: 0.88rem;
+  line-height: 1.08;
   text-shadow: 0 2px 0 rgba(0, 0, 0, 0.28);
 }
 
 .crew-card__role {
   margin-top: 2px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   color: #d4b073;
   font-family: Georgia, "Times New Roman", serif;
-  font-size: 0.54rem;
+  font-size: 0.55rem;
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
@@ -4233,13 +4873,16 @@ body.is-harbor-map-open .hud-harbor-shortcut {
 .crew-card__stats {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 4px;
+  grid-auto-rows: minmax(0, 1fr);
+  gap: 5px;
+  min-height: 0;
 }
 
 .crew-card__stat {
-  padding: 5px 6px;
+  min-height: 40px;
+  padding: 6px 7px;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) 66px;
   align-items: center;
   gap: 6px;
   border-radius: 7px;
@@ -4256,7 +4899,7 @@ body.is-harbor-map-open .hud-harbor-shortcut {
   display: block;
   color: #c9ab74;
   font-family: Georgia, "Times New Roman", serif;
-  font-size: 0.46rem;
+  font-size: 0.48rem;
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
@@ -4264,27 +4907,31 @@ body.is-harbor-map-open .hud-harbor-shortcut {
 .crew-card__stat strong {
   display: block;
   margin-top: 1px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   color: #f4dfb1;
   font-family: Georgia, "Times New Roman", serif;
-  font-size: 0.76rem;
-  line-height: 1;
+  font-size: 0.8rem;
+  line-height: 1.1;
 }
 
 .crew-card__mini-action {
-  width: 80px;
-  min-height: 26px;
+  width: 66px;
+  min-height: 28px;
   border-radius: 5px;
   border: 1px solid rgba(237, 198, 124, 0.24);
   background:
     linear-gradient(180deg, rgba(78, 57, 40, 0.96), rgba(27, 19, 14, 0.98));
   color: #fff4d8;
   font-family: Georgia, "Times New Roman", serif;
-  font-size: 0.54rem;
+  font-size: 0.52rem;
   font-weight: 700;
   line-height: 1.1;
   letter-spacing: 0.025em;
   text-transform: uppercase;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+  justify-self: end;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.15),
     0 3px 8px rgba(0, 0, 0, 0.18);
@@ -4332,6 +4979,10 @@ body.is-dragging-map * {
 .robbery-game__arena {
   min-height: 0;
   overflow: hidden;
+}
+
+.robbery-game.is-solo-battle .robbery-game__arena {
+  background-size: cover;
 }
 
 .robbery-game.is-team-selection .robbery-game__panel {
@@ -4470,6 +5121,13 @@ button.battle-unit {
 .battle-unit--ally-1 { top: 76%; left: 28%; }
 .battle-unit--ally-2 { top: 82%; left: 50%; }
 .battle-unit--ally-3 { top: 76%; left: 72%; }
+
+.battle-unit--enemy-count-1.battle-unit--enemy-1 { top: 20%; left: 50%; }
+.battle-unit--enemy-count-2.battle-unit--enemy-1 { top: 24%; left: 38%; }
+.battle-unit--enemy-count-2.battle-unit--enemy-2 { top: 24%; left: 62%; }
+.battle-unit--ally-count-1.battle-unit--ally-1 { top: 80%; left: 50%; }
+.battle-unit--ally-count-2.battle-unit--ally-1 { top: 79%; left: 39%; }
+.battle-unit--ally-count-2.battle-unit--ally-2 { top: 79%; left: 61%; }
 
 .battle-unit.is-player {
   border-color: rgba(111, 174, 83, 0.8);
@@ -4660,6 +5318,21 @@ button.battle-unit {
 
 .robbery-team-choice__stat em {
   display: none;
+}
+
+.robbery-team-empty {
+  grid-column: 1 / -1;
+  width: min(440px, 100%);
+  margin: 0 auto;
+  padding: 16px 18px;
+  border: 1px solid rgba(214, 173, 102, 0.26);
+  border-radius: 10px;
+  background: rgba(18, 11, 8, 0.92);
+  color: #e5c990;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 0.9rem;
+  line-height: 1.35;
+  text-align: center;
 }
 
 .hud-mini-map {
@@ -5069,6 +5742,10 @@ button.battle-unit {
   inset: 0;
   z-index: 62;
   pointer-events: auto;
+}
+
+.side-dialog--profile {
+  z-index: 150;
 }
 
 .side-dialog.hidden {
@@ -5601,6 +6278,24 @@ button.battle-unit {
 
 .market-item__buy:disabled {
   opacity: 0.52;
+}
+
+.market-item.is-owned {
+  border-color: rgba(166, 166, 166, 0.24);
+  background:
+    linear-gradient(180deg, rgba(31, 29, 27, 0.98), rgba(18, 16, 14, 0.98)),
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.03), transparent 42%);
+}
+
+.market-item.is-owned .market-item__art {
+  filter: grayscale(1) brightness(0.86);
+  opacity: 0.86;
+}
+
+.market-item.is-owned .market-item__meta,
+.market-item.is-owned .market-item__copy,
+.market-item.is-owned .market-item__stats {
+  opacity: 0.72;
 }
 
 .market-panel__footnote {
@@ -6718,6 +7413,23 @@ button.battle-unit {
   transition: transform 160ms ease, filter 160ms ease;
 }
 
+.worldmap__rival-city::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 8px;
+  width: 44px;
+  height: 24px;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  border: 2px solid rgba(220, 76, 60, 0.78);
+  background: rgba(92, 24, 18, 0.28);
+  box-shadow:
+    0 0 0 4px rgba(104, 30, 22, 0.2),
+    0 0 18px rgba(227, 86, 62, 0.34);
+  pointer-events: none;
+}
+
 .worldmap__rival-city:hover,
 .worldmap__rival-city:focus-visible {
   transform: translate(-50%, -100%) scale(1.04);
@@ -6727,7 +7439,7 @@ button.battle-unit {
   content: attr(data-world-label);
   position: absolute;
   left: 50%;
-  bottom: calc(100% + 8px);
+  bottom: calc(100% + 18px);
   transform: translateX(-50%);
   padding: 6px 10px;
   border-radius: 10px;
@@ -6737,7 +7449,7 @@ button.battle-unit {
   font-size: 0.72rem;
   font-weight: 700;
   white-space: nowrap;
-  opacity: 0;
+  opacity: 0.92;
   pointer-events: none;
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.28);
   transition: opacity 140ms ease;
@@ -6752,21 +7464,25 @@ button.battle-unit {
   position: absolute;
   left: 50%;
   bottom: 0;
-  width: 110px;
+  width: 126px;
   height: auto;
   transform: translateX(-50%);
   pointer-events: none;
   filter:
-    drop-shadow(0 12px 18px rgba(0, 0, 0, 0.42))
-    drop-shadow(0 0 18px rgba(161, 56, 49, 0.2));
+    sepia(0.18)
+    saturate(0.78)
+    brightness(0.82)
+    contrast(0.94)
+    drop-shadow(0 10px 16px rgba(0, 0, 0, 0.4))
+    drop-shadow(0 0 12px rgba(111, 82, 42, 0.14));
 }
 
 .worldmap__rival-city-art--level-2 {
-  width: 122px;
+  width: 138px;
 }
 
 .worldmap__rival-city-art--level-3 {
-  width: 136px;
+  width: 152px;
 }
 
 .worldmap__rival-city--captured .worldmap__rival-city-art {
@@ -6815,6 +7531,385 @@ button.battle-unit {
 .worldmap__choose {
   flex: 0 0 auto;
   min-width: 180px;
+}
+
+.npc-city-profile {
+  display: grid;
+  gap: 14px;
+}
+
+.npc-city-profile__hero {
+  display: grid;
+  gap: 12px;
+}
+
+.npc-city-profile__map {
+  position: relative;
+  min-height: 360px;
+  overflow: hidden;
+  border: 1px solid rgba(214, 173, 102, 0.22);
+  border-radius: 12px;
+  background:
+    linear-gradient(180deg, rgba(15, 10, 7, 0.18), rgba(8, 6, 4, 0.74)),
+    rgba(15, 10, 7, 0.9);
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+  box-shadow: inset 0 0 0 1px rgba(255, 230, 180, 0.05);
+}
+
+.npc-city-profile__map-shade {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(6, 4, 3, 0.08), rgba(6, 4, 3, 0.58)),
+    radial-gradient(circle at 50% 45%, transparent 18%, rgba(5, 4, 3, 0.54) 100%);
+  pointer-events: none;
+}
+
+.npc-city-profile--uptown .npc-city-profile__map {
+  filter: saturate(1.04) brightness(0.96);
+}
+
+.npc-city-profile--docklands .npc-city-profile__map {
+  filter: saturate(0.96) brightness(0.92);
+}
+
+.npc-city-profile--industrial .npc-city-profile__map {
+  filter: sepia(0.12) saturate(0.88) brightness(0.88);
+}
+
+.npc-city-profile__eyebrow {
+  color: #d8ae69;
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.npc-city-profile__marker {
+  position: absolute;
+  z-index: 3;
+  width: 88px;
+  height: 88px;
+  padding: 0;
+  transform: translate(-50%, -50%);
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.npc-city-profile__marker.is-active {
+  transform: translate(-50%, -50%) scale(1.04);
+}
+
+.npc-city-profile__marker.is-destroyed {
+  opacity: 0.7;
+  filter: grayscale(0.72);
+}
+
+.npc-city-profile__marker.is-repairing {
+  opacity: 1;
+  filter: none;
+}
+
+.npc-city-profile__marker.is-repairing .npc-city-profile__marker-hitbox {
+  opacity: 1;
+  border-style: solid;
+  border-color: rgba(224, 178, 91, 0.76);
+  background: radial-gradient(circle at center, rgba(190, 133, 48, 0.3), rgba(43, 30, 18, 0));
+  animation: npc-repair-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes npc-repair-pulse {
+  0%, 100% { transform: translate(-50%, -50%) scale(0.92); opacity: 0.58; }
+  50% { transform: translate(-50%, -50%) scale(1.08); opacity: 1; }
+}
+
+.npc-city-profile__marker.is-destroyed .npc-city-profile__marker-hitbox {
+  opacity: 1;
+  border-color: rgba(190, 167, 130, 0.42);
+  background: radial-gradient(circle at center, rgba(94, 83, 70, 0.28), rgba(30, 24, 19, 0));
+}
+
+.npc-city-profile__marker-hitbox {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 72px;
+  height: 72px;
+  transform: translate(-50%, -50%);
+  border-radius: 18px;
+  background: radial-gradient(circle at center, rgba(255, 224, 159, 0.14), rgba(255, 224, 159, 0));
+  border: 1px dashed rgba(255, 222, 160, 0.18);
+  opacity: 0;
+  transition: opacity 140ms ease, transform 140ms ease, border-color 140ms ease;
+  pointer-events: none;
+}
+
+.npc-city-profile__marker:hover .npc-city-profile__marker-hitbox,
+.npc-city-profile__marker:focus-visible .npc-city-profile__marker-hitbox,
+.npc-city-profile__marker.is-active .npc-city-profile__marker-hitbox {
+  opacity: 1;
+}
+
+.npc-city-profile__marker.is-active .npc-city-profile__marker-hitbox {
+  border-color: rgba(255, 229, 173, 0.46);
+  transform: translate(-50%, -50%) scale(1.04);
+}
+
+.npc-city-profile__marker-badge {
+  position: absolute;
+  left: 54px;
+  top: 58px;
+  min-width: 34px;
+  height: 30px;
+  padding: 0 9px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid rgba(244, 209, 145, 0.74);
+  background: linear-gradient(180deg, rgba(104, 72, 37, 0.98), rgba(43, 27, 16, 0.98));
+  color: #fff0cf;
+  font-size: 0.74rem;
+  font-weight: 800;
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.42);
+  pointer-events: none;
+}
+
+.npc-city-profile__marker.is-active .npc-city-profile__marker-badge {
+  border-color: #ffe0a6;
+  box-shadow: 0 0 0 4px rgba(255, 222, 160, 0.16), 0 10px 18px rgba(0, 0, 0, 0.5);
+}
+
+.npc-city-profile__marker-role {
+  position: absolute;
+  left: 80px;
+  top: 50px;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1px solid rgba(242, 211, 154, 0.5);
+  background: rgba(31, 20, 14, 0.96);
+  color: #f5d79d;
+  font-size: 0.62rem;
+  font-weight: 900;
+  pointer-events: none;
+}
+
+.npc-city-profile__marker--attack .npc-city-profile__marker-role {
+  border-color: rgba(208, 100, 76, 0.72);
+  color: #f0a183;
+}
+
+.npc-city-profile__marker--defense .npc-city-profile__marker-role {
+  border-color: rgba(112, 157, 190, 0.74);
+  color: #acd3eb;
+}
+
+.npc-city-profile__marker-hp {
+  position: absolute;
+  left: 44px;
+  top: 22px;
+  min-width: 62px;
+  height: 26px;
+  padding: 0 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid rgba(246, 212, 150, 0.74);
+  background: rgba(24, 16, 11, 0.94);
+  color: #fff1cf;
+  font-size: 0.68rem;
+  font-weight: 800;
+  white-space: nowrap;
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.42);
+  pointer-events: none;
+}
+
+.npc-city-profile__hero-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+  gap: 10px;
+}
+
+.npc-city-profile__metric,
+.npc-city-profile__focus,
+.npc-city-profile__footer {
+  border: 1px solid rgba(214, 173, 102, 0.18);
+  border-radius: 12px;
+  background:
+    linear-gradient(180deg, rgba(37, 27, 20, 0.96), rgba(18, 13, 10, 0.98)),
+    radial-gradient(circle at top left, rgba(223, 178, 92, 0.08), transparent 34%);
+}
+
+.npc-city-profile__metric {
+  padding: 12px;
+  display: grid;
+  gap: 5px;
+}
+
+.npc-city-profile__metric span {
+  color: rgba(231, 212, 178, 0.64);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+}
+
+.npc-city-profile__metric strong {
+  color: #fff0cd;
+  font-size: 1.2rem;
+}
+
+.npc-city-profile__metric strong[data-rival-protection-until],
+.npc-city-profile__metric strong[data-rival-income-time] {
+  font-size: 0.88rem;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.npc-city-profile__focus {
+  padding: 14px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+}
+
+.npc-city-profile__focus h3 {
+  margin: 4px 0 6px;
+  color: #fff0cd;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 1.18rem;
+}
+
+.npc-city-profile__focus p {
+  margin: 0;
+  color: rgba(241, 224, 190, 0.82);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.npc-city-profile__focus-actions {
+  display: grid;
+  gap: 10px;
+  justify-items: end;
+}
+
+.npc-city-profile__hp {
+  display: grid;
+  gap: 2px;
+  justify-items: end;
+  color: rgba(232, 212, 176, 0.72);
+  font-size: 0.72rem;
+}
+
+.npc-city-profile__hp strong {
+  color: #fff0cd;
+  font-size: 1rem;
+}
+
+.npc-city-profile__attack,
+.npc-city-profile__repair-actions button,
+.npc-city-profile__footer-actions button {
+  min-height: 38px;
+  padding: 0 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(237, 198, 124, 0.28);
+  background: linear-gradient(180deg, rgba(132, 96, 48, 0.98), rgba(86, 57, 24, 0.98));
+  color: #fff1d0;
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.npc-city-profile__repair-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.npc-city-profile__repair-progress {
+  min-width: 150px;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid rgba(224, 178, 91, 0.38);
+  border-radius: 8px;
+  background: rgba(43, 29, 17, 0.94);
+  color: rgba(239, 217, 178, 0.78);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+}
+
+.npc-city-profile__repair-progress strong {
+  color: #ffe0a3;
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+
+.npc-city-profile__repair-actions button:last-child {
+  background: linear-gradient(180deg, rgba(78, 108, 126, 0.98), rgba(43, 65, 79, 0.98));
+}
+
+.npc-city-profile__footer-actions button:disabled {
+  opacity: 0.48;
+  cursor: default;
+}
+
+.npc-city-profile__footer-actions .is-primary {
+  background: linear-gradient(180deg, rgba(168, 118, 46, 0.98), rgba(110, 69, 22, 0.98));
+}
+
+.npc-city-profile__footcopy {
+  color: rgba(238, 220, 188, 0.76);
+  font-size: 0.78rem;
+  font-style: normal;
+  line-height: 1.45;
+}
+
+.npc-city-profile__footer-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.npc-city-profile__footer {
+  padding: 14px;
+  display: grid;
+  gap: 10px;
+}
+
+@media (max-width: 980px) {
+  .npc-city-profile__hero-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .npc-city-profile__focus {
+    grid-template-columns: 1fr;
+  }
+
+  .npc-city-profile__focus-actions {
+    justify-items: stretch;
+  }
+
+  .npc-city-profile__marker-badge {
+    left: 50px;
+    top: 54px;
+  }
+
+  .npc-city-profile__marker-hp {
+    left: 40px;
+    top: 18px;
+  }
 }
 
 @media (max-width: 1100px) {
@@ -6874,7 +7969,7 @@ button.battle-unit {
   }
 
   .crew-panel {
-    width: 236px;
+    width: 252px;
   }
 
   .hud-bottom-bar {

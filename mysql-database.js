@@ -62,11 +62,12 @@ const schema = `
     heat INT NOT NULL DEFAULT 0,
     influence INT NOT NULL DEFAULT 0,
     city_level INT NOT NULL DEFAULT 1,
-    crew_count INT NOT NULL DEFAULT 3,
+    crew_count INT NOT NULL DEFAULT 0,
     health INT NOT NULL DEFAULT 100,
     energy INT NOT NULL DEFAULT 100,
     world_base_lot_id VARCHAR(64),
     world_base_level INT NOT NULL DEFAULT 1,
+    npc_village_victories INT NOT NULL DEFAULT 0,
     registered_at BIGINT NOT NULL,
     updated_at BIGINT NOT NULL,
     last_seen_at BIGINT NOT NULL,
@@ -241,6 +242,18 @@ const schema = `
     CONSTRAINT fk_player_world_rivals_player FOREIGN KEY (profile_name) REFERENCES players(profile_name) ON DELETE CASCADE
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_hungarian_ci;
 
+  CREATE TABLE IF NOT EXISTS player_harbor_garage (
+    profile_name VARCHAR(18) PRIMARY KEY,
+    garage_level INT NOT NULL DEFAULT 1,
+    active_vehicle_id VARCHAR(64) NOT NULL DEFAULT 'sedan',
+    unlocked_vehicle_ids LONGTEXT NOT NULL,
+    successful_runs INT NOT NULL DEFAULT 0,
+    failed_runs INT NOT NULL DEFAULT 0,
+    payload_json LONGTEXT NOT NULL,
+    updated_at BIGINT NOT NULL,
+    CONSTRAINT fk_player_harbor_garage_player FOREIGN KEY (profile_name) REFERENCES players(profile_name) ON DELETE CASCADE
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_hungarian_ci;
+
   CREATE TABLE IF NOT EXISTS world_lots (
     lot_id VARCHAR(64) PRIMARY KEY,
     coord VARCHAR(32) NOT NULL,
@@ -260,6 +273,7 @@ const schema = `
     level INT NOT NULL DEFAULT 1,
     fame INT NOT NULL DEFAULT 0,
     city_level INT NOT NULL DEFAULT 1,
+    npc_village_victories INT NOT NULL DEFAULT 0,
     rank_title VARCHAR(64) NOT NULL DEFAULT 'Utcai figura',
     updated_at BIGINT NOT NULL,
     INDEX idx_leaderboard_global (season_key, level DESC, fame DESC, city_level DESC, updated_at DESC),
@@ -282,6 +296,14 @@ const schema = `
     updated_at BIGINT NOT NULL,
     INDEX idx_market_scope_owner (market_scope, owner_profile_name, updated_at DESC),
     CONSTRAINT fk_market_owner FOREIGN KEY (owner_profile_name) REFERENCES players(profile_name) ON DELETE CASCADE
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_hungarian_ci;
+
+  CREATE TABLE IF NOT EXISTS game_config_entries (
+    config_key VARCHAR(80) PRIMARY KEY,
+    config_group VARCHAR(40) NOT NULL DEFAULT 'general',
+    payload_json LONGTEXT NOT NULL,
+    updated_at BIGINT NOT NULL,
+    INDEX idx_game_config_group (config_group, updated_at DESC)
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_hungarian_ci;
 
   CREATE TABLE IF NOT EXISTS clans (
@@ -348,6 +370,9 @@ async function createMysqlDatabase() {
     multipleStatements: true,
   });
   await pool.query(schema);
+  await pool.query("ALTER TABLE players ALTER COLUMN crew_count SET DEFAULT 0");
+  await ensureColumn(pool, "players", "npc_village_victories", "INT NOT NULL DEFAULT 0");
+  await ensureColumn(pool, "leaderboard_entries", "npc_village_victories", "INT NOT NULL DEFAULT 0");
   await pool.query("DELETE FROM world_lots WHERE owner_profile_name IS NULL AND status <> 'free'");
 
   const execute = async (sql, params = []) => {
@@ -397,3 +422,17 @@ async function createMysqlDatabase() {
 }
 
 module.exports = { createMysqlDatabase };
+
+async function ensureColumn(pool, tableName, columnName, definitionSql) {
+  const [rows] = await pool.query(
+    `SELECT COUNT(*) AS count
+     FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = ?
+       AND TABLE_NAME = ?
+       AND COLUMN_NAME = ?`,
+    [config.database, tableName, columnName],
+  );
+  const count = Array.isArray(rows) ? Number(rows[0]?.count || 0) : 0;
+  if (count > 0) return;
+  await pool.query(`ALTER TABLE \`${tableName}\` ADD COLUMN \`${columnName}\` ${definitionSql}`);
+}

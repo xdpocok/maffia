@@ -1,0 +1,50 @@
+{
+  "market-row": {
+    "x": 828,
+    "y": 223,
+    "width": 208,
+    "height": 146,
+    "scale": 0.92,
+    "score": 0.70767
+  },
+  "west-mid-block": {
+    "x": 333,
+    "y": 346,
+    "width": 201,
+    "height": 165,
+    "scale": 0.92,
+    "score": 0.66702
+  },
+  "east-office": {
+    "x": 954,
+    "y": 333,
+    "width": 261,
+    "height": 189,
+    "scale": 1.14,
+    "score": 0.72732
+  },
+  "central-bank": {
+    "x": 621,
+    "y": 567,
+    "width": 217,
+    "height": 178,
+    "scale": 0.92,
+    "score": 0.6799
+  },
+  "southwest-tenement": {
+    "x": 236,
+    "y": 663,
+    "width": 294,
+    "height": 249,
+    "scale": 1.13,
+    "score": 0.64054
+  },
+  "courthouse": {
+    "x": 967,
+    "y": 586,
+    "width": 229,
+    "height": 200,
+    "scale": 0.92,
+    "score": 0.76576
+  }
+}
