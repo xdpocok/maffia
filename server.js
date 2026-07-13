@@ -697,6 +697,13 @@ const upsertClanStmt = db.prepare(`
     updated_at = VALUES(updated_at)
 `);
 
+const insertClanStmt = db.prepare(`
+  INSERT INTO clans (
+    clan_id, clan_name, boss_profile_name, description, notoriety, treasury, created_at, updated_at
+  )
+  VALUES (?, ?, ?, ?, 0, 0, ?, ?)
+`);
+
 const deleteClanMembersByClanStmt = db.prepare(`
   DELETE FROM clan_members
   WHERE clan_id = ?
@@ -717,10 +724,194 @@ const insertClanMemberStmt = db.prepare(`
     joined_at = VALUES(joined_at)
 `);
 
+const updateClanMemberRoleStmt = db.prepare(`
+  UPDATE clan_members
+  SET member_role = ?
+  WHERE clan_id = ? AND profile_name = ?
+`);
+
+const deleteClanMemberStmt = db.prepare(`
+  DELETE FROM clan_members
+  WHERE clan_id = ? AND profile_name = ?
+`);
+
+const countClanMembersStmt = db.prepare(`
+  SELECT COUNT(*) AS member_count
+  FROM clan_members
+  WHERE clan_id = ?
+`);
+
+const selectClanSuccessorStmt = db.prepare(`
+  SELECT cm.profile_name, cm.member_role, p.fame
+  FROM clan_members cm
+  JOIN players p ON p.profile_name = cm.profile_name
+  LEFT JOIN clan_roles cr ON cr.clan_id = cm.clan_id AND cr.role_key = cm.member_role
+  WHERE cm.clan_id = ? AND cm.profile_name <> ?
+  ORDER BY COALESCE(cr.role_priority, 0) DESC, p.fame DESC, cm.joined_at ASC
+  LIMIT 1
+`);
+
+const updateClanBossStmt = db.prepare(`
+  UPDATE clans
+  SET boss_profile_name = ?, updated_at = ?
+  WHERE clan_id = ?
+`);
+
+const deleteClanByIdStmt = db.prepare(`
+  DELETE FROM clans
+  WHERE clan_id = ?
+`);
+
+const listClanRolesStmt = db.prepare(`
+  SELECT clan_id, role_key, role_name, role_priority, permissions_json, is_system, updated_at
+  FROM clan_roles
+  WHERE clan_id = ?
+  ORDER BY role_priority DESC, role_name ASC
+`);
+
+const selectClanRoleStmt = db.prepare(`
+  SELECT clan_id, role_key, role_name, role_priority, permissions_json, is_system, updated_at
+  FROM clan_roles
+  WHERE clan_id = ? AND role_key = ?
+`);
+
+const upsertClanRoleStmt = db.prepare(`
+  INSERT INTO clan_roles (clan_id, role_key, role_name, role_priority, permissions_json, is_system, updated_at)
+  VALUES (?, ?, ?, ?, ?, ?, ?)
+  ON DUPLICATE KEY UPDATE
+    role_name = VALUES(role_name),
+    role_priority = VALUES(role_priority),
+    permissions_json = VALUES(permissions_json),
+    is_system = VALUES(is_system),
+    updated_at = VALUES(updated_at)
+`);
+
+const insertClanInvitationStmt = db.prepare(`
+  INSERT INTO clan_invitations (
+    clan_id, invited_profile_name, invited_by_profile_name, invitation_status, message_id, created_at, responded_at, expires_at
+  )
+  VALUES (?, ?, ?, 'pending', NULL, ?, NULL, ?)
+`);
+
+const updateClanInvitationMessageStmt = db.prepare(`
+  UPDATE clan_invitations
+  SET message_id = ?
+  WHERE invitation_id = ?
+`);
+
+const selectPendingClanInvitationStmt = db.prepare(`
+  SELECT invitation_id, clan_id, invited_profile_name, invited_by_profile_name, invitation_status, message_id, created_at, responded_at, expires_at
+  FROM clan_invitations
+  WHERE clan_id = ? AND invited_profile_name = ? AND invitation_status = 'pending' AND expires_at > ?
+  LIMIT 1
+`);
+
+const selectClanInvitationStmt = db.prepare(`
+  SELECT invitation_id, clan_id, invited_profile_name, invited_by_profile_name, invitation_status, message_id, created_at, responded_at, expires_at
+  FROM clan_invitations
+  WHERE invitation_id = ?
+`);
+
+const listClanInvitationsStmt = db.prepare(`
+  SELECT i.invitation_id, i.clan_id, i.invited_profile_name, i.invited_by_profile_name,
+         i.invitation_status, i.message_id, i.created_at, i.responded_at, i.expires_at,
+         p.display_name
+  FROM clan_invitations i
+  JOIN players p ON p.profile_name = i.invited_profile_name
+  WHERE i.clan_id = ?
+  ORDER BY (i.invitation_status = 'pending') DESC, i.created_at DESC
+  LIMIT 100
+`);
+
+const updateClanInvitationStatusStmt = db.prepare(`
+  UPDATE clan_invitations
+  SET invitation_status = ?, responded_at = ?
+  WHERE invitation_id = ? AND invitation_status = 'pending'
+`);
+
+const updateClanInvitationMessagePayloadStmt = db.prepare(`
+  UPDATE messages
+  SET payload_json = JSON_SET(payload_json, '$.invitationStatus', ?)
+  WHERE id = ?
+`);
+
 const listClansStmt = db.prepare(`
   SELECT clan_id, clan_name, boss_profile_name, description, notoriety, treasury, created_at, updated_at
   FROM clans
   ORDER BY notoriety DESC, updated_at DESC, clan_name ASC
+`);
+
+const selectClanByIdStmt = db.prepare(`
+  SELECT clan_id, clan_name, boss_profile_name, description, notoriety, treasury, created_at, updated_at
+  FROM clans
+  WHERE clan_id = ?
+`);
+
+const selectClanForMemberStmt = db.prepare(`
+  SELECT c.clan_id, c.clan_name, c.boss_profile_name, c.description, c.notoriety, c.treasury,
+         c.created_at, c.updated_at, cm.member_role, cm.contribution, cm.joined_at
+  FROM clan_members cm
+  JOIN clans c ON c.clan_id = cm.clan_id
+  WHERE cm.profile_name = ?
+  ORDER BY cm.joined_at ASC
+  LIMIT 1
+`);
+
+const listClanMembersStmt = db.prepare(`
+  SELECT cm.profile_name, cm.member_role, cm.contribution, cm.joined_at,
+         p.display_name, p.rank_title, p.level, p.fame, p.last_seen_at
+  FROM clan_members cm
+  JOIN players p ON p.profile_name = cm.profile_name
+  WHERE cm.clan_id = ?
+  ORDER BY CASE cm.member_role WHEN 'fonok' THEN 0 WHEN 'alvezeto' THEN 1 ELSE 2 END,
+           p.fame DESC, p.profile_name ASC
+`);
+
+const listClanRecruitCandidatesStmt = db.prepare(`
+  SELECT p.profile_name, p.display_name, p.rank_title, p.level, p.fame, p.last_seen_at
+  FROM players p
+  LEFT JOIN clan_members cm ON cm.profile_name = p.profile_name
+  WHERE cm.profile_name IS NULL AND p.profile_name <> ?
+  ORDER BY p.fame DESC, p.updated_at DESC
+  LIMIT 100
+`);
+
+const selectClanMembershipStmt = db.prepare(`
+  SELECT clan_id, profile_name, member_role, contribution, joined_at
+  FROM clan_members
+  WHERE profile_name = ?
+  LIMIT 1
+`);
+
+const listClanWarsStmt = db.prepare(`
+  SELECT w.war_id, w.attacker_clan_id, attacker.clan_name AS attacker_clan_name,
+         w.defender_clan_id, defender.clan_name AS defender_clan_name,
+         w.attacker_score, w.defender_score, w.war_status, w.started_at, w.ends_at
+  FROM clan_wars w
+  JOIN clans attacker ON attacker.clan_id = w.attacker_clan_id
+  JOIN clans defender ON defender.clan_id = w.defender_clan_id
+  WHERE w.attacker_clan_id = ? OR w.defender_clan_id = ?
+  ORDER BY (w.war_status = 'active') DESC, w.started_at DESC
+  LIMIT 30
+`);
+
+const findActiveClanWarStmt = db.prepare(`
+  SELECT war_id
+  FROM clan_wars
+  WHERE war_status = 'active'
+    AND ((attacker_clan_id = ? AND defender_clan_id = ?) OR (attacker_clan_id = ? AND defender_clan_id = ?))
+  LIMIT 1
+`);
+
+const insertClanWarStmt = db.prepare(`
+  INSERT INTO clan_wars (attacker_clan_id, defender_clan_id, attacker_score, defender_score, war_status, started_at, ends_at)
+  VALUES (?, ?, 0, 0, 'active', ?, ?)
+`);
+
+const expireClanWarsStmt = db.prepare(`
+  UPDATE clan_wars
+  SET war_status = 'finished'
+  WHERE war_status = 'active' AND ends_at <= ?
 `);
 
 const insertEventStmt = db.prepare(`
@@ -781,6 +972,11 @@ const markMessagesReadStmt = db.prepare(`
   UPDATE messages
   SET read_at = ?
   WHERE recipient_profile_name = ? AND message_type = 'player' AND read_at IS NULL
+`);
+
+const deleteReceivedMessageStmt = db.prepare(`
+  DELETE FROM messages
+  WHERE id = ? AND recipient_profile_name = ? AND message_type = 'player'
 `);
 
 const deleteMessagesByProfileStmt = db.prepare(`
@@ -1063,6 +1259,63 @@ function mapClanRow(row) {
     treasury: row.treasury,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+  };
+}
+
+const clanPermissionKeys = ["inviteMembers", "declareWar"];
+
+function normalizeClanPermissions(value = {}) {
+  const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  return Object.fromEntries(clanPermissionKeys.map((key) => [key, Boolean(source[key])]));
+}
+
+function mapClanRoleRow(row) {
+  return {
+    clanId: row.clan_id,
+    roleKey: row.role_key,
+    roleName: row.role_name,
+    priority: row.role_priority,
+    permissions: normalizeClanPermissions(parseJsonSafely(row.permissions_json, {})),
+    isSystem: Boolean(row.is_system),
+    updatedAt: row.updated_at,
+  };
+}
+
+async function ensureDefaultClanRoles(clanId, now = Date.now()) {
+  const defaults = [
+    { key: "fonok", name: "Családfő", priority: 100, permissions: { inviteMembers: true, declareWar: true }, system: 1 },
+    { key: "alvezeto", name: "Alvezér", priority: 60, permissions: { inviteMembers: true, declareWar: true }, system: 0 },
+    { key: "katona", name: "Katona", priority: 10, permissions: { inviteMembers: false, declareWar: false }, system: 0 },
+  ];
+  const current = await listClanRolesStmt.all(clanId);
+  const existingKeys = new Set(current.map((role) => role.role_key));
+  for (const role of defaults) {
+    if (existingKeys.has(role.key)) continue;
+    await upsertClanRoleStmt.run(
+      clanId,
+      role.key,
+      role.name,
+      role.priority,
+      JSON.stringify(role.permissions),
+      role.system,
+      now,
+    );
+  }
+}
+
+async function getClanAccess(profileName) {
+  const membership = profileName ? await selectClanForMemberStmt.get(profileName) : null;
+  if (!membership) return null;
+  await ensureDefaultClanRoles(membership.clan_id);
+  const role = await selectClanRoleStmt.get(membership.clan_id, membership.member_role);
+  const isBoss = membership.boss_profile_name === profileName || membership.member_role === "fonok";
+  return {
+    membership,
+    isBoss,
+    role: role ? mapClanRoleRow(role) : null,
+    permissions: isBoss
+      ? Object.fromEntries(clanPermissionKeys.map((key) => [key, true]))
+      : normalizeClanPermissions(parseJsonSafely(role?.permissions_json, {})),
   };
 }
 
@@ -2032,6 +2285,8 @@ async function writeMarketStock(profileName, state, now) {
 async function writeClanData(profileName, state, now) {
   const clanName = typeof state.clanName === "string" ? state.clanName.trim() : "";
   if (!clanName) return;
+  const existingMembership = await selectClanForMemberStmt.get(profileName);
+  if (existingMembership) return;
   const clanId = `clan-${clanName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "ismeretlen"}`;
   await upsertClanStmt.run(
     clanId,
@@ -2043,7 +2298,6 @@ async function writeClanData(profileName, state, now) {
     now,
     now,
   );
-  await deleteClanMembersByClanStmt.run(clanId);
   await insertClanMemberStmt.run(clanId, profileName, "fonok", 0, now);
 }
 
@@ -2117,7 +2371,7 @@ async function logEvent(profileName, eventType, title, payload = {}, now = Date.
 }
 
 async function createMessage(recipientProfileName, senderProfileName, messageType, title, body, payload = {}, now = Date.now()) {
-  await insertMessageStmt.run(
+  return insertMessageStmt.run(
     recipientProfileName,
     senderProfileName || null,
     String(messageType || "player").slice(0, 32),
@@ -2531,10 +2785,408 @@ async function handleApiRequest(request, response, pathname) {
     return true;
   }
 
+  if (pathname === "/api/clans/dashboard" && request.method === "GET") {
+    const profileName = getActiveProfileFromRequest(request);
+    if (!profileName) {
+      sendJson(response, 401, { error: "Nincs aktív játékos." });
+      return true;
+    }
+    await expireClanWarsStmt.run(Date.now());
+    const membership = await selectClanForMemberStmt.get(profileName);
+    const clans = (await listClansStmt.all()).map(mapClanRow);
+    if (!membership) {
+      sendJson(response, 200, { clan: null, members: [], candidates: [], rivals: clans, wars: [] });
+      return true;
+    }
+    const clan = {
+      ...mapClanRow(membership),
+      memberRole: membership.member_role,
+      contribution: membership.contribution,
+      joinedAt: membership.joined_at,
+    };
+    await ensureDefaultClanRoles(clan.clanId);
+    const access = await getClanAccess(profileName);
+    const [members, candidates, wars, roleRows, invitations] = await Promise.all([
+      listClanMembersStmt.all(clan.clanId),
+      listClanRecruitCandidatesStmt.all(profileName),
+      listClanWarsStmt.all(clan.clanId, clan.clanId),
+      listClanRolesStmt.all(clan.clanId),
+      listClanInvitationsStmt.all(clan.clanId),
+    ]);
+    sendJson(response, 200, {
+      clan,
+      members,
+      candidates,
+      roles: roleRows.map(mapClanRoleRow),
+      permissions: access?.permissions || {},
+      isBoss: Boolean(access?.isBoss),
+      invitations: invitations.map((entry) => ({
+        invitationId: entry.invitation_id,
+        profileName: entry.invited_profile_name,
+        displayName: entry.display_name,
+        status: entry.invitation_status,
+        createdAt: entry.created_at,
+        expiresAt: entry.expires_at,
+      })),
+      rivals: clans.filter((entry) => entry.clanId !== clan.clanId),
+      wars: wars.map((row) => ({
+        warId: row.war_id,
+        attackerClanId: row.attacker_clan_id,
+        attackerClanName: row.attacker_clan_name,
+        defenderClanId: row.defender_clan_id,
+        defenderClanName: row.defender_clan_name,
+        attackerScore: row.attacker_score,
+        defenderScore: row.defender_score,
+        status: row.war_status,
+        startedAt: row.started_at,
+        endsAt: row.ends_at,
+      })),
+    });
+    return true;
+  }
+
   if (pathname === "/api/clans" && request.method === "GET") {
     const clans = (await listClansStmt.all()).map(mapClanRow);
     sendJson(response, 200, { clans });
     return true;
+  }
+
+  if (pathname === "/api/clans" && request.method === "POST") {
+    try {
+      const profileName = getActiveProfileFromRequest(request);
+      const player = profileName ? await selectPlayerStmt.get(profileName) : null;
+      if (!profileName || !player) {
+        sendJson(response, 401, { error: "Nincs aktív játékos." });
+        return true;
+      }
+      if (await selectClanMembershipStmt.get(profileName)) {
+        sendJson(response, 409, { error: "Már tagja vagy egy klánnak." });
+        return true;
+      }
+      const rawBody = await readRequestBody(request);
+      const body = rawBody ? JSON.parse(rawBody) : {};
+      const clanName = String(body.clanName || "").trim().slice(0, 40);
+      const description = String(body.description || "").trim().slice(0, 220);
+      if (clanName.length < 3) {
+        sendJson(response, 400, { error: "A család neve legalább 3 karakter legyen." });
+        return true;
+      }
+      const slug = clanName.toLowerCase().replace(/[^a-z0-9áéíóöőúüű]+/gi, "-").replace(/^-|-$/g, "") || "csalad";
+      const clanId = `clan-${Date.now().toString(36)}-${slug}`.slice(0, 128);
+      const now = Date.now();
+      await db.transaction(async () => {
+        await insertClanStmt.run(clanId, clanName, profileName, description, now, now);
+        await insertClanMemberStmt.run(clanId, profileName, "fonok", 0, now);
+        await ensureDefaultClanRoles(clanId, now);
+      });
+      sendJson(response, 201, { ok: true, clanId, clanName });
+      return true;
+    } catch (error) {
+      const duplicateName = error?.code === "ER_DUP_ENTRY";
+      sendJson(response, duplicateName ? 409 : 400, { error: duplicateName ? "Ez a klánnév már foglalt." : (error.message || "A klán alapítása sikertelen.") });
+      return true;
+    }
+  }
+
+  if (pathname === "/api/clans/members" && request.method === "POST") {
+    try {
+      const requester = getActiveProfileFromRequest(request);
+      const access = await getClanAccess(requester);
+      const clan = access?.membership;
+      if (!clan || !access.permissions.inviteMembers) {
+        sendJson(response, 403, { error: "A rangod nem küldhet klánmeghívót." });
+        return true;
+      }
+      const rawBody = await readRequestBody(request);
+      const body = rawBody ? JSON.parse(rawBody) : {};
+      const profileName = normalizeProfileName(body.profileName);
+      if (!profileName || !await selectPlayerStmt.get(profileName)) {
+        sendJson(response, 404, { error: "A játékos nem található." });
+        return true;
+      }
+      if (await selectClanMembershipStmt.get(profileName)) {
+        sendJson(response, 409, { error: "A játékos már egy klán tagja." });
+        return true;
+      }
+      const now = Date.now();
+      const pendingInvitation = await selectPendingClanInvitationStmt.get(clan.clan_id, profileName, now);
+      if (pendingInvitation) {
+        sendJson(response, 409, { error: "Ennek a játékosnak már elküldtétek a meghívót." });
+        return true;
+      }
+      const expiresAt = now + (7 * 24 * 60 * 60 * 1000);
+      const invitationResult = await insertClanInvitationStmt.run(clan.clan_id, profileName, requester, now, expiresAt);
+      const invitationId = Number(invitationResult.insertId);
+      const title = `Egy szék vár rád a ${clan.clan_name} asztalánál`;
+      const messageBody = `${requester} üzenete: a ${clan.clan_name} család felfigyelt rád. Ha elfogadod a meghívást, helyet kapsz az asztalnál — de ne feledd: a családba belépni döntés, a hűség pedig eskü.`;
+      const messageResult = await createMessage(
+        profileName,
+        requester,
+        "player",
+        title,
+        messageBody,
+        {
+          kind: "clan_invitation",
+          invitationId,
+          invitationStatus: "pending",
+          clanId: clan.clan_id,
+          clanName: clan.clan_name,
+          invitedBy: requester,
+          expiresAt,
+        },
+        now,
+      );
+      await updateClanInvitationMessageStmt.run(Number(messageResult.insertId), invitationId);
+      sendJson(response, 201, { ok: true, profileName, invitationId, message: "A meghívó üzenetet elküldtük." });
+      return true;
+    } catch (error) {
+      sendJson(response, 400, { error: error.message || "A játékos felvétele sikertelen." });
+      return true;
+    }
+  }
+
+  if (pathname.startsWith("/api/clans/invitations/") && pathname.endsWith("/respond") && request.method === "POST") {
+    try {
+      const recipient = getActiveProfileFromRequest(request);
+      const invitationId = toSafeInt(pathname.slice("/api/clans/invitations/".length, -"/respond".length), 0, 1);
+      const invitation = invitationId ? await selectClanInvitationStmt.get(invitationId) : null;
+      if (!recipient || !invitation || invitation.invited_profile_name !== recipient) {
+        sendJson(response, 404, { error: "A meghívó nem található." });
+        return true;
+      }
+      const rawBody = await readRequestBody(request);
+      const body = rawBody ? JSON.parse(rawBody) : {};
+      const decision = body.decision === "accept" ? "accepted" : body.decision === "decline" ? "declined" : "";
+      if (!decision) {
+        sendJson(response, 400, { error: "Érvénytelen válasz." });
+        return true;
+      }
+      if (invitation.invitation_status !== "pending") {
+        sendJson(response, 409, { error: "Erre a meghívóra már válaszoltál.", status: invitation.invitation_status });
+        return true;
+      }
+      const now = Date.now();
+      if (Number(invitation.expires_at) <= now) {
+        await updateClanInvitationStatusStmt.run("expired", now, invitationId);
+        if (invitation.message_id) await updateClanInvitationMessagePayloadStmt.run("expired", invitation.message_id);
+        sendJson(response, 410, { error: "A meghívó már lejárt." });
+        return true;
+      }
+      if (decision === "accepted" && await selectClanMembershipStmt.get(recipient)) {
+        sendJson(response, 409, { error: "Már tagja vagy egy másik klánnak." });
+        return true;
+      }
+      await db.transaction(async () => {
+        if (decision === "accepted") {
+          await insertClanMemberStmt.run(invitation.clan_id, recipient, "katona", 0, now);
+        }
+        await updateClanInvitationStatusStmt.run(decision, now, invitationId);
+        if (invitation.message_id) await updateClanInvitationMessagePayloadStmt.run(decision, invitation.message_id);
+      });
+      const clan = await selectClanByIdStmt.get(invitation.clan_id);
+      sendJson(response, 200, {
+        ok: true,
+        status: decision,
+        clanName: clan?.clan_name || "a család",
+        message: decision === "accepted" ? "Mostantól a család tagja vagy." : "A meghívót elutasítottad.",
+      });
+      return true;
+    } catch (error) {
+      sendJson(response, 400, { error: error.message || "A meghívóra nem sikerült válaszolni." });
+      return true;
+    }
+  }
+
+  if (pathname === "/api/clans/member-role" && request.method === "PUT") {
+    try {
+      const requester = getActiveProfileFromRequest(request);
+      const access = await getClanAccess(requester);
+      if (!access?.isBoss) {
+        sendJson(response, 403, { error: "Csak a családfő oszthat rangot." });
+        return true;
+      }
+      const rawBody = await readRequestBody(request);
+      const body = rawBody ? JSON.parse(rawBody) : {};
+      const profileName = normalizeProfileName(body.profileName);
+      const roleKey = String(body.roleKey || "").slice(0, 32);
+      const targetMembership = profileName ? await selectClanMembershipStmt.get(profileName) : null;
+      const role = roleKey ? await selectClanRoleStmt.get(access.membership.clan_id, roleKey) : null;
+      if (!targetMembership || targetMembership.clan_id !== access.membership.clan_id || !role) {
+        sendJson(response, 404, { error: "A tag vagy a rang nem található." });
+        return true;
+      }
+      if (profileName === requester || targetMembership.member_role === "fonok" || roleKey === "fonok") {
+        sendJson(response, 409, { error: "A családfő rangja nem módosítható." });
+        return true;
+      }
+      await updateClanMemberRoleStmt.run(roleKey, access.membership.clan_id, profileName);
+      sendJson(response, 200, { ok: true, profileName, roleKey });
+      return true;
+    } catch (error) {
+      sendJson(response, 400, { error: error.message || "A rang kiosztása sikertelen." });
+      return true;
+    }
+  }
+
+  if (pathname.startsWith("/api/clans/members/") && request.method === "DELETE") {
+    try {
+      const requester = getActiveProfileFromRequest(request);
+      const access = await getClanAccess(requester);
+      if (!access?.isBoss) {
+        sendJson(response, 403, { error: "Csak a családfő rúghat ki tagot." });
+        return true;
+      }
+      const profileName = normalizeProfileName(decodeURIComponent(pathname.slice("/api/clans/members/".length)));
+      if (!profileName || profileName === requester) {
+        sendJson(response, 400, { error: "Saját magadnál a kilépést használd." });
+        return true;
+      }
+      const membership = await selectClanMembershipStmt.get(profileName);
+      if (!membership || membership.clan_id !== access.membership.clan_id || membership.member_role === "fonok") {
+        sendJson(response, 404, { error: "Ez a játékos nem rúgható ki ebből a klánból." });
+        return true;
+      }
+      const now = Date.now();
+      await db.transaction(async () => {
+        await deleteClanMemberStmt.run(access.membership.clan_id, profileName);
+        await createMessage(
+          profileName,
+          requester,
+          "player",
+          `Lezárult a tagságod a ${access.membership.clan_name} családban`,
+          `${requester} döntése alapján többé nem vagy a ${access.membership.clan_name} család tagja. Az ajtó bezárult, az utca azonban továbbra is nyitva áll előtted.`,
+          { kind: "clan_membership_removed", clanId: access.membership.clan_id, clanName: access.membership.clan_name },
+          now,
+        );
+      });
+      sendJson(response, 200, { ok: true, profileName });
+      return true;
+    } catch (error) {
+      sendJson(response, 400, { error: error.message || "A tag kirúgása sikertelen." });
+      return true;
+    }
+  }
+
+  if (pathname === "/api/clans/leave" && request.method === "POST") {
+    try {
+      const profileName = getActiveProfileFromRequest(request);
+      const access = await getClanAccess(profileName);
+      if (!access) {
+        sendJson(response, 404, { error: "Nem vagy klántag." });
+        return true;
+      }
+      const clanId = access.membership.clan_id;
+      const clanName = access.membership.clan_name;
+      const now = Date.now();
+      let successor = null;
+      let dissolved = false;
+      await db.transaction(async () => {
+        if (access.isBoss) {
+          successor = await selectClanSuccessorStmt.get(clanId, profileName);
+          if (successor) {
+            await deleteClanMemberStmt.run(clanId, profileName);
+            await updateClanMemberRoleStmt.run("fonok", clanId, successor.profile_name);
+            await updateClanBossStmt.run(successor.profile_name, now, clanId);
+            await createMessage(
+              successor.profile_name,
+              profileName,
+              "player",
+              `A ${clanName} család vezetése rád szállt`,
+              `${profileName} elhagyta a családot. A megmaradt emberek mostantól rád néznek: te lettél a családfő.`,
+              { kind: "clan_leadership_transfer", clanId, clanName },
+              now,
+            );
+          } else {
+            dissolved = true;
+            await deleteClanByIdStmt.run(clanId);
+          }
+        } else {
+          await deleteClanMemberStmt.run(clanId, profileName);
+        }
+      });
+      sendJson(response, 200, {
+        ok: true,
+        clanName,
+        dissolved,
+        newBossProfileName: successor?.profile_name || null,
+      });
+      return true;
+    } catch (error) {
+      sendJson(response, 400, { error: error.message || "A klánból való kilépés sikertelen." });
+      return true;
+    }
+  }
+
+  if (pathname === "/api/clans/roles" && request.method === "PUT") {
+    try {
+      const requester = getActiveProfileFromRequest(request);
+      const access = await getClanAccess(requester);
+      if (!access?.isBoss) {
+        sendJson(response, 403, { error: "Csak a családfő állíthatja a rangjogokat." });
+        return true;
+      }
+      const rawBody = await readRequestBody(request);
+      const body = rawBody ? JSON.parse(rawBody) : {};
+      const roleKey = String(body.roleKey || "").slice(0, 32);
+      const existingRole = roleKey ? await selectClanRoleStmt.get(access.membership.clan_id, roleKey) : null;
+      if (!existingRole || roleKey === "fonok") {
+        sendJson(response, 409, { error: "A családfő jogai nem módosíthatók." });
+        return true;
+      }
+      const roleName = String(body.roleName || existingRole.role_name).trim().slice(0, 64);
+      if (roleName.length < 2) {
+        sendJson(response, 400, { error: "A rang neve legalább 2 karakter legyen." });
+        return true;
+      }
+      const permissions = normalizeClanPermissions(body.permissions);
+      await upsertClanRoleStmt.run(
+        access.membership.clan_id,
+        roleKey,
+        roleName,
+        existingRole.role_priority,
+        JSON.stringify(permissions),
+        existingRole.is_system,
+        Date.now(),
+      );
+      sendJson(response, 200, { ok: true, roleKey, roleName, permissions });
+      return true;
+    } catch (error) {
+      sendJson(response, 400, { error: error.message || "A rangjogok mentése sikertelen." });
+      return true;
+    }
+  }
+
+  if (pathname === "/api/clans/wars" && request.method === "POST") {
+    try {
+      const requester = getActiveProfileFromRequest(request);
+      const access = await getClanAccess(requester);
+      const clan = access?.membership;
+      if (!clan || !access.permissions.declareWar) {
+        sendJson(response, 403, { error: "A rangod nem indíthat bandaháborút." });
+        return true;
+      }
+      const rawBody = await readRequestBody(request);
+      const body = rawBody ? JSON.parse(rawBody) : {};
+      const targetClanId = String(body.targetClanId || "").slice(0, 128);
+      const targetClan = targetClanId ? await selectClanByIdStmt.get(targetClanId) : null;
+      if (!targetClan || targetClan.clan_id === clan.clan_id) {
+        sendJson(response, 400, { error: "Érvénytelen rivális család." });
+        return true;
+      }
+      const activeWar = await findActiveClanWarStmt.get(clan.clan_id, targetClanId, targetClanId, clan.clan_id);
+      if (activeWar) {
+        sendJson(response, 409, { error: "Ezzel a családdal már folyamatban van egy háború." });
+        return true;
+      }
+      const now = Date.now();
+      const endsAt = now + (24 * 60 * 60 * 1000);
+      const result = await insertClanWarStmt.run(clan.clan_id, targetClanId, now, endsAt);
+      sendJson(response, 201, { ok: true, warId: result.insertId, endsAt });
+      return true;
+    } catch (error) {
+      sendJson(response, 400, { error: error.message || "A bandaháború indítása sikertelen." });
+      return true;
+    }
   }
 
   if (pathname === "/api/events" && request.method === "GET") {
@@ -2653,6 +3305,23 @@ async function handleApiRequest(request, response, pathname) {
       return true;
     } catch (error) {
       sendJson(response, 400, { error: error.message || "Invalid read payload" });
+      return true;
+    }
+  }
+
+  if (pathname.startsWith("/api/messages/") && request.method === "DELETE") {
+    try {
+      const profileName = getActiveProfileFromRequest(request);
+      const messageId = toSafeInt(decodeURIComponent(pathname.slice("/api/messages/".length)), 0, 1);
+      if (!profileName || !messageId) {
+        sendJson(response, 400, { error: "Missing profile name or message id" });
+        return true;
+      }
+      await deleteReceivedMessageStmt.run(messageId, profileName);
+      sendJson(response, 200, { ok: true, messageId });
+      return true;
+    } catch (error) {
+      sendJson(response, 400, { error: error.message || "Invalid delete request" });
       return true;
     }
   }

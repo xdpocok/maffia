@@ -20,6 +20,7 @@ const HEAT_GAIN_MULTIPLIER = 0.46;
 const RIVAL_SPAWN_MIN_MS = 4 * 60 * 60 * 1000;
 const RIVAL_SPAWN_MAX_MS = 5 * 60 * 60 * 1000;
 const RIVAL_EVENT_DURATION_MS = 5 * 60 * 60 * 1000;
+const RIVAL_ACTION_DURATION_MS = 5 * 60 * 1000;
 const WORLD_RIVAL_CITY_TRIBUTE_MS = 4 * 60 * 60 * 1000;
 const WORLD_RIVAL_CITY_PROTECTION_MS = 48 * 60 * 60 * 1000;
 const WORLD_RIVAL_STRUCTURE_REPAIR_MS = 35 * 60 * 1000;
@@ -27,6 +28,9 @@ const WORLD_RIVAL_ATTACK_FAILURE_COOLDOWN_MS = 15 * 60 * 1000;
 const WORLD_RIVAL_CITY_BASE_COUNT = 18;
 const WORLD_RIVAL_CITY_MAX_COUNT = 34;
 const WORLD_RIVAL_CITY_NEAR_BASE_COUNT = 5;
+const MARKET_REFRESH_MS = 6 * 60 * 60 * 1000;
+const GARAGE_RUN_WINDOW_MS = 12 * 60 * 60 * 1000;
+const GARAGE_RUN_LIMIT = 4;
 const districtDefs = [
   {
     id: "center",
@@ -311,10 +315,13 @@ function buildWorldMapSelectionBar(ownLot, selectionMode) {
     <div class="worldmap__selectionbar">
       <div class="worldmap__selectioncopy">
         <strong id="worldMapLotTitle">${ownLot ? `${ownLot.code} / ${ownLot.coord}` : "Nincs kijelolt telek"}</strong>
-        <p id="worldMapLotText">Kattints egy szabad telekre, vagy keresd meg koordinata alapjan a varosod helyet.</p>
         <div id="worldMapLotMeta" class="worldmap__meta">${ownLot ? `Allapot: a tied | Bazisszint: ${clamp(Math.round(Number(state.worldBaseLevel) || 1), 1, 3)}` : "Allapot: ures telek"}</div>
       </div>
-      ${selectionMode ? `<button id="worldMapChooseBtn" class="worldmap__choose" type="button" disabled>Ez lesz a varosom</button>` : ``}
+      <div class="worldmap__searchrow worldmap__searchrow--selection">
+        <input id="worldMapSearch" type="text" placeholder="Jatekosnev, C2 vagy 46:28" autocomplete="off" aria-label="Jatekos vagy telek keresese">
+        <button id="worldMapSearchBtn" type="button">Kereses</button>
+      </div>
+      <button id="worldMapChooseBtn" class="worldmap__choose" type="button" disabled>Ez lesz a falum</button>
     </div>
   `;
 }
@@ -1105,6 +1112,7 @@ const auxPanel = document.getElementById("auxPanel");
 const auxPanelBackdrop = document.getElementById("auxPanelBackdrop");
 const auxPanelTitle = document.getElementById("auxPanelTitle");
 const auxPanelSubtitle = document.getElementById("auxPanelSubtitle");
+const auxPanelHeaderTools = document.getElementById("auxPanelHeaderTools");
 const auxPanelBody = document.getElementById("auxPanelBody");
 const auxPanelClose = document.getElementById("auxPanelClose");
 const messagesDialog = document.getElementById("messagesDialog");
@@ -1578,11 +1586,10 @@ function generateMarketStock(seed = state.profileName || "market", refreshAt = D
 }
 
 function ensureMarketStock(now = Date.now()) {
-  const refreshEveryMs = 4 * 60 * 60 * 1000;
   const needsMigration = Array.isArray(state.marketStock) && state.marketStock.some((entry) => !String(entry?.item?.id || "").startsWith("market-"));
   if (!Array.isArray(state.marketStock) || !state.marketStock.length || !Number.isFinite(state.marketRefreshAt) || now >= state.marketRefreshAt || needsMigration) {
     state.marketStock = generateMarketStock(state.profileName || "market", now);
-    state.marketRefreshAt = now + refreshEveryMs;
+    state.marketRefreshAt = now + MARKET_REFRESH_MS;
   }
 }
 
@@ -2101,6 +2108,7 @@ function setAuxPanelContent(title, subtitle, bodyHtml) {
   document.body.classList.remove("is-world-map-open");
   if (auxPanelTitle) auxPanelTitle.textContent = title;
   if (auxPanelSubtitle) auxPanelSubtitle.textContent = subtitle;
+  if (auxPanelHeaderTools) auxPanelHeaderTools.replaceChildren();
   if (auxPanelBody) auxPanelBody.innerHTML = bodyHtml;
   auxPanel?.classList.remove("hidden");
   auxPanel?.setAttribute("aria-hidden", "false");
@@ -2245,6 +2253,14 @@ function hideRewardModal() {
   }, 0);
 }
 
+function getPlayerCombatAttackStat() {
+  return Math.max(1, getPlayerAttackStat() + getRankLevel(state.fame));
+}
+
+function getPlayerCombatDefenseStat() {
+  return Math.max(1, getPlayerDefenseStat() + getRankLevel(state.fame));
+}
+
 function queueRewardModal(payload = {}) {
   const normalizedPayload = {
     title: payload.title || "Jutalom",
@@ -2291,8 +2307,8 @@ function formatInboxDate(timestamp) {
   });
 }
 
-function getMessageTypeLabel(messageType) {
-  return "Játékos";
+function getMessageTypeLabel(messageType, payload = {}) {
+  return payload?.kind === "clan_invitation" ? "Klánmeghívó" : "Játékos";
 }
 
 function getPlayerInboxMessages(messages = []) {
@@ -2305,21 +2321,39 @@ function renderMessagesPanel(messages = []) {
   const body = playerMessages.length
     ? `
       <section class="messages-panel">
-        <div class="messages-panel__intro">
-          <strong>Családi posta</strong>
-          <span>Csak a más játékosoktól kapott privát üzenetek jelennek meg itt.</span>
-        </div>
         <div class="messages-list">
           ${playerMessages.map((message) => `
-            <article class="message-card message-card--${escapeHtml(message.messageType || "player")}${message.readAt ? "" : " is-unread"}">
-              <div class="message-card__stamp">${getMessageTypeLabel(message.messageType)}</div>
+            <article class="message-card message-card--${escapeHtml(message.messageType || "player")}${message.readAt ? "" : " is-unread"}" data-message-id="${Number(message.id) || 0}" tabindex="0">
+              <button class="message-card__delete" type="button" data-message-delete="${Number(message.id) || 0}" aria-label="Uzenet torlese">x</button>
+              <div class="message-card__stamp">${getMessageTypeLabel(message.messageType, message.payload)}</div>
               <div class="message-card__copy">
                 <div class="message-card__heading">
                   <strong>${escapeHtml(message.title || "Üzenet")}</strong>
                   <time>${formatInboxDate(message.createdAt)}</time>
                 </div>
                 ${message.senderProfileName ? `<span class="message-card__sender">Feladó: ${escapeHtml(message.senderProfileName)}</span>` : ""}
-                <p>${escapeHtml(message.body || "")}</p>
+                <p class="message-card__preview">${escapeHtml(message.body || "")}</p>
+                <div class="message-card__details">
+                  <p>${escapeHtml(message.body || "")}</p>
+                  ${message.payload?.kind === "clan_invitation" ? `
+                    <div class="clan-invitation-response" data-clan-invitation-actions="${Number(message.payload.invitationId) || 0}">
+                      <div>
+                        <small>A család ajánlata</small>
+                        <strong>${escapeHtml(message.payload.clanName || "Ismeretlen család")}</strong>
+                      </div>
+                      ${message.payload.invitationStatus === "pending" ? `
+                        <button type="button" data-clan-invite-decision="accept" data-invitation-id="${Number(message.payload.invitationId) || 0}">Elfogadom</button>
+                        <button class="is-decline" type="button" data-clan-invite-decision="decline" data-invitation-id="${Number(message.payload.invitationId) || 0}">Elutasítom</button>
+                      ` : `<span class="clan-invitation-response__status">${message.payload.invitationStatus === "accepted" ? "Elfogadva · A család tagja vagy" : message.payload.invitationStatus === "declined" ? "Elutasítva" : "A meghívó lejárt"}</span>`}
+                    </div>
+                  ` : ""}
+                  <form class="message-reply-form" data-message-reply="${escapeHtml(message.senderProfileName || "")}">
+                    <label>Valasz ${escapeHtml(message.senderProfileName || "a feladonak")} reszere</label>
+                    <textarea maxlength="1200" placeholder="Ird ide a valaszodat..."></textarea>
+                    <button type="submit">Valasz kuldese</button>
+                    <span class="message-reply-form__status" aria-live="polite"></span>
+                  </form>
+                </div>
               </div>
             </article>
           `).join("")}
@@ -2333,13 +2367,117 @@ function renderMessagesPanel(messages = []) {
       </div>
     `;
   hideAuxPanel();
-  setMessagesDialogContent("Üzenetek", "Családi posta", body);
+  setMessagesDialogContent("Üzenetek", "Privát üzenetek", body);
   activeAuxPanelKind = "messages";
+  bindMessagesPanelActions();
+}
+
+function bindMessagesPanelActions() {
+  if (!messagesDialogBody) return;
+  messagesDialogBody.onclick = async (event) => {
+    const invitationButton = event.target.closest("[data-clan-invite-decision]");
+    if (invitationButton) {
+      event.preventDefault();
+      event.stopPropagation();
+      const invitationId = Number(invitationButton.dataset.invitationId) || 0;
+      const decision = invitationButton.dataset.clanInviteDecision;
+      const actions = invitationButton.closest("[data-clan-invitation-actions]");
+      if (!invitationId || !["accept", "decline"].includes(decision)) return;
+      actions?.querySelectorAll("button").forEach((button) => { button.disabled = true; });
+      try {
+        const response = await fetch(`/api/clans/invitations/${invitationId}/respond`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Accept: "application/json" },
+          body: JSON.stringify({ decision }),
+        });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || "A válasz sikertelen.");
+        if (actions) {
+          actions.querySelectorAll("button").forEach((button) => button.remove());
+          const status = document.createElement("span");
+          status.className = "clan-invitation-response__status";
+          status.textContent = decision === "accept" ? `Elfogadva · ${payload.clanName} tagja vagy` : "A meghívót elutasítottad";
+          actions.append(status);
+        }
+        if (decision === "accept") {
+          state.clanName = payload.clanName || state.clanName;
+          saveGame(true);
+        }
+      } catch (error) {
+        actions?.querySelectorAll("button").forEach((button) => { button.disabled = false; });
+        const existingStatus = actions?.querySelector(".clan-invitation-response__status");
+        if (existingStatus) existingStatus.textContent = error.message;
+        else if (actions) {
+          const status = document.createElement("span");
+          status.className = "clan-invitation-response__status is-error";
+          status.textContent = error.message;
+          actions.append(status);
+        }
+      }
+      return;
+    }
+    const deleteButton = event.target.closest("[data-message-delete]");
+    if (deleteButton) {
+      event.preventDefault();
+      event.stopPropagation();
+      const messageId = Number(deleteButton.dataset.messageDelete) || 0;
+      if (!messageId) return;
+      deleteButton.disabled = true;
+      try {
+        const response = await fetch(`/api/messages/${messageId}`, { method: "DELETE" });
+        if (!response.ok) throw new Error("delete_failed");
+        deleteButton.closest(".message-card")?.remove();
+        if (!messagesDialogBody.querySelector(".message-card")) openMessagesPanel();
+      } catch {
+        deleteButton.disabled = false;
+      }
+      return;
+    }
+    if (event.target.closest(".message-reply-form")) return;
+    const card = event.target.closest(".message-card");
+    if (!card) return;
+    messagesDialogBody.querySelectorAll(".message-card.is-open").forEach((entry) => {
+      if (entry !== card) entry.classList.remove("is-open");
+    });
+    card.classList.toggle("is-open");
+    card.classList.remove("is-unread");
+  };
+  messagesDialogBody.onkeydown = (event) => {
+    if ((event.key === "Enter" || event.key === " ") && event.target.matches(".message-card")) {
+      event.preventDefault();
+      event.target.click();
+    }
+  };
+  messagesDialogBody.onsubmit = async (event) => {
+    const form = event.target.closest("[data-message-reply]");
+    if (!form) return;
+    event.preventDefault();
+    const recipientProfileName = form.dataset.messageReply || "";
+    const textarea = form.querySelector("textarea");
+    const status = form.querySelector(".message-reply-form__status");
+    const body = textarea?.value.trim() || "";
+    if (!body) {
+      if (status) status.textContent = "Ird be a valaszodat.";
+      return;
+    }
+    try {
+      const response = await fetch("/api/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ recipientProfileName, body }),
+      });
+      if (!response.ok) throw new Error("reply_failed");
+      if (textarea) textarea.value = "";
+      if (status) status.textContent = "A valasz elkuldve.";
+    } catch {
+      if (status) status.textContent = "A valaszt most nem sikerult elkuldeni.";
+    }
+  };
 }
 
 async function openMessagesPanel() {
   hideAuxPanel();
-  setMessagesDialogContent("Üzenetek", "Családi posta", `<div class="aux-panel__carditem"><strong>Posta betöltése...</strong></div>`);
+  setMessagesDialogContent("Üzenetek", "Privát üzenetek", `<div class="aux-panel__carditem"><strong>Üzenetek betöltése...</strong></div>`);
   activeAuxPanelKind = "messages";
   try {
     const response = await fetch("/api/messages?limit=80", {
@@ -2354,7 +2492,7 @@ async function openMessagesPanel() {
       body: JSON.stringify({}),
     });
   } catch {
-    setMessagesDialogContent("Üzenetek", "Családi posta", `<div class="aux-panel__carditem"><strong>A posta most nem elérhető.</strong><div class="aux-panel__muted">Próbáld meg néhány pillanat múlva.</div></div>`);
+    setMessagesDialogContent("Üzenetek", "Privát üzenetek", `<div class="aux-panel__carditem"><strong>Az üzenetek most nem érhetők el.</strong><div class="aux-panel__muted">Próbáld meg néhány pillanat múlva.</div></div>`);
   }
 }
 
@@ -2371,10 +2509,7 @@ function renderPublicPlayerProfile(profile, focusMessage = false) {
       </article>
       <div class="public-profile__stats">
         <div><span>Befolyás</span><strong>${profile.influence}%</strong></div>
-        <div><span>Támadás</span><strong>${profile.attack}</strong></div>
-        <div><span>Védelem</span><strong>${profile.defense}</strong></div>
         <div><span>Bázis</span><strong>${profile.worldBaseLevel}. szint</strong></div>
-        <div><span>Banda</span><strong>${profile.crewCount} fő</strong></div>
         <div><span>Város</span><strong>${Math.max(0, Math.round(Number(profile.npcVillageVictories) || 0))} legyőzve</strong></div>
       </div>
       <div class="public-profile__actions">
@@ -3088,23 +3223,451 @@ function renderBlackMarketPanel() {
   activeAuxPanelKind = "market";
 }
 
-function renderClanPanel() {
-  const body = `
-    <div class="aux-panel__cardlist">
-      <article class="aux-panel__carditem">
-        <strong>Klánközpont</strong>
-        <div class="aux-panel__muted">Ide kerül majd a családok közötti szövetség, tagfelvétel, közös kassza és klánüzenetek felülete.</div>
-      </article>
-      <article class="aux-panel__carditem">
-        <strong>Állapot</strong>
-        <div>Nincs aktív klánod.</div>
-        <div class="aux-panel__muted">A saját embereid kezelése továbbra is a jobb oldali Banda panelen marad.</div>
-      </article>
-    </div>
+let clanPanelData = null;
+let clanActiveTab = "members";
+
+function getClanMemberName(member) {
+  return member?.display_name || member?.profile_name || "Ismeretlen";
+}
+
+function formatClanLastSeen(timestamp) {
+  const elapsed = Date.now() - Number(timestamp || 0);
+  if (elapsed < 5 * 60 * 1000) return "Most aktív";
+  if (elapsed < 60 * 60 * 1000) return `${Math.max(1, Math.floor(elapsed / 60000))} perce`;
+  if (elapsed < 24 * 60 * 60 * 1000) return `${Math.floor(elapsed / 3600000)} órája`;
+  return new Date(Number(timestamp || 0)).toLocaleDateString("hu-HU");
+}
+
+function getClanRoleLabel(role, data = clanPanelData) {
+  const configuredRole = (Array.isArray(data?.roles) ? data.roles : []).find((entry) => entry.roleKey === role);
+  if (configuredRole?.roleName) return configuredRole.roleName;
+  if (role === "fonok") return "Családfő";
+  if (role === "alvezeto") return "Alvezér";
+  return "Katona";
+}
+
+function hasClanPermission(data, permission) {
+  return Boolean(data?.isBoss || data?.permissions?.[permission]);
+}
+
+function getClanWarTimeLeft(endsAt) {
+  const remaining = Math.max(0, Number(endsAt || 0) - Date.now());
+  if (!remaining) return "Lezárult";
+  const hours = Math.floor(remaining / 3600000);
+  const minutes = Math.ceil((remaining % 3600000) / 60000);
+  return `${hours} óra ${minutes} perc`;
+}
+
+function getClanMembersHtml(data) {
+  const members = Array.isArray(data.members) ? data.members : [];
+  const roles = Array.isArray(data.roles) ? data.roles : [];
+  const isBoss = Boolean(data.isBoss);
+  return `
+    <section class="clan-dossier">
+      <div class="clan-section-heading">
+        <div><span>A család emberei</span><h3>Klántagok</h3></div>
+        <strong>${members.length} fő</strong>
+      </div>
+      <div class="clan-member-list">
+        ${members.map((member, index) => {
+          const isSelf = member.profile_name === state.profileName;
+          const canManage = isBoss && !isSelf && member.member_role !== "fonok";
+          const hasActions = isSelf || canManage;
+          return `
+          <article class="clan-member-card${isSelf ? " is-self" : ""}${hasActions ? " is-actionable" : ""}"${hasActions ? ` data-clan-member-card="${escapeHtml(member.profile_name)}" tabindex="0"` : ""}>
+            <div class="clan-member-card__number">${String(index + 1).padStart(2, "0")}</div>
+            <div class="clan-member-card__seal">${member.member_role === "fonok" ? "♛" : "M"}</div>
+            <div class="clan-member-card__identity">
+              <strong>${escapeHtml(getClanMemberName(member))}</strong>
+              <span>${escapeHtml(member.rank_title || "Utcai figura")}</span>
+            </div>
+            <div class="clan-member-card__stat clan-member-card__role"><small>Rang</small><strong>${escapeHtml(getClanRoleLabel(member.member_role, data))}</strong></div>
+            <div class="clan-member-card__stat"><small>Hírnév</small><strong>${Math.max(0, Number(member.fame) || 0)}</strong></div>
+            <div class="clan-member-card__status${Date.now() - Number(member.last_seen_at || 0) < 5 * 60 * 1000 ? " is-online" : ""}">${hasActions ? "Műveletek ▾" : formatClanLastSeen(member.last_seen_at)}</div>
+            ${hasActions ? `
+              <div class="clan-member-actions">
+                <div class="clan-member-actions__identity"><small>${isSelf ? "Saját tagságod" : "Kiválasztott ember"}</small><strong>${escapeHtml(getClanMemberName(member))}</strong></div>
+                ${canManage ? `
+                  <label><span>Új rang</span><select data-clan-member-role="${escapeHtml(member.profile_name)}" aria-label="${escapeHtml(getClanMemberName(member))} új rangja">
+                    ${roles.filter((role) => role.roleKey !== "fonok").map((role) => `<option value="${escapeHtml(role.roleKey)}"${role.roleKey === member.member_role ? " selected" : ""}>${escapeHtml(role.roleName)}</option>`).join("")}
+                  </select></label>
+                  <button class="clan-member-action clan-member-action--kick" type="button" data-clan-kick="${escapeHtml(member.profile_name)}">Kirúgom a klánból</button>
+                ` : `
+                  <p>${member.member_role === "fonok" && members.length > 1 ? "Kilépéskor a vezetést a legmagasabb rangú megmaradt tag kapja." : "Kilépés után csak új meghívóval térhetsz vissza."}</p>
+                  <button class="clan-member-action clan-member-action--leave" type="button" data-clan-leave>Kilépek a klánból</button>
+                `}
+                <span class="clan-member-actions__status" aria-live="polite"></span>
+              </div>
+            ` : ""}
+          </article>
+        `;
+        }).join("") || `<div class="clan-empty-note">A családi névsor még üres.</div>`}
+      </div>
+      <div class="clan-panel__notice" id="clanPanelNotice" aria-live="polite"></div>
+    </section>
   `;
-  setAuxPanelContent("Klán", "Családi ügyek", body);
+}
+
+function getClanRecruitHtml(data) {
+  const canInvite = hasClanPermission(data, "inviteMembers");
+  const candidates = Array.isArray(data.candidates) ? data.candidates : [];
+  const pendingNames = new Set((Array.isArray(data.invitations) ? data.invitations : [])
+    .filter((entry) => entry.status === "pending" && Number(entry.expiresAt) > Date.now())
+    .map((entry) => entry.profileName));
+  return `
+    <section class="clan-dossier">
+      <div class="clan-section-heading">
+        <div><span>Új emberek az utcáról</span><h3>Játékos felvétele</h3></div>
+        <strong>${candidates.length} jelölt</strong>
+      </div>
+      ${canInvite ? `
+        <label class="clan-player-search">
+          <span>⌕</span>
+          <input id="clanPlayerSearch" type="search" placeholder="Játékos keresése név alapján..." autocomplete="off">
+        </label>
+        <div class="clan-candidate-list" id="clanCandidateList">
+          ${candidates.map((candidate) => `
+            <article class="clan-candidate" data-clan-candidate="${escapeHtml(String(candidate.profile_name || "").toLowerCase())}">
+              <div class="clan-candidate__avatar">${escapeHtml(String(getClanMemberName(candidate)).slice(0, 1).toUpperCase())}</div>
+              <div class="clan-candidate__copy">
+                <strong>${escapeHtml(getClanMemberName(candidate))}</strong>
+                <span>${escapeHtml(candidate.rank_title || "Utcai figura")} · ${Math.max(0, Number(candidate.fame) || 0)} hírnév</span>
+              </div>
+              <div class="clan-candidate__seen">${formatClanLastSeen(candidate.last_seen_at)}</div>
+              <button class="clan-action-button" type="button" data-clan-recruit="${escapeHtml(candidate.profile_name)}"${pendingNames.has(candidate.profile_name) ? " disabled" : ""}>${pendingNames.has(candidate.profile_name) ? "Meghívva" : "Meghívó"}</button>
+            </article>
+          `).join("") || `<div class="clan-empty-note">Jelenleg nincs szabad játékos, akit felvehetnél.</div>`}
+        </div>
+      ` : `<div class="clan-empty-note">A rangod nem küldhet játékosmeghívót.</div>`}
+      <div class="clan-panel__notice" id="clanPanelNotice" aria-live="polite"></div>
+    </section>
+  `;
+}
+
+function getClanWarsHtml(data) {
+  const clan = data.clan;
+  const canDeclareWar = hasClanPermission(data, "declareWar");
+  const rivals = Array.isArray(data.rivals) ? data.rivals : [];
+  const wars = Array.isArray(data.wars) ? data.wars : [];
+  const activeWars = wars.filter((war) => war.status === "active" && Number(war.endsAt) > Date.now());
+  return `
+    <section class="clan-dossier clan-war-room">
+      <div class="clan-section-heading">
+        <div><span>Hadüzenetek és leszámolások</span><h3>Bandaháború</h3></div>
+        <strong>${activeWars.length} aktív</strong>
+      </div>
+      ${canDeclareWar ? `
+        <div class="clan-war-declare">
+          <div><small>Rivális család kijelölése</small><strong>A háború 24 órán át tart</strong></div>
+          <select id="clanWarTarget" ${rivals.length ? "" : "disabled"}>
+            ${rivals.map((rival) => `<option value="${escapeHtml(rival.clanId)}">${escapeHtml(rival.clanName)} · ${Math.max(0, Number(rival.notoriety) || 0)} hírnév</option>`).join("") || `<option>Nincs elérhető rivális</option>`}
+          </select>
+          <button class="clan-action-button clan-action-button--war" id="clanDeclareWar" type="button" ${rivals.length ? "" : "disabled"}>Hadüzenet</button>
+        </div>
+      ` : `<div class="clan-empty-note">A rangod nem indíthat bandaháborút.</div>`}
+      <div class="clan-war-list">
+        ${wars.map((war) => {
+          const ownIsAttacker = war.attackerClanId === clan.clanId;
+          const opponent = ownIsAttacker ? war.defenderClanName : war.attackerClanName;
+          const ownScore = ownIsAttacker ? war.attackerScore : war.defenderScore;
+          const enemyScore = ownIsAttacker ? war.defenderScore : war.attackerScore;
+          const active = war.status === "active" && Number(war.endsAt) > Date.now();
+          return `
+            <article class="clan-war-card${active ? " is-active" : ""}">
+              <div class="clan-war-card__ribbon">${active ? "Háborúban" : "Lezárt akta"}</div>
+              <div class="clan-war-card__families"><strong>${escapeHtml(clan.clanName)}</strong><span>VS</span><strong>${escapeHtml(opponent || "Ismeretlen")}</strong></div>
+              <div class="clan-war-card__score">${Number(ownScore) || 0}<span>:</span>${Number(enemyScore) || 0}</div>
+              <div class="clan-war-card__time">${active ? getClanWarTimeLeft(war.endsAt) : new Date(war.endsAt).toLocaleDateString("hu-HU")}</div>
+            </article>
+          `;
+        }).join("") || `<div class="clan-empty-note">Még egyetlen bandaháború sem került a családi krónikába.</div>`}
+      </div>
+      <div class="clan-panel__notice" id="clanPanelNotice" aria-live="polite"></div>
+    </section>
+  `;
+}
+
+function getClanRolesHtml(data) {
+  const roles = Array.isArray(data.roles) ? data.roles : [];
+  return `
+    <section class="clan-dossier clan-roles-panel">
+      <div class="clan-section-heading">
+        <div><span>Hatalom és felelősség</span><h3>Rangok és jogok</h3></div>
+        <strong>${roles.length} rang</strong>
+      </div>
+      <p class="clan-roles-panel__intro">A családfő kioszthatja a rangokat a taglistában. Itt meghatározhatja, melyik rang küldhet meghívót és indíthat bandaháborút.</p>
+      <div class="clan-role-list">
+        ${roles.map((role) => {
+          const locked = role.roleKey === "fonok" || !data.isBoss;
+          return `
+            <form class="clan-role-card${locked ? " is-locked" : ""}" data-clan-role-form="${escapeHtml(role.roleKey)}">
+              <div class="clan-role-card__crest">${role.roleKey === "fonok" ? "♛" : "M"}</div>
+              <label class="clan-role-card__name"><small>Rang neve</small><input name="roleName" maxlength="64" minlength="2" value="${escapeHtml(role.roleName)}" ${locked ? "readonly" : ""}></label>
+              <label class="clan-role-permission"><input name="inviteMembers" type="checkbox"${role.permissions?.inviteMembers ? " checked" : ""}${locked ? " disabled" : ""}><span>Játékosok meghívása</span></label>
+              <label class="clan-role-permission"><input name="declareWar" type="checkbox"${role.permissions?.declareWar ? " checked" : ""}${locked ? " disabled" : ""}><span>Bandaháború indítása</span></label>
+              ${locked ? `<span class="clan-role-card__locked">${role.roleKey === "fonok" ? "Teljes jogkör" : "Csak a családfő szerkesztheti"}</span>` : `<button class="clan-action-button" type="submit">Jogok mentése</button>`}
+              <span class="clan-role-card__status" aria-live="polite"></span>
+            </form>
+          `;
+        }).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function bindClanPanelActions(data) {
+  auxPanelBody?.querySelectorAll("[data-clan-tab]").forEach((button) => {
+    button.addEventListener("click", () => {
+      clanActiveTab = button.dataset.clanTab || "members";
+      renderClanPanel(data);
+    });
+  });
+  const createForm = document.getElementById("clanCreateForm");
+  createForm?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const notice = document.getElementById("clanPanelNotice");
+    const submit = createForm.querySelector("button[type='submit']");
+    submit.disabled = true;
+    try {
+      const response = await fetch("/api/clans", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({ clanName: createForm.clanName.value, description: createForm.description.value }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "Nem sikerült megalapítani a családot.");
+      state.clanName = payload.clanName;
+      state.clanDescription = createForm.description.value.trim();
+      saveGame();
+      await loadClanPanel();
+    } catch (error) {
+      if (notice) notice.textContent = error.message;
+      submit.disabled = false;
+    }
+  });
+  const search = document.getElementById("clanPlayerSearch");
+  search?.addEventListener("input", () => {
+    const query = search.value.trim().toLowerCase();
+    auxPanelBody.querySelectorAll("[data-clan-candidate]").forEach((row) => {
+      row.classList.toggle("hidden", Boolean(query) && !row.dataset.clanCandidate.includes(query));
+    });
+  });
+  auxPanelBody?.querySelectorAll("[data-clan-recruit]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const notice = document.getElementById("clanPanelNotice");
+      button.disabled = true;
+      try {
+        const response = await fetch("/api/clans/members", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Accept: "application/json" },
+          body: JSON.stringify({ profileName: button.dataset.clanRecruit }),
+        });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || "A meghívó elküldése sikertelen.");
+        await loadClanPanel();
+      } catch (error) {
+        if (notice) notice.textContent = error.message;
+        button.disabled = false;
+      }
+    });
+  });
+  auxPanelBody?.querySelectorAll("[data-clan-member-card]").forEach((card) => {
+    const toggleCard = () => {
+      auxPanelBody.querySelectorAll("[data-clan-member-card].is-open").forEach((entry) => {
+        if (entry !== card) entry.classList.remove("is-open");
+      });
+      card.classList.toggle("is-open");
+    };
+    card.addEventListener("click", (event) => {
+      if (event.target.closest(".clan-member-actions")) return;
+      toggleCard();
+    });
+    card.addEventListener("keydown", (event) => {
+      if ((event.key === "Enter" || event.key === " ") && event.target === card) {
+        event.preventDefault();
+        toggleCard();
+      }
+    });
+  });
+  auxPanelBody?.querySelectorAll("[data-clan-kick]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const profileName = button.dataset.clanKick || "";
+      const status = button.closest(".clan-member-actions")?.querySelector(".clan-member-actions__status");
+      if (!window.confirm(`Biztosan kirúgod ${profileName} játékost a klánból?`)) return;
+      button.disabled = true;
+      try {
+        const response = await fetch(`/api/clans/members/${encodeURIComponent(profileName)}`, { method: "DELETE", headers: { Accept: "application/json" } });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || "A kirúgás sikertelen.");
+        await loadClanPanel();
+      } catch (error) {
+        if (status) status.textContent = error.message;
+        button.disabled = false;
+      }
+    });
+  });
+  auxPanelBody?.querySelector("[data-clan-leave]")?.addEventListener("click", async (event) => {
+    const button = event.currentTarget;
+    const status = button.closest(".clan-member-actions")?.querySelector(".clan-member-actions__status");
+    if (!window.confirm("Biztosan kilépsz a klánból? A visszatéréshez új meghívóra lesz szükséged.")) return;
+    button.disabled = true;
+    try {
+      const response = await fetch("/api/clans/leave", { method: "POST", headers: { Accept: "application/json" } });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "A kilépés sikertelen.");
+      state.clanName = "";
+      state.clanDescription = "";
+      state.clanTreasury = 0;
+      saveGame(true);
+      clanPanelData = null;
+      clanActiveTab = "members";
+      await loadClanPanel();
+    } catch (error) {
+      if (status) status.textContent = error.message;
+      button.disabled = false;
+    }
+  });
+  auxPanelBody?.querySelectorAll("[data-clan-member-role]").forEach((select) => {
+    select.addEventListener("change", async () => {
+      const previousRole = data.members?.find((member) => member.profile_name === select.dataset.clanMemberRole)?.member_role || "katona";
+      select.disabled = true;
+      try {
+        const response = await fetch("/api/clans/member-role", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json", Accept: "application/json" },
+          body: JSON.stringify({ profileName: select.dataset.clanMemberRole, roleKey: select.value }),
+        });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || "A rang kiosztása sikertelen.");
+        await loadClanPanel();
+      } catch (error) {
+        select.value = previousRole;
+        select.disabled = false;
+        const notice = document.getElementById("clanPanelNotice");
+        if (notice) notice.textContent = error.message;
+      }
+    });
+  });
+  auxPanelBody?.querySelectorAll("[data-clan-role-form]").forEach((form) => {
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const button = form.querySelector("button[type='submit']");
+      const status = form.querySelector(".clan-role-card__status");
+      button.disabled = true;
+      try {
+        const response = await fetch("/api/clans/roles", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json", Accept: "application/json" },
+          body: JSON.stringify({
+            roleKey: form.dataset.clanRoleForm,
+            roleName: form.roleName.value,
+            permissions: {
+              inviteMembers: Boolean(form.inviteMembers?.checked),
+              declareWar: Boolean(form.declareWar?.checked),
+            },
+          }),
+        });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || "A rangjogok mentése sikertelen.");
+        if (status) status.textContent = "A rang és a jogok elmentve.";
+        window.setTimeout(() => loadClanPanel(), 500);
+      } catch (error) {
+        if (status) status.textContent = error.message;
+        button.disabled = false;
+      }
+    });
+  });
+  document.getElementById("clanDeclareWar")?.addEventListener("click", async (event) => {
+    const button = event.currentTarget;
+    const target = document.getElementById("clanWarTarget");
+    const notice = document.getElementById("clanPanelNotice");
+    button.disabled = true;
+    try {
+      const response = await fetch("/api/clans/wars", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({ targetClanId: target?.value }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "A hadüzenet sikertelen.");
+      await loadClanPanel();
+    } catch (error) {
+      if (notice) notice.textContent = error.message;
+      button.disabled = false;
+    }
+  });
+}
+
+function renderClanPanel(data = clanPanelData) {
+  if (!data) {
+    setAuxPanelContent("Klán", "Családi ügyek", `<div class="clan-loading"><span>M</span><strong>A családi akták betöltése...</strong></div>`);
+    auxPanel?.setAttribute("data-kind", "clan");
+    activeAuxPanelKind = "clan";
+    return;
+  }
+  if (!data.clan) {
+    const suggestedName = `${state.profileName || "Új"} családja`;
+    const body = `
+      <section class="clan-foundation">
+        <div class="clan-foundation__crest"><span>M</span></div>
+        <div class="clan-foundation__copy"><span>New York · 1930</span><h2>Alapíts saját családot</h2><p>Adj nevet a családnak, gyűjts hűséges embereket, és írd be a neved az alvilág krónikájába.</p></div>
+        <form class="clan-create-form" id="clanCreateForm">
+          <label><span>A család neve</span><input name="clanName" maxlength="40" minlength="3" value="${escapeHtml(suggestedName)}" required></label>
+          <label><span>A család jelmondata</span><textarea name="description" maxlength="220" placeholder="Hűség. Becsület. Hallgatás."></textarea></label>
+          <button class="clan-action-button clan-action-button--found" type="submit">A család megalapítása</button>
+        </form>
+        <div class="clan-panel__notice" id="clanPanelNotice" aria-live="polite"></div>
+      </section>
+    `;
+    setAuxPanelContent("Klán", "A család mindenek felett", body);
+    auxPanel?.setAttribute("data-kind", "clan");
+    activeAuxPanelKind = "clan";
+    bindClanPanelActions(data);
+    return;
+  }
+  const clan = data.clan;
+  const tabBody = clanActiveTab === "recruit"
+    ? getClanRecruitHtml(data)
+    : clanActiveTab === "wars"
+      ? getClanWarsHtml(data)
+      : clanActiveTab === "roles"
+        ? getClanRolesHtml(data)
+        : getClanMembersHtml(data);
+  const body = `
+    <section class="clan-hq">
+      <header class="clan-hq__masthead">
+        <div class="clan-hq__crest"><span>M</span></div>
+        <div class="clan-hq__identity"><span>A család</span><h2>${escapeHtml(clan.clanName)}</h2><p>${escapeHtml(clan.description || "Hűség. Becsület. Hallgatás.")}</p></div>
+        <div class="clan-hq__ledger"><small>Családfő</small><strong>${escapeHtml(clan.bossProfileName || "Ismeretlen")}</strong><span>${Math.max(0, Number(clan.notoriety) || 0)} hírnév</span></div>
+      </header>
+      <nav class="clan-tabs" aria-label="Klán menüpontok">
+        <button type="button" data-clan-tab="wars" class="${clanActiveTab === "wars" ? "is-active" : ""}"><span>⚔</span>Bandaháború</button>
+        <button type="button" data-clan-tab="recruit" class="${clanActiveTab === "recruit" ? "is-active" : ""}"><span>✚</span>Játékos felvétele</button>
+        <button type="button" data-clan-tab="members" class="${clanActiveTab === "members" ? "is-active" : ""}"><span>♟</span>Klántagok</button>
+        <button type="button" data-clan-tab="roles" class="${clanActiveTab === "roles" ? "is-active" : ""}"><span>♛</span>Rangok és jogok</button>
+      </nav>
+      ${tabBody}
+    </section>
+  `;
+  setAuxPanelContent("Klán", "Családi ügyek · 1930", body);
   auxPanel?.setAttribute("data-kind", "clan");
   activeAuxPanelKind = "clan";
+  bindClanPanelActions(data);
+}
+
+async function loadClanPanel() {
+  renderClanPanel(null);
+  try {
+    const response = await fetch("/api/clans/dashboard", { headers: { Accept: "application/json" } });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || "A klánadatok nem tölthetők be.");
+    clanPanelData = payload;
+    renderClanPanel(payload);
+  } catch (error) {
+    setAuxPanelContent("Klán", "Családi ügyek", `<div class="clan-empty-note">${escapeHtml(error.message)}</div>`);
+    auxPanel?.setAttribute("data-kind", "clan");
+    activeAuxPanelKind = "clan";
+  }
 }
 
 function buyMarketItem(itemId, options = {}) {
@@ -3150,16 +3713,6 @@ function renderWorldMapPanelWithSaves(saves = []) {
   const metrics = getWorldMapCanvasMetrics();
   const body = `
     <section class="worldmap">
-      <div class="worldmap__toolbar">
-        <div class="worldmap__search">
-          <span class="worldmap__card-eyebrow">Koordinata vagy telek kod</span>
-          <div class="worldmap__searchrow">
-            <input id="worldMapSearch" type="text" placeholder="Pelda: C2 vagy 46:28" autocomplete="off">
-            <button id="worldMapSearchBtn" type="button">Kereses</button>
-          </div>
-        </div>
-      </div>
-
       ${buildWorldMapSelectionBar(ownLot, selectionMode)}
 
       <div class="worldmap__stage" id="worldMapStage">
@@ -3180,6 +3733,14 @@ function renderWorldMapPanelWithSaves(saves = []) {
   `;
   setAuxPanelContent("Vilagterkep", selectionMode ? "Valaszd ki a varosod helyet" : "", body);
   auxPanel?.setAttribute("data-kind", "world");
+  if (!selectionMode && auxPanelHeaderTools) {
+    auxPanelHeaderTools.innerHTML = `
+      <div class="worldmap__searchrow worldmap__searchrow--header">
+        <input id="worldMapSearch" type="text" placeholder="Kereses: C2 vagy 46:28" autocomplete="off" aria-label="Telek keresese">
+        <button id="worldMapSearchBtn" type="button">Kereses</button>
+      </div>
+    `;
+  }
   document.body.classList.add("is-world-map-open");
   activeAuxPanelKind = "world";
   bindWorldMapInteractions(occupiedLots, rivalCities, selectionMode);
@@ -3473,13 +4034,35 @@ function bindWorldMapInteractions(occupiedLots, rivalCities, selectionMode) {
   });
 
   const runSearch = () => {
-    const lot = parseWorldMapQuery(searchInput?.value || "");
+    const rawQuery = String(searchInput?.value || "").trim();
+    const normalizedQuery = rawQuery.toLocaleLowerCase("hu-HU");
+    let lot = parseWorldMapQuery(rawQuery);
+    if (!lot && normalizedQuery) {
+      const occupiedEntries = Object.entries(occupiedLots || {});
+      const exactPlayer = occupiedEntries.find(([, owner]) =>
+        String(owner?.profileName || "").trim().toLocaleLowerCase("hu-HU") === normalizedQuery,
+      );
+      const partialPlayers = exactPlayer ? [] : occupiedEntries.filter(([, owner]) =>
+        String(owner?.profileName || "").trim().toLocaleLowerCase("hu-HU").includes(normalizedQuery),
+      );
+      const playerMatch = exactPlayer || (partialPlayers.length === 1 ? partialPlayers[0] : null);
+      if (playerMatch) lot = getWorldMapLotById(playerMatch[0]);
+      if (!lot && partialPlayers.length > 1) {
+        sceneRef?.setMessage("Tobb jatekos neve is illik a keresesre. Irj be pontosabb nevet.");
+        searchInput?.focus();
+        return;
+      }
+    }
     if (!lot) {
-      sceneRef?.setMessage("Nem talaltam ilyen koordinatat a terkepen.");
+      sceneRef?.setMessage("Nem talaltam ilyen jatekost, telekkodot vagy koordinatat a terkepen.");
       searchInput?.focus();
       return;
     }
     renderSelection(lot.id, { center: true });
+    const owner = occupiedLots?.[lot.id];
+    sceneRef?.setMessage(owner?.profileName
+      ? `${owner.profileName} haza a terkep kozepe kerult.`
+      : `${lot.code} / ${lot.coord} telek a terkep kozepe kerult.`);
   };
 
   searchButton?.addEventListener("click", runSearch);
@@ -3800,12 +4383,32 @@ function normalizeHarborGarage(saved) {
   const activeVehicleId = unlockedVehicleIds.includes(saved?.activeVehicleId)
     ? saved.activeVehicleId
     : (unlockedVehicleIds[0] || "sedan");
+  const now = Date.now();
+  const runTimestamps = (Array.isArray(saved?.runTimestamps) ? saved.runTimestamps : [])
+    .map(Number)
+    .filter((timestamp) => Number.isFinite(timestamp) && timestamp > now - GARAGE_RUN_WINDOW_MS && timestamp <= now + 60000)
+    .sort((left, right) => left - right)
+    .slice(-GARAGE_RUN_LIMIT);
   return {
     level: clamp(Math.round(Number(saved?.level) || 1), 1, 3),
     wins: Math.max(0, Math.round(Number(saved?.wins) || 0)),
     losses: Math.max(0, Math.round(Number(saved?.losses) || 0)),
     activeVehicleId,
     unlockedVehicleIds,
+    runTimestamps,
+  };
+}
+
+function getGarageRunLimitState(now = Date.now()) {
+  state.harborGarage = normalizeHarborGarage(state.harborGarage);
+  const runs = state.harborGarage.runTimestamps;
+  const used = runs.length;
+  const resetAt = used >= GARAGE_RUN_LIMIT ? runs[0] + GARAGE_RUN_WINDOW_MS : 0;
+  return {
+    used,
+    remaining: Math.max(0, GARAGE_RUN_LIMIT - used),
+    resetAt,
+    resetIn: Math.max(0, resetAt - now),
   };
 }
 
@@ -4114,6 +4717,9 @@ function renderHarborOrders(zone, kind = "mixed") {
         <div class="harbor-orders__row harbor-orders__row--head"><span>Munka</span><span>Igeny / aru</span><span>Ido</span><span>Jutalom</span><span></span></div>
         ${orders.map((mission) => {
           const affordable = canPayCargo(mission.requires);
+          const alreadyQueued = normalizeProcessTasks(state.harborProcessTasks).some((task) =>
+            task.type === "harbor" && (task.payload?.missionId === mission.id || (!task.payload?.missionId && task.payload?.title === mission.title)),
+          );
           const needs = mission.requires ? formatCargoList(mission.requires) : `Szerez: ${formatCargoList(mission.gives)}`;
           const chanceText = Number.isFinite(Number(mission.successChance)) && mission.successChance < 1
             ? `, ${Math.round(Number(mission.successChance) * 100)}% esely`
@@ -4125,7 +4731,7 @@ function renderHarborOrders(zone, kind = "mixed") {
             <small>${escapeHtml(needs)}</small>
             <span>${formatCountdown(mission.durationMs)}</span>
             <span>${escapeHtml(reward)}</span>
-            <button type="button" data-harbor-mission="${mission.id}" ${affordable ? "" : "disabled"}>${affordable ? "Inditas" : "Nincs aru"}</button>
+            <button type="button" data-harbor-mission="${mission.id}" ${affordable && !alreadyQueued ? "" : "disabled"}>${alreadyQueued ? "Mar folyamatban" : affordable ? "Inditas" : "Nincs aru"}</button>
           </div>
         `; }).join("")}
       </div>
@@ -4240,9 +4846,11 @@ function getHarborGarageSceneHtml(vehicle, stats) {
 
 function renderGarageMissionList(stats) {
   const activeVehicle = getActiveGarageVehicle();
+  const limitState = getGarageRunLimitState();
   return harborGarageMissionDefs.map((mission) => {
     const requiredVehicle = getGarageVehicleById(mission.vehicleId);
-    const canRun = activeVehicle.id === requiredVehicle.id;
+    const hasRequiredVehicle = activeVehicle.id === requiredVehicle.id;
+    const canRun = hasRequiredVehicle && limitState.remaining > 0;
     const missionStats = {
       ...stats,
       speed: requiredVehicle.speed,
@@ -4262,7 +4870,7 @@ function renderGarageMissionList(stats) {
           <em>${escapeHtml(rewardText)}</em>
         </div>
         <button type="button" data-garage-mission="${mission.id}" ${canRun ? "" : "disabled"}>
-          ${canRun ? "Mini-jatek inditasa" : `${requiredVehicle.title} kell`}
+          ${limitState.remaining <= 0 ? `Limit elerve (${formatCountdown(limitState.resetIn)})` : canRun ? "Mini-jatek inditasa" : `${requiredVehicle.title} kell`}
         </button>
       </article>
     `;
@@ -4461,6 +5069,12 @@ function resolveGarageCheckpoint() {
 
 function startGarageMission(missionId) {
   state.harborGarage = normalizeHarborGarage(state.harborGarage);
+  const limitState = getGarageRunLimitState();
+  if (limitState.remaining <= 0) {
+    sceneRef?.setMessage(`Tizenkét órán belül csak ${GARAGE_RUN_LIMIT} fuvar indítható. Következő fuvar: ${formatCountdown(limitState.resetIn)} múlva.`);
+    renderHarborGarage(harborZoneDefs.find((entry) => entry.id === "garage") || { id: "garage", title: "Garazs" });
+    return false;
+  }
   const mission = getGarageMissionById(missionId);
   if (!mission) return false;
   const vehicle = getActiveGarageVehicle();
@@ -4471,6 +5085,9 @@ function startGarageMission(missionId) {
   }
   const stats = getHarborGarageStats();
   const runConfig = getGarageMissionRunConfig(mission, stats, vehicle);
+  state.harborGarage.runTimestamps.push(Date.now());
+  state.harborGarage.runTimestamps = state.harborGarage.runTimestamps.slice(-GARAGE_RUN_LIMIT);
+  saveGame(true);
   garageMiniGameState = {
     missionId: mission.id,
     round: 1,
@@ -4503,6 +5120,7 @@ function renderHarborGarage(zone) {
   const vehicle = getActiveGarageVehicle();
   const stats = getHarborGarageStats();
   const upgradeCost = getHarborGarageUpgradeCost();
+  const limitState = getGarageRunLimitState();
   if (garageMiniGameState) {
     const mission = getGarageMissionById(garageMiniGameState.missionId);
     if (mission) {
@@ -4517,6 +5135,7 @@ function renderHarborGarage(zone) {
         <div><span>Muhely</span><strong>${state.harborGarage.level}. szint</strong></div>
         <div><span>Sikeres utak</span><strong>${state.harborGarage.wins}</strong></div>
         <div><span>Bukott utak</span><strong>${state.harborGarage.losses}</strong></div>
+        <div><span>12 oras fuvarlimit</span><strong>${limitState.remaining} / ${GARAGE_RUN_LIMIT} maradt${limitState.remaining <= 0 ? ` (${formatCountdown(limitState.resetIn)})` : ""}</strong></div>
       </div>
       <div class="harbor-garage-workshop">
         <div>
@@ -4563,6 +5182,13 @@ function renderHarborZonePanel(zone) {
 function startHarborMission(missionId) {
   const mission = [...harborMissionCatalog, ...harborFishMissionDefs].find((entry) => entry.id === missionId);
   if (!mission) return false;
+  const duplicate = normalizeProcessTasks(state.harborProcessTasks).some((task) =>
+    task.type === "harbor" && (task.payload?.missionId === mission.id || (!task.payload?.missionId && task.payload?.title === mission.title)),
+  );
+  if (duplicate) {
+    sceneRef?.setMessage(`${mission.title} mar folyamatban van, ugyanazt nem indithatod el ujra.`);
+    return false;
+  }
   if (!hasProcessTaskSlot("harbor")) {
     sceneRef?.setMessage("Nincs szabad feladat kor a kikotoi munkahoz.");
     renderProcessTasks();
@@ -4579,6 +5205,7 @@ function startHarborMission(missionId) {
     icon: mission.zone === "fish" ? "H" : "C",
     durationMs: mission.durationMs,
     payload: {
+      missionId: mission.id,
       title: mission.title,
       zone: mission.zone,
       gives: mission.gives || {},
@@ -4783,7 +5410,7 @@ async function openAuxPanel(kind) {
     return;
   }
   if (kind === "clan") {
-    renderClanPanel();
+    await loadClanPanel();
     return;
   }
   if (kind === "messages") {
@@ -5952,7 +6579,13 @@ function applyProtectionReward(reward) {
   applyFame(reward.fameGain);
   const appliedHeat = applyHeat(reward.heatGain);
   const district = state.districts[reward.districtIndex];
-  if (district) district.loyalty = clamp(district.loyalty + 6, 0, 100);
+  if (district) {
+    district.loyalty = clamp(district.loyalty + 6, 0, 100);
+    if (!district.controlled && district.loyalty >= 65) {
+      district.controlled = true;
+      sceneRef?.pushLog(`${district.name} most mar a bandadhoz tartozik.`);
+    }
+  }
   if (reward.completesQuest && reward.spotId) completeQuest("protection", getSpotById(reward.spotId));
   completeMentorStep("protection");
   sceneRef?.pushLog(`${reward.buildingName}: vedelmi penz befolyt. +${reward.gain} $, +${reward.fameGain} XP, +${appliedHeat}% korozes.`);
@@ -6088,6 +6721,18 @@ function normalizeRivalEvent(event, now = Date.now()) {
   if (!getSpotById(spotId)) return null;
   const expiresAt = Number(event.expiresAt);
   if (!Number.isFinite(expiresAt) || expiresAt <= now) return null;
+  const pendingType = ["scout", "intimidate", "attack"].includes(event.pendingAction?.type)
+    ? event.pendingAction.type
+    : "";
+  const pendingReadyAt = Number(event.pendingAction?.readyAt);
+  const pendingStartedAt = Number(event.pendingAction?.startedAt);
+  const pendingAction = pendingType && Number.isFinite(pendingReadyAt) && pendingReadyAt > 0
+    ? {
+        type: pendingType,
+        startedAt: Number.isFinite(pendingStartedAt) ? pendingStartedAt : Math.max(0, pendingReadyAt - RIVAL_ACTION_DURATION_MS),
+        readyAt: pendingReadyAt,
+      }
+    : null;
   return {
     id: String(event.id || `rival-${spotId}-${Math.round(expiresAt)}`),
     spotId,
@@ -6096,6 +6741,7 @@ function normalizeRivalEvent(event, now = Date.now()) {
     rewardXp: Math.max(10, Math.round(Number(event.rewardXp) || 20)),
     scouted: Boolean(event.scouted),
     intimidationStacks: clamp(Math.round(Number(event.intimidationStacks) || 0), 0, 3),
+    pendingAction,
     expiresAt,
   };
 }
@@ -6159,6 +6805,12 @@ function renderRivalActionPanel(spot) {
   const scoutChance = Math.round(getRivalScoutChance(rival) * 100);
   const intimidateChance = Math.round(getRivalIntimidateChance(rival) * 100);
   const attackChance = Math.round(getRivalAttackChance(rival) * 100);
+  const pendingAction = rival.pendingAction;
+  const pendingLabels = {
+    scout: "Felderites",
+    intimidate: "Megfelemlites",
+    attack: "Tamadas",
+  };
   const body = `
     <section class="rival-panel">
       <div class="rival-panel__summary aux-panel__carditem">
@@ -6168,18 +6820,25 @@ function renderRivalActionPanel(spot) {
           ${rival.intimidationStacks ? ` Megfelemlites: ${rival.intimidationStacks}/3.` : ""}
         </div>
       </div>
+      ${pendingAction ? `
+        <div class="rival-panel__progress">
+          <span>${escapeHtml(pendingLabels[pendingAction.type] || "Muvelet")} folyamatban</span>
+          <strong data-rival-action-countdown="${pendingAction.readyAt}">${formatCountdown(pendingAction.readyAt - Date.now())}</strong>
+          <small>Az informaciok es az eredmeny az ido lejartakor jelennek meg.</small>
+        </div>
+      ` : ""}
       <div class="rival-panel__actions">
-        <button type="button" class="rival-panel__action" data-rival-action="scout" data-rival-spot="${escapeHtml(spot.id)}">
+        <button type="button" class="rival-panel__action${pendingAction?.type === "scout" ? " is-running" : ""}" data-rival-action="scout" data-rival-spot="${escapeHtml(spot.id)}" ${pendingAction ? "disabled" : ""}>
           <strong>Felderites</strong>
-          <span>Siker esely: ${scoutChance}%. Kevés energiaért feltéred az erejüket.</span>
+          <span>5 perc · Siker esely: ${scoutChance}%. Az eredmeny utan lathatod a pontos erejuket.</span>
         </button>
-        <button type="button" class="rival-panel__action" data-rival-action="intimidate" data-rival-spot="${escapeHtml(spot.id)}">
+        <button type="button" class="rival-panel__action${pendingAction?.type === "intimidate" ? " is-running" : ""}" data-rival-action="intimidate" data-rival-spot="${escapeHtml(spot.id)}" ${pendingAction ? "disabled" : ""}>
           <strong>Megfelemlites</strong>
-          <span>Siker esely: ${intimidateChance}%. Ha sikerul, gyengulnek a tamadas elott.</span>
+          <span>5 perc · Siker esely: ${intimidateChance}%. Siker eseten gyengulnek, vagy akar teljesen tavozhatnak.</span>
         </button>
-        <button type="button" class="rival-panel__action" data-rival-action="attack" data-rival-spot="${escapeHtml(spot.id)}">
+        <button type="button" class="rival-panel__action${pendingAction?.type === "attack" ? " is-running" : ""}" data-rival-action="attack" data-rival-spot="${escapeHtml(spot.id)}" ${pendingAction ? "disabled" : ""}>
           <strong>Tamadas</strong>
-          <span>Gyozelmi esely: ${attackChance}%. Gyozelem: penz, hirnev, item esely. Vereseg: HP, korozes, penzbuntetes.</span>
+          <span>5 perc · Gyozelmi esely: ${attackChance}%. Az eredmeny es a jutalom a visszaszamlalas utan jelenik meg.</span>
         </button>
         <button type="button" class="rival-panel__action" data-rival-action="retreat" data-rival-spot="${escapeHtml(spot.id)}">
           <strong>Elvonulas</strong>
@@ -6195,47 +6854,110 @@ function renderRivalActionPanel(spot) {
   return true;
 }
 
-function handleRivalScout(spot) {
+function startRivalTimedAction(spot, actionType) {
   const rival = getRivalEventAtSpot(spot?.id);
   if (!rival) {
     sceneRef?.setMessage("Itt most nincs rivalis banda.");
     return false;
   }
-  if (!spendEnergy(4)) return false;
-  rival.scouted = true;
-  state.rivalEvent = { ...rival };
-  sceneRef?.pushLog(`${spot.name}: felderites sikeres. Rivalis ero ${getRivalEffectiveStrength(rival)}.`);
-  sceneRef?.setMessage(`${spot.name}: felderites kesz. Rivalis ero ${getRivalEffectiveStrength(rival)}.`);
+  if (rival.pendingAction) {
+    sceneRef?.setMessage(`Mar folyamatban van egy rivalis muvelet: ${formatCountdown(rival.pendingAction.readyAt - Date.now())}.`);
+    renderRivalActionPanel(spot);
+    return false;
+  }
+  const costs = { scout: 4, intimidate: 8, attack: 14 };
+  const labels = { scout: "Felderites", intimidate: "Megfelemlites", attack: "Tamadas" };
+  if (!Object.hasOwn(costs, actionType)) return false;
+  if (actionType !== "scout" && !canStartCombat(`A ${labels[actionType].toLowerCase()} akciot`)) return false;
+  if (!spendEnergy(costs[actionType])) return false;
+  const now = Date.now();
+  const readyAt = now + RIVAL_ACTION_DURATION_MS;
+  state.rivalEvent = normalizeRivalEvent({
+    ...rival,
+    pendingAction: { type: actionType, startedAt: now, readyAt },
+    expiresAt: Math.max(rival.expiresAt, readyAt + 60 * 1000),
+  }, now);
+  sceneRef?.setMessage(`${labels[actionType]} elindult. Eredmeny: ${formatCountdown(RIVAL_ACTION_DURATION_MS)} mulva.`);
+  sceneRef?.pushLog(`${spot.name}: ${labels[actionType].toLowerCase()} elindult, ido 5 perc.`);
+  saveGame(true);
+  sceneRef?.refreshHUD();
   renderRivalActionPanel(spot);
-  saveGame();
   return true;
 }
 
+function handleRivalScout(spot) {
+  return startRivalTimedAction(spot, "scout");
+}
+
 function handleRivalIntimidate(spot) {
-  const rival = getRivalEventAtSpot(spot?.id);
-  if (!rival) {
-    sceneRef?.setMessage("Itt most nincs rivalis banda.");
-    return false;
-  }
-  if (!spendEnergy(8)) return false;
-  const successChance = getRivalIntimidateChance(rival);
-  if (Math.random() <= successChance) {
-    rival.intimidationStacks = clamp((rival.intimidationStacks || 0) + 1, 0, 3);
-    rival.scouted = true;
-    state.rivalEvent = { ...rival };
-    applyFame(4);
-    sceneRef?.pushLog(`${spot.name}: a rivalis banda megrettent. Ero most ${getRivalEffectiveStrength(rival)}.`);
-    sceneRef?.setMessage(`${spot.name}: a rivalis banda megingott. A tamadas most konnyebb lesz.`);
-    renderRivalActionPanel(spot);
-    saveGame();
+  return startRivalTimedAction(spot, "intimidate");
+}
+
+function refreshRivalActionCountdown(now = Date.now()) {
+  document.querySelectorAll("[data-rival-action-countdown]").forEach((element) => {
+    const readyAt = Number(element.getAttribute("data-rival-action-countdown")) || 0;
+    element.textContent = formatCountdown(Math.max(0, readyAt - now));
+  });
+}
+
+function completeRivalPendingAction(rival, now = Date.now()) {
+  const action = rival?.pendingAction;
+  const spot = getSpotById(rival?.spotId);
+  if (!action || !spot) return false;
+  state.rivalEvent = normalizeRivalEvent({ ...rival, pendingAction: null }, now);
+
+  if (action.type === "scout") {
+    state.rivalEvent = normalizeRivalEvent({ ...state.rivalEvent, scouted: true }, now);
+    const strength = getRivalEffectiveStrength(state.rivalEvent);
+    sceneRef?.pushLog(`${spot.name}: a felderites befejezodott. Rivalis ero: ${strength}.`);
+    sceneRef?.setMessage(`${spot.name}: felderites kesz. Rivalis ero ${strength}, tamadasi esely ${Math.round(getRivalAttackChance(state.rivalEvent) * 100)}%.`);
+    addLocalNotification("Felderites kesz", `${spot.name}: a rivalis banda ereje ${strength}.`, { messageType: "event" });
+    if (activeAuxPanelKind === "rival") renderRivalActionPanel(spot);
     return true;
   }
-  const hpLoss = applyActionDamage(4, 10);
-  const heatGain = applyHeat(4);
-  sceneRef?.pushLog(`${spot.name}: a megfelemlites visszautott. -${hpLoss} eletero, +${heatGain}% korozes.`);
-  sceneRef?.setMessage(`${spot.name}: a rivalisok nem ijedtek meg. -${hpLoss} eletero.`);
-  renderRivalActionPanel(spot);
-  saveGame();
+
+  if (action.type === "intimidate") {
+    const successChance = getRivalIntimidateChance(state.rivalEvent);
+    if (Math.random() <= successChance) {
+      const intimidationStacks = clamp((state.rivalEvent.intimidationStacks || 0) + 1, 0, 3);
+      const leaveChance = clamp(0.2 + intimidationStacks * 0.1, 0.3, 0.5);
+      if (Math.random() <= leaveChance) {
+        state.rivalEvent = null;
+        scheduleNextRivalEvent(now);
+        applyFame(8);
+        sceneRef?.pushLog(`${spot.name}: a megfélemlített rivális banda elhagyta a környéket.`);
+        sceneRef?.setMessage(`${spot.name}: a megfélemlítés sikerült, a rivális banda távozott.`);
+        addLocalNotification("Rivális banda távozott", `${spot.name}: a megfélemlítés hatására elhagyták a környéket.`, { messageType: "event" });
+        if (activeAuxPanelKind === "rival") hideAuxPanel();
+        sceneRef?.refreshMap();
+        return true;
+      }
+      state.rivalEvent = normalizeRivalEvent({
+        ...state.rivalEvent,
+        scouted: true,
+        intimidationStacks,
+      }, now);
+      applyFame(4);
+      const strength = getRivalEffectiveStrength(state.rivalEvent);
+      sceneRef?.pushLog(`${spot.name}: a megfelemlites sikerult. Rivalis ero most ${strength}.`);
+      sceneRef?.setMessage(`${spot.name}: megingott a rivalis banda. Ero ${strength}, tamadasi esely ${Math.round(getRivalAttackChance(state.rivalEvent) * 100)}%.`);
+      addLocalNotification("Megfélemlítés sikeres", `${spot.name}: a rivális banda meggyengült. Aktuális erő: ${strength}.`, { messageType: "event" });
+    } else {
+      const hpLoss = applyActionDamage(4, 10);
+      const heatGain = applyHeat(4);
+      sceneRef?.pushLog(`${spot.name}: a megfelemlites nem sikerult. -${hpLoss} eletero, +${heatGain}% korozes.`);
+      sceneRef?.setMessage(`${spot.name}: nem ijedtek meg. -${hpLoss} eletero, +${heatGain}% korozes.`);
+      addLocalNotification("Megfélemlítés sikertelen", `${spot.name}: a riválisok ellenálltak. -${hpLoss} életerő.`, { messageType: "event" });
+    }
+    if (activeAuxPanelKind === "rival") renderRivalActionPanel(spot);
+    sceneRef?.refreshHUD();
+    return true;
+  }
+
+  if (action.type === "attack") {
+    resolveRivalBattle(spot, { skipCost: true });
+    return true;
+  }
   return false;
 }
 
@@ -6252,7 +6974,7 @@ function handleRivalRetreat(spot) {
 
 function normalizeRivalNextSpawnAt(value, now = Date.now()) {
   const next = Number(value);
-  if (!Number.isFinite(next) || next <= 0 || next < now + RIVAL_SPAWN_MIN_MS) {
+  if (!Number.isFinite(next) || next <= 0) {
     return now + randomInt(RIVAL_SPAWN_MIN_MS, RIVAL_SPAWN_MAX_MS);
   }
   return next;
@@ -6286,6 +7008,7 @@ function spawnRivalEvent(now = Date.now()) {
     `${spot.name} kornyeken rivalis banda jelent meg. Lepj kozbe 5 oran belul.`,
     { messageType: "event" },
   );
+  sceneRef?.refreshMap();
   return true;
 }
 
@@ -6307,9 +7030,13 @@ function syncRivalEvent(now = Date.now()) {
       `A rivalis banda eltunt, mire odaertel. Veszteseg: -${loss} $, -2% befolyas.`,
       { messageType: "event" },
     );
+    sceneRef?.refreshMap();
     return true;
   }
-  if (active) return false;
+  if (active) {
+    if (active.pendingAction?.readyAt <= now) return completeRivalPendingAction(active, now);
+    return false;
+  }
   if (!Number.isFinite(Number(state.rivalNextSpawnAt)) || Number(state.rivalNextSpawnAt) <= 0) {
     scheduleNextRivalEvent(now);
     return true;
@@ -7142,7 +7869,7 @@ function renderCrewPanel() {
                 <small>Felbérlés</small>
                 <strong>${hireCost} $</strong>
               </div>
-              <button class="crew-card__mini-action" data-crew-action="hire" type="button"${state.money < hireCost ? " disabled" : ""}>Felbérel</button>
+              <button class="crew-card__mini-action" data-crew-action="hire" type="button"${state.money < hireCost ? " disabled" : ""}>Vétel</button>
             </div>
           </div>`}
         </div>
@@ -7840,8 +8567,8 @@ function refreshCharacterPanel() {
   if (characterMoney) characterMoney.textContent = String(state.money);
   if (characterLevel) characterLevel.textContent = String(level);
   if (characterHealth) characterHealth.textContent = `${state.health} / 100`;
-  if (characterAttack) characterAttack.textContent = String(getPlayerAttackStat());
-  if (characterDefense) characterDefense.textContent = String(getPlayerDefenseStat());
+  if (characterAttack) characterAttack.textContent = String(getPlayerCombatAttackStat());
+  if (characterDefense) characterDefense.textContent = String(getPlayerCombatDefenseStat());
   if (characterFame) characterFame.textContent = String(state.fame);
   if (characterHeat) characterHeat.textContent = `${state.heat}%`;
   if (characterCrew) characterCrew.textContent = String(getHiredCrewMembers().length);
@@ -8788,6 +9515,11 @@ function collectProtectionMoney(targetDistrict, buildingName = "Haz", targetSpot
   const difficulty = targetSpot ? getBuildingDifficulty(targetSpot) : Math.round((target?.security ?? 50) * 0.82);
   const difficultyInfo = getDifficultyInfo(difficulty, "protection");
   const bandProfile = getBandPowerProfile();
+  const adjustedProtectionChance = clamp(
+    difficultyInfo.successChance * (0.74 + bandProfile.readiness * 0.2),
+    0.18,
+    0.88,
+  );
   const gainBase = 14 + Math.round(difficulty * 0.16) + state.cityLevel * 4 + randomInt(0, 14);
   const lowReadinessPenalty = bandProfile.readiness < 0.6 ? Math.round((0.6 - bandProfile.readiness) * 16) : 0;
 
@@ -8799,14 +9531,6 @@ function collectProtectionMoney(targetDistrict, buildingName = "Haz", targetSpot
   const fameGain = difficultyInfo.label === "Veszelyes" ? 5 : difficultyInfo.label === "Kockazatos" ? 4 : 3;
   const heatGain = difficultyInfo.label === "Veszelyes" ? 8 : difficultyInfo.label === "Kockazatos" ? 6 : 4;
 
-  if (target) {
-    target.loyalty = clamp(target.loyalty + (difficultyInfo.label === "Veszelyes" ? 10 : 8), 0, 100);
-    if (!target.controlled && target.loyalty >= 65) {
-      target.controlled = true;
-      sceneRef?.pushLog(`${target.name} most mar a bandadhoz tartozik.`);
-    }
-  }
-
   const reward = {
     spotId: targetSpot?.id || null,
     buildingName,
@@ -8814,7 +9538,7 @@ function collectProtectionMoney(targetDistrict, buildingName = "Haz", targetSpot
     gain,
     fameGain,
     heatGain,
-    successChance: difficultyInfo.successChance,
+    successChance: adjustedProtectionChance,
     failHealthLossMin: difficultyInfo.label === "Veszelyes" ? 8 : 4,
     failHealthLossMax: difficultyInfo.label === "Veszelyes" ? 18 : 11,
     failHeatGain: difficultyInfo.label === "Veszelyes" ? 10 : difficultyInfo.label === "Kockazatos" ? 7 : 5,
@@ -8830,14 +9554,14 @@ function collectProtectionMoney(targetDistrict, buildingName = "Haz", targetSpot
   return true;
 }
 
-function resolveRivalBattle(spot) {
+function resolveRivalBattle(spot, options = {}) {
   const rival = getRivalEventAtSpot(spot?.id);
   if (!rival) {
     sceneRef?.setMessage("Itt most nincs rivalis banda.");
     return false;
   }
-  if (!canStartCombat("A rivalis banda elleni harcot")) return false;
-  if (!spendEnergy(14)) return false;
+  if (!options.skipCost && !canStartCombat("A rivalis banda elleni harcot")) return false;
+  if (!options.skipCost && !spendEnergy(14)) return false;
 
   const successChance = getRivalAttackChance(rival);
   const success = Math.random() <= successChance;
@@ -9264,6 +9988,7 @@ class CityScene extends Phaser.Scene {
           this.refreshHUD();
         }
         refreshWorldRivalRepairTimers();
+        refreshRivalActionCountdown();
         if (activeChoiceSpot) showChoiceWheel(activeChoiceSpot);
       },
     });
@@ -9909,7 +10634,7 @@ createRobberyDefenders = function createThreeDefenders(spot, difficulty, count =
 function createBattleAllies(selectedMemberIds) {
   const members = selectedMemberIds
     .map((memberId) => state.crewMembers.find((member) => member.id === memberId))
-    .filter((member) => member?.hired)
+    .filter((member) => member?.hired && Number(member.health) > 0)
     .slice(0, 2)
     .map((member) => ({
       id: member.id,
@@ -9922,15 +10647,16 @@ function createBattleAllies(selectedMemberIds) {
       defense: getCrewMemberDefense(member),
       isPlayer: false,
     }));
+  const playerLevel = getRankLevel(state.fame);
   const player = {
     id: "player",
     name: state.profileName || "Fonok",
     role: "Te",
-    level: getRankLevel(state.fame),
+    level: playerLevel,
     maxHealth: 100,
     health: state.health,
-    attack: Math.max(6, getPlayerAttackStat()),
-    defense: Math.max(4, getPlayerDefenseStat()),
+    attack: getPlayerCombatAttackStat(),
+    defense: getPlayerCombatDefenseStat(),
     isPlayer: true,
   };
   return [members[0], player, members[1]].filter(Boolean);
@@ -9961,29 +10687,29 @@ function getRobberyTierProfile(difficultyInfo, battleMode = "full") {
   if (difficultyInfo?.label === "Veszelyes") {
     return {
       color: "red",
-      attack: 1.06 * modeProfile.stat,
-      defense: 1.03 * modeProfile.stat,
-      health: 1.07 * modeProfile.health,
-      enemyDamage: 1.01 * modeProfile.enemyDamage,
-      levelOffset: 1,
+      attack: 0.84 * modeProfile.stat,
+      defense: 0.78 * modeProfile.stat,
+      health: 0.86 * modeProfile.health,
+      enemyDamage: 0.84 * modeProfile.enemyDamage,
+      levelOffset: 0,
     };
   }
   if (difficultyInfo?.label === "Kockazatos") {
     return {
       color: "yellow",
-      attack: 0.94 * modeProfile.stat,
-      defense: 0.94 * modeProfile.stat,
-      health: 0.96 * modeProfile.health,
-      enemyDamage: 0.94 * modeProfile.enemyDamage,
+      attack: 0.82 * modeProfile.stat,
+      defense: 0.78 * modeProfile.stat,
+      health: 0.84 * modeProfile.health,
+      enemyDamage: 0.82 * modeProfile.enemyDamage,
       levelOffset: 0,
     };
   }
   return {
     color: "green",
-    attack: 0.82 * modeProfile.stat,
-    defense: 0.82 * modeProfile.stat,
-    health: 0.84 * modeProfile.health,
-    enemyDamage: 0.84 * modeProfile.enemyDamage,
+    attack: 0.83 * modeProfile.stat,
+    defense: 0.79 * modeProfile.stat,
+    health: 0.85 * modeProfile.health,
+    enemyDamage: 0.83 * modeProfile.enemyDamage,
     levelOffset: -1,
   };
 }
@@ -10099,6 +10825,12 @@ function pickAutoRobberyTarget(encounter) {
   })[0];
 }
 
+function selectAutoRobberyTactic(encounter, target) {
+  if (!encounter || !target) return;
+  const matchingEntry = Object.entries(robberyTacticDefs).find(([, tactic]) => tactic.strongAgainst === target.type);
+  if (matchingEntry) encounter.selectedTactic = matchingEntry[0];
+}
+
 function queueRobberyAutoPlay(encounter, delay = 420) {
   clearRobberyAutoPlay();
   if (!encounter || activeRobberyGame !== encounter || encounter.ended || !encounter.autoPlay) return;
@@ -10116,7 +10848,8 @@ function queueRobberyAutoPlay(encounter, delay = 420) {
       return;
     }
     encounter.selectedDefenderId = target.id;
-    encounter.message = `${target.name} lett az automata célpont.`;
+    selectAutoRobberyTactic(encounter, target);
+    encounter.message = `${target.name} lett az automata célpont. ${robberyTacticDefs[encounter.selectedTactic].name} következik.`;
     refreshRobberyGame();
     playRobberyTurn();
   }, delay);
@@ -10258,6 +10991,11 @@ function syncBattleHealth(encounter) {
 refreshRobberyGame = function refreshThreeVsThreeBattle() {
   const encounter = activeRobberyGame;
   if (!encounter || !robberyGame) return;
+  const hiredMembers = getHiredCrewMembers();
+  const readyMembers = hiredMembers.filter((member) => Number(member.health) > 0);
+  encounter.selectedMemberIds = encounter.selectedMemberIds.filter((memberId) => (
+    readyMembers.some((member) => member.id === memberId)
+  ));
   const selectedDefender = encounter.defenders.find((defender) => defender.id === encounter.selectedDefenderId && defender.health > 0);
   const arena = robberyGame.querySelector(".robbery-game__arena");
   const control = getRobberyControl(encounter);
@@ -10282,7 +11020,9 @@ refreshRobberyGame = function refreshThreeVsThreeBattle() {
           ? "kisebb csapat, kisebb zsakmany"
           : "teljes csapat"
     }`
-    : (getHiredCrewMembers().length ? "Valassz 1 vagy 2 embert magad melle" : "Nincs felvett embered, egyedul indulsz");
+    : (readyMembers.length
+      ? "Valassz 1 vagy 2 harckepes embert magad melle"
+      : (hiredMembers.length ? "Minden embered harckeptelen - egyedul indulhatsz" : "Nincs felvett embered, egyedul indulsz"));
   if (robberyHealthText) robberyHealthText.textContent = `${state.health}%`;
   if (robberyHealthFill) robberyHealthFill.style.width = `${state.health}%`;
   if (robberyControlText) robberyControlText.textContent = `${control}%`;
@@ -10294,9 +11034,11 @@ refreshRobberyGame = function refreshThreeVsThreeBattle() {
   if (robberyRound) robberyRound.textContent = `${encounter.round}. kor`;
   if (robberyInstruction) robberyInstruction.textContent = encounter.battleStarted
     ? `Celpont: ${selectedDefender?.name || "valassz ellenseget"}`
-    : (getHiredCrewMembers().length
+    : (readyMembers.length
       ? `Csapattarsak: ${encounter.selectedMemberIds.length}/2 - 1 emberrel is indithato`
-      : "Nincs felvett embered: egyedul indulsz, kisebb jutalommal");
+      : (hiredMembers.length
+        ? "A 0 HP-s embereket elobb meg kell gyogyitani"
+        : "Nincs felvett embered: egyedul indulsz, kisebb jutalommal"));
   if (robberyLoot) robberyLoot.textContent = `Jutalom: ${getRobberyProjectedMoney(encounter)} $`;
   if (robberyBattleLog) robberyBattleLog.textContent = encounter.message;
 
@@ -10350,15 +11092,15 @@ refreshRobberyGame = function refreshThreeVsThreeBattle() {
 
   robberyTeamPicker?.classList.toggle("is-hidden", encounter.battleStarted);
   robberyTeamPicker?.replaceChildren();
-  const hiredMembers = getHiredCrewMembers();
   hiredMembers.forEach((member) => {
     const selected = encounter.selectedMemberIds.includes(member.id);
-    const locked = encounter.battleStarted || (!selected && encounter.selectedMemberIds.length >= 2);
+    const incapacitated = Number(member.health) <= 0;
+    const locked = encounter.battleStarted || incapacitated || (!selected && encounter.selectedMemberIds.length >= 2);
     const attack = getCrewMemberAttack(member);
     const defense = getCrewMemberDefense(member);
     const button = document.createElement("button");
     button.type = "button";
-    button.className = `robbery-team-choice${selected ? " is-selected" : ""}`;
+    button.className = `robbery-team-choice${selected ? " is-selected" : ""}${incapacitated ? " is-incapacitated" : ""}`;
     button.classList.toggle("is-disabled", locked);
     button.disabled = locked;
     button.innerHTML = `
@@ -10369,7 +11111,7 @@ refreshRobberyGame = function refreshThreeVsThreeBattle() {
       <div class="robbery-team-choice__body">
         <div class="robbery-team-choice__header">
           <strong>${member.name}</strong>
-          <small>${member.role}</small>
+          <small>${incapacitated ? "Harckeptelen - gyogyitsd meg" : member.role}</small>
         </div>
         <div class="robbery-team-choice__stats">
           <div class="robbery-team-choice__stat">
@@ -10388,7 +11130,7 @@ refreshRobberyGame = function refreshThreeVsThreeBattle() {
       </div>
     `;
     button.addEventListener("click", () => {
-      if (!activeRobberyGame || activeRobberyGame.battleStarted) return;
+      if (!activeRobberyGame || activeRobberyGame.battleStarted || incapacitated) return;
       activeRobberyGame.selectedMemberIds = selected
         ? activeRobberyGame.selectedMemberIds.filter((id) => id !== member.id)
         : [...activeRobberyGame.selectedMemberIds, member.id];
@@ -10402,10 +11144,12 @@ refreshRobberyGame = function refreshThreeVsThreeBattle() {
     });
     robberyTeamPicker?.appendChild(button);
   });
-  if (!hiredMembers.length && !encounter.battleStarted) {
+  if (!readyMembers.length && !encounter.battleStarted) {
     const note = document.createElement("div");
     note.className = "robbery-team-empty";
-    note.textContent = "Nincs felvett embered. A fonok egyedul megy be, a jutalom erosen csokkentett.";
+    note.textContent = hiredMembers.length
+      ? "Minden embered 0 HP-n van. Gyogyitsd meg oket a banda panelen, vagy indulj egyedul csokkentett jutalomert."
+      : "Nincs felvett embered. A fonok egyedul megy be, a jutalom erosen csokkentett.";
     robberyTeamPicker?.appendChild(note);
   }
 
@@ -10422,7 +11166,7 @@ refreshRobberyGame = function refreshThreeVsThreeBattle() {
   if (robberyAttack) {
     robberyAttack.disabled = encounter.ended || encounter.finalizing || encounter.turnLocked || (!encounter.battleStarted && !canStartRobberySelection(encounter));
     robberyAttack.textContent = !encounter.battleStarted
-      ? (!hiredMembers.length || encounter.selectedMemberIds.length === 0
+      ? (!readyMembers.length || encounter.selectedMemberIds.length === 0
         ? "Egyeduli rajtautes"
         : (encounter.selectedMemberIds.length === 1 ? "Kis csapat inditasa" : "Harc inditasa"))
       : encounter.turnLocked
@@ -10440,6 +11184,8 @@ startRobberyMinigame = function startThreeVsThreeBattle(spot) {
   if (!spendEnergy(energyCost)) return;
   const difficulty = getBuildingDifficulty(spot);
   const defenders = createRobberyDefenders(spot, difficulty, 1);
+  const hiredMembers = getHiredCrewMembers();
+  const readyMembers = hiredMembers.filter((member) => Number(member.health) > 0);
   activeRobberyGame = {
     spot,
     targetDistrict: state.districts[spot.districtIndex] || getSelectedDistrict(),
@@ -10451,16 +11197,18 @@ startRobberyMinigame = function startThreeVsThreeBattle(spot) {
     selectedMemberIds: [],
     selectedDefenderId: defenders[0].id,
     battleStarted: false,
-    battleMode: getHiredCrewMembers().length ? "full" : "lone",
+    battleMode: readyMembers.length ? "full" : "lone",
     rewardMultiplier: 1,
     allyTurnIndex: 0,
     alert: 0,
     loot: 0,
     round: 1,
     healthAtStart: state.health,
-    message: getHiredCrewMembers().length
+    message: readyMembers.length
       ? "Valassz 1 vagy 2 embert a harc megkezdesehez. Egy emberrel kevesebb jutalom jar."
-      : "Nincs felberelt embered, egyedul mesz be. A jutalom erosen csokkentett.",
+      : (hiredMembers.length
+        ? "Minden embered 0 HP-n van. Gyogyitsd meg oket, vagy indulj egyedul csokkentett jutalomert."
+        : "Nincs felberelt embered, egyedul mesz be. A jutalom erosen csokkentett."),
     turnLocked: false,
     actionAnimation: null,
     ended: false,
@@ -10698,7 +11446,7 @@ function bindHudActions() {
     } else if (action === "intimidate") {
       handleRivalIntimidate(spot);
     } else if (action === "attack") {
-      resolveRivalBattle(spot);
+      startRivalTimedAction(spot, "attack");
     } else if (action === "retreat") {
       handleRivalRetreat(spot);
     }
@@ -10921,6 +11669,29 @@ registerForm.addEventListener("submit", async (event) => {
 });
 
 playerNameInput.value = getRememberedProfileName();
+
+document.querySelectorAll("[data-password-target]").forEach((button) => {
+  button.addEventListener("click", () => {
+    const input = document.getElementById(button.dataset.passwordTarget || "");
+    if (!input) return;
+    const reveal = input.type === "password";
+    input.type = reveal ? "text" : "password";
+    button.setAttribute("aria-label", reveal ? "Jelszó elrejtése" : "Jelszó megjelenítése");
+    button.classList.toggle("is-active", reveal);
+  });
+});
+
+document.getElementById("previewRegistrationForm")?.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const status = document.getElementById("registrationStatus");
+  if (status) status.textContent = "A regisztráció még nincs bekapcsolva. A bal oldalon egy névvel már beléphetsz.";
+});
+
+document.getElementById("forgotPasswordButton")?.addEventListener("click", () => {
+  const status = document.getElementById("loginStatus");
+  if (status) status.textContent = "Még nincs szükség jelszóra: írj be egy nevet, majd kattints a Belépés gombra.";
+  playerNameInput.focus();
+});
 
 bindHudActions();
 setHudVisible(false);

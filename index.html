@@ -4,32 +4,46 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Maffia: Birodalomépítő</title>
-    <link rel="stylesheet" href="./style.css?v=avatar-onboarding-2026-07-12-1" />
+    <link rel="stylesheet" href="./style.css?v=login-screen-2026-07-12-1" />
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.90.0/dist/phaser.min.js"></script>
   </head>
   <body>
     <div id="bootOverlay" class="boot-overlay">
-      <section class="boot-card">
-        <p class="eyebrow">Böngészős stratégia</p>
-        <h1>Maffia: Birodalomépítő</h1>
-        <p class="lead">
-          Regisztrálj, majd egy isometrikus város fogad. Kattints a házakra, vedd át a
-          kerületeket, és építsd fel a saját alvilági birodalmad.
-        </p>
+      <section class="boot-card" aria-label="Bejelentkezés és regisztráció">
+        <div class="login-deck">
+          <form id="registerForm" class="login-panel login-panel--signin">
+            <h2>Bejelentkezés</h2>
+            <label class="auth-field">
+              <span class="auth-field__icon" aria-hidden="true">♟</span>
+              <span class="sr-only">Felhasználónév</span>
+              <input id="playerName" type="text" maxlength="18" placeholder="Felhasználónév" autocomplete="nickname" required />
+            </label>
+            <label class="auth-field">
+              <span class="auth-field__icon" aria-hidden="true">🔒</span>
+              <span class="sr-only">Jelszó</span>
+              <input id="loginPassword" type="password" placeholder="Jelszó" autocomplete="current-password" />
+              <button class="password-toggle" type="button" data-password-target="loginPassword" aria-label="Jelszó megjelenítése">◉</button>
+            </label>
+            <div class="login-options">
+              <label class="remember-option"><input type="checkbox" id="rememberLogin" checked /><span></span>Emlékezz rám</label>
+              <button class="text-action" id="forgotPasswordButton" type="button">Elfelejtetted a jelszavad?</button>
+            </div>
+            <button class="auth-submit" type="submit">Belépés</button>
+            <p class="auth-note" id="loginStatus" aria-live="polite">Jelenleg csak a felhasználónevet kell megadnod.</p>
+          </form>
 
-        <form id="registerForm" class="register-form">
-          <label>
-            <span>Gengszternév</span>
-            <input
-              id="playerName"
-              type="text"
-              maxlength="18"
-              placeholder="Például: Fekete Zsolt"
-              autocomplete="nickname"
-            />
-          </label>
-          <button class="primary" type="submit">Belépés a városba</button>
-        </form>
+          <div class="login-seal" aria-hidden="true"><strong>M</strong></div>
+
+          <form id="previewRegistrationForm" class="login-panel login-panel--register">
+            <h2>Regisztráció</h2>
+            <label class="auth-field"><span class="auth-field__icon" aria-hidden="true">♟</span><span class="sr-only">Felhasználónév</span><input type="text" maxlength="18" placeholder="Felhasználónév" autocomplete="off" /></label>
+            <label class="auth-field"><span class="auth-field__icon" aria-hidden="true">✉</span><span class="sr-only">E-mail cím</span><input type="email" placeholder="E-mail cím" autocomplete="off" /></label>
+            <label class="auth-field"><span class="auth-field__icon" aria-hidden="true">🔒</span><span class="sr-only">Jelszó</span><input id="registrationPassword" type="password" placeholder="Jelszó" autocomplete="new-password" /><button class="password-toggle" type="button" data-password-target="registrationPassword" aria-label="Jelszó megjelenítése">◉</button></label>
+            <label class="auth-field"><span class="auth-field__icon" aria-hidden="true">🔒</span><span class="sr-only">Jelszó megerősítése</span><input id="registrationPasswordAgain" type="password" placeholder="Jelszó megerősítése" autocomplete="new-password" /><button class="password-toggle" type="button" data-password-target="registrationPasswordAgain" aria-label="Jelszó megjelenítése">◉</button></label>
+            <button class="auth-submit" type="submit">Regisztráció</button>
+            <p class="auth-note" id="registrationStatus" aria-live="polite">A teljes regisztráció hamarosan elérhető.</p>
+          </form>
+        </div>
       </section>
     </div>
 
@@ -92,6 +106,7 @@
             <div class="aux-panel__eyebrow" id="auxPanelSubtitle">Részletek</div>
             <h2 id="auxPanelTitle">Panel</h2>
           </div>
+          <div id="auxPanelHeaderTools" class="aux-panel__header-tools"></div>
           <button id="auxPanelClose" class="aux-panel__close" type="button" aria-label="Panel bezárása">×</button>
         </header>
         <div id="auxPanelBody" class="aux-panel__body"></div>
@@ -103,7 +118,7 @@
       <article class="side-dialog__card" role="dialog" aria-modal="true" aria-labelledby="messagesDialogTitle">
         <header class="side-dialog__header">
           <div>
-            <div id="messagesDialogSubtitle" class="side-dialog__eyebrow">Csaladi posta</div>
+            <div id="messagesDialogSubtitle" class="side-dialog__eyebrow">Privat uzenetek</div>
             <h2 id="messagesDialogTitle">Uzenetek</h2>
           </div>
           <button id="messagesDialogClose" class="side-dialog__close" type="button" aria-label="Uzenetek bezarasa">x</button>
@@ -615,6 +630,6 @@
       })();
     </script>
     <script src="./assets-inline.js"></script>
-    <script src="./game.js?v=avatar-onboarding-2026-07-12-1"></script>
+    <script src="./game.js?v=robbery-odds-2026-07-13-1"></script>
   </body>
 </html>

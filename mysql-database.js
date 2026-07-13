@@ -330,6 +330,52 @@ const schema = `
     CONSTRAINT fk_clan_members_player FOREIGN KEY (profile_name) REFERENCES players(profile_name) ON DELETE CASCADE
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_hungarian_ci;
 
+  CREATE TABLE IF NOT EXISTS clan_roles (
+    clan_id VARCHAR(128) NOT NULL,
+    role_key VARCHAR(32) NOT NULL,
+    role_name VARCHAR(64) NOT NULL,
+    role_priority INT NOT NULL DEFAULT 0,
+    permissions_json LONGTEXT NOT NULL,
+    is_system TINYINT(1) NOT NULL DEFAULT 0,
+    updated_at BIGINT NOT NULL,
+    PRIMARY KEY (clan_id, role_key),
+    INDEX idx_clan_roles_priority (clan_id, role_priority DESC),
+    CONSTRAINT fk_clan_roles_clan FOREIGN KEY (clan_id) REFERENCES clans(clan_id) ON DELETE CASCADE
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_hungarian_ci;
+
+  CREATE TABLE IF NOT EXISTS clan_invitations (
+    invitation_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    clan_id VARCHAR(128) NOT NULL,
+    invited_profile_name VARCHAR(18) NOT NULL,
+    invited_by_profile_name VARCHAR(18) NOT NULL,
+    invitation_status VARCHAR(24) NOT NULL DEFAULT 'pending',
+    message_id BIGINT,
+    created_at BIGINT NOT NULL,
+    responded_at BIGINT,
+    expires_at BIGINT NOT NULL,
+    INDEX idx_clan_invites_recipient (invited_profile_name, invitation_status, created_at DESC),
+    INDEX idx_clan_invites_clan (clan_id, invitation_status, created_at DESC),
+    CONSTRAINT fk_clan_invites_clan FOREIGN KEY (clan_id) REFERENCES clans(clan_id) ON DELETE CASCADE,
+    CONSTRAINT fk_clan_invites_recipient FOREIGN KEY (invited_profile_name) REFERENCES players(profile_name) ON DELETE CASCADE,
+    CONSTRAINT fk_clan_invites_sender FOREIGN KEY (invited_by_profile_name) REFERENCES players(profile_name) ON DELETE CASCADE,
+    CONSTRAINT fk_clan_invites_message FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE SET NULL
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_hungarian_ci;
+
+  CREATE TABLE IF NOT EXISTS clan_wars (
+    war_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    attacker_clan_id VARCHAR(128) NOT NULL,
+    defender_clan_id VARCHAR(128) NOT NULL,
+    attacker_score INT NOT NULL DEFAULT 0,
+    defender_score INT NOT NULL DEFAULT 0,
+    war_status VARCHAR(24) NOT NULL DEFAULT 'active',
+    started_at BIGINT NOT NULL,
+    ends_at BIGINT NOT NULL,
+    INDEX idx_clan_wars_attacker (attacker_clan_id, war_status, started_at DESC),
+    INDEX idx_clan_wars_defender (defender_clan_id, war_status, started_at DESC),
+    CONSTRAINT fk_clan_wars_attacker FOREIGN KEY (attacker_clan_id) REFERENCES clans(clan_id) ON DELETE CASCADE,
+    CONSTRAINT fk_clan_wars_defender FOREIGN KEY (defender_clan_id) REFERENCES clans(clan_id) ON DELETE CASCADE
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_hungarian_ci;
+
   CREATE TABLE IF NOT EXISTS app_meta (
     meta_key VARCHAR(80) PRIMARY KEY,
     meta_value VARCHAR(255) NOT NULL,
