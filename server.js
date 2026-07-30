@@ -4843,10 +4843,7 @@ function finishServerRobberyState(profileName, state, action, outcome, reason, n
   const heatGain = Math.max(1, Math.round(rawHeat * 0.46));
   state.heat = clampServer(Number(state.heat) + heatGain, 0, 100);
   const requestedInfluenceLoss = getRobberyInfluencePenalty(action, outcome);
-  ensureServerInfluenceState(state);
-  const influenceBefore = state.influence;
-  const influenceLoss = Math.min(influenceBefore, requestedInfluenceLoss);
-  state.influence = normalizeServerInfluence(influenceBefore - influenceLoss, influenceBefore);
+  const influenceLoss = Math.max(0, -changeServerInfluence(state, -requestedInfluenceLoss));
   let moneyGain = 0;
   let fameGain = 0;
   let influenceGain = 0;
@@ -6015,14 +6012,14 @@ async function handleApiRequest(request, response, pathname) {
 
       const attackerCombat = getPvpCombatStats(attackerState);
       const defenderCombat = getPvpCombatStats(defenderState);
+      ensureServerInfluenceState(attackerState);
+      ensureServerInfluenceState(defenderState);
       const now = Date.now();
       const roll = 0.88 + Math.abs(Math.sin(now * 0.000013 + attackerCombat.attack)) * 0.28;
       const attackScore = attackerCombat.attack * roll;
       const defenseScore = defenderCombat.defense * (0.92 + Math.abs(Math.cos(now * 0.000017 + defenderCombat.defense)) * 0.22);
       const attackerWon = attackScore >= defenseScore;
-      const influenceLoss = attackerWon
-        ? 0
-        : Math.min(3, normalizeServerInfluence(attackerState.influence, SERVER_STARTING_INFLUENCE));
+      const influenceLoss = attackerWon ? 0 : Math.max(0, -changeServerInfluence(attackerState, -3));
       const stolenMoney = attackerWon ? Math.max(1, Math.floor(Math.max(0, Number(defenderState.money) || 0) * 0.03)) : 0;
       const healthLoss = attackerWon
         ? Math.max(4, Math.min(12, Math.round(defenderCombat.defense / Math.max(8, attackerCombat.attack) * 8)))
@@ -6031,8 +6028,8 @@ async function handleApiRequest(request, response, pathname) {
       attackerState.energy = Math.max(0, toSafeInt(attackerState.energy, 0, 0) - 12);
       attackerState.health = Math.max(1, toSafeInt(attackerState.health, 1, 0) - healthLoss);
       attackerState.fame = Math.max(0, toSafeInt(attackerState.fame, 0, 0) + (attackerWon ? 12 : 2));
-      attackerState.influence = normalizeServerInfluence(attackerState.influence - influenceLoss, SERVER_STARTING_INFLUENCE);
       const influenceGain = attackerWon ? Math.max(0, changeServerInfluence(attackerState, 2)) : 0;
+      const defenderInfluenceGain = attackerWon ? 0 : Math.max(0, changeServerInfluence(defenderState, 2));
       if (attackerWon) {
         attackerState.money = Math.max(0, toSafeInt(attackerState.money, 0, 0) + stolenMoney);
         defenderState.money = Math.max(0, toSafeInt(defenderState.money, 0, 0) - stolenMoney);
@@ -6044,13 +6041,16 @@ async function handleApiRequest(request, response, pathname) {
         const defenderBody = attackerWon
           ? `${attackerProfileName} megtámadta a bázisodat és ${stolenMoney} $ zsákmányt vitt el.`
           : `${attackerProfileName} megtámadta a bázisodat, de az embereid visszaverték.`;
+        const defenderMessageBody = !attackerWon && defenderInfluenceGain > 0
+          ? `${defenderBody} +${defenderInfluenceGain}% befolyas.`
+          : defenderBody;
         await createMessage(
           defenderProfileName,
           attackerProfileName,
           "pvp",
           attackerWon ? "Támadás érte a bázisodat" : "Visszavert támadás",
-          defenderBody,
-          { attackerWon, stolenMoney, attackerAttack: attackerCombat.attack, defenderDefense: defenderCombat.defense },
+          defenderMessageBody,
+          { attackerWon, stolenMoney, attackerAttack: attackerCombat.attack, defenderDefense: defenderCombat.defense, influenceGain: defenderInfluenceGain },
           now,
         );
         await logEvent(attackerProfileName, "pvp_attack", "PvP támadás végrehajtva", {
@@ -6061,6 +6061,7 @@ async function handleApiRequest(request, response, pathname) {
           attackerWon,
           stolenMoney,
           influenceGain,
+          defenderInfluenceGain,
           influenceLoss,
         }, now);
       });
@@ -6070,11 +6071,12 @@ async function handleApiRequest(request, response, pathname) {
         attackerWon,
         stolenMoney,
         influenceGain,
+        defenderInfluenceGain,
         influenceLoss,
         healthLoss,
         attackerAttack: attackerCombat.attack,
         defenderDefense: defenderCombat.defense,
-        attackerState,
+        state: buildEconomyClientState(attackerState),
       });
       return true;
     } catch (error) {

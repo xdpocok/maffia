@@ -1,4 +1,4 @@
-const CACHE_VERSION = "maffia-assets-2026-07-30-13";
+const CACHE_VERSION = "maffia-assets-2026-07-30-17";
 const CORE_ASSETS = [
   "./style.css?v=perf-2026-07-19-3",
   "./styles/hud-redesign.css?v=influence-system-2026-07-30-07",
@@ -6,7 +6,7 @@ const CORE_ASSETS = [
   "./js/asset-runtime.js?v=settings-popover-2026-07-27-1",
   "./js/world-map.js?v=influence-system-2026-07-30-1",
   "./js/app-shell.js?v=settings-popover-2026-07-27-1",
-  "./game.js?v=influence-system-2026-07-30-12"
+  "./game.js?v=influence-system-2026-07-30-16"
 ];
 
 self.addEventListener("install", (event) => {

@@ -2245,7 +2245,7 @@ async function runWorldPvpAttack(defenderProfileName) {
     });
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.error || "PvP hiba");
-    hydrateState(payload.attackerState);
+    applyServerRobberyState(payload.state || payload.attackerState || {});
     sceneRef?.refreshHUD();
     sceneRef?.refreshMap();
     const resultText = payload.attackerWon
@@ -8622,7 +8622,7 @@ function showChoiceWheel(spot) {
     const hideUsesLeft = Math.max(0, RECOVERY_USAGE_LIMIT - healthUsage.uses);
     const meetingUsesLeft = Math.max(0, RECOVERY_USAGE_LIMIT - energyUsage.uses);
     if (choiceWheelTitle) choiceWheelTitle.textContent = spot.name;
-    if (choiceWheelSubtitle) choiceWheelSubtitle.textContent = "Semleges terület";
+    if (choiceWheelSubtitle) choiceWheelSubtitle.textContent = "Semleges terület · 3 órás keret";
     if (choiceWheelCoreLabel) choiceWheelCoreLabel.textContent = "Park";
     if (choiceWheelAction1) {
       choiceWheelAction1.textContent = healthRecovery
@@ -8630,7 +8630,7 @@ function showChoiceWheel(spot) {
         : energyRecovery
           ? "Lapulás (várakozik)"
           : hideUsesLeft <= 0
-            ? `Lapulás (${formatCountdown(healthUsage.resetAt - Date.now())})`
+            ? `Lapulás (újra: ${formatCountdown(healthUsage.resetAt - Date.now())})`
             : `Lapulás (+50 HP, ${hideUsesLeft}/3)`;
       choiceWheelAction1.disabled = Boolean(healthRecovery) || Boolean(energyRecovery) || hideUsesLeft <= 0;
     }
@@ -8640,7 +8640,7 @@ function showChoiceWheel(spot) {
         : healthRecovery
           ? "Találkozó (várakozik)"
           : meetingUsesLeft <= 0
-            ? `Találkozó (${formatCountdown(energyUsage.resetAt - Date.now())})`
+            ? `Találkozó (újra: ${formatCountdown(energyUsage.resetAt - Date.now())})`
             : `Találkozó (+50 energia, ${meetingUsesLeft}/3)`;
       choiceWheelAction2.disabled = Boolean(energyRecovery) || Boolean(healthRecovery) || meetingUsesLeft <= 0;
     }
@@ -9386,12 +9386,19 @@ function renderInfluenceInfo() {
     <section class="hud-influence-info__section">
       <strong>Hogyan változik?</strong>
       <div class="hud-influence-info__events">
-        <div><span>Védelmi pénz / csempészmunka</span><b>+1%</b></div>
+        <div><span>Kezdő játékos</span><b>10%</b></div>
+        <div><span>Védelmi pénz sikeresen</span><b>+1%</b></div>
         <div><span>Kirablás: könnyű / kockázatos / veszélyes</span><b>+1 / +2 / +3%</b></div>
-        <div><span>Rivális banda / PvP-győzelem</span><b>+3 / +2%</b></div>
-        <div><span>Világtérképes épület / város</span><b>+2 / +5%</b></div>
-        <div><span>Kerület átvétele / garázsfuvar</span><b>+3 / +1–2%</b></div>
+        <div><span>Rivális banda legyőzése</span><b>+3%</b></div>
+        <div><span>PvP-győzelem</span><b>+2%</b></div>
+        <div><span>Világtérképes épület legyőzése</span><b>+2%</b></div>
+        <div><span>Rivális város elfoglalása</span><b>+5%</b></div>
+        <div><span>Kerület átvétele</span><b>+3%</b></div>
+        <div><span>Sikeres csempészmunka</span><b>+1%</b></div>
+        <div><span>Sikeres garázsfuvar</span><b>+1–2%</b></div>
         <div><span>Lapulás</span><b>−2%</b></div>
+        <div><span>Kudarc: kirablás / rivális / PvP</span><b>−1–4%</b></div>
+        <div><span>Rivális város ostroma elbukik</span><b>−4%</b></div>
       </div>
     </section>
     <p class="hud-influence-info__note">A rendszer 0–100% között marad. A kezdőérték 10%, ezért az új játékos nem kap hátrányt; a bónuszok 10% fölött fokozatosan nőnek.</p>
