@@ -1,0 +1,728 @@
+{
+  "createdAt": "2026-07-16T21:41:57.740593+02:00",
+  "applied": true,
+  "fileCount": 120,
+  "totalBytes": 347245347,
+  "files": [
+    {
+      "source": "02b5e32f-7b66-4fb0-9797-53fda0ef7ed6.png",
+      "archive": "backups/performance-assets-2026-07-16/files/02b5e32f-7b66-4fb0-9797-53fda0ef7ed6.png",
+      "bytes": 1701358,
+      "sha256": "1cc5d02193223a5d400c517ece3d4d5527ae972799f572364deef9b7a4f35ff5"
+    },
+    {
+      "source": "02ce0e80-a622-473f-ae01-5bb6551fdd78.png",
+      "archive": "backups/performance-assets-2026-07-16/files/02ce0e80-a622-473f-ae01-5bb6551fdd78.png",
+      "bytes": 1782313,
+      "sha256": "368b316816358ff3906015c41ba2e389b479d2d39ca7a3c360d99514021784f2"
+    },
+    {
+      "source": "171b693e-b7ba-4eb6-92b4-90adf2bec939.png",
+      "archive": "backups/performance-assets-2026-07-16/files/171b693e-b7ba-4eb6-92b4-90adf2bec939.png",
+      "bytes": 2832124,
+      "sha256": "a5c1cf7c7010ea4f3eec61f0545666038c0ddea367bb25a355dc084c9b6dd328"
+    },
+    {
+      "source": "23563ae5-d36e-446f-bdea-d4dad86a758e.png",
+      "archive": "backups/performance-assets-2026-07-16/files/23563ae5-d36e-446f-bdea-d4dad86a758e.png",
+      "bytes": 1975444,
+      "sha256": "2797ae036bed727a5ee565b685a012aecbb118bbadfab4568116eb60b5892bf0"
+    },
+    {
+      "source": "23a3955d-e7e5-4fdf-8ede-3003fa075d8a.png",
+      "archive": "backups/performance-assets-2026-07-16/files/23a3955d-e7e5-4fdf-8ede-3003fa075d8a.png",
+      "bytes": 2043650,
+      "sha256": "658521cce0408b26f56cff38c907082c674d1e395d31dda67538fab48369abbe"
+    },
+    {
+      "source": "2af3908d-de8b-41ec-a4a4-124350732eb7.png",
+      "archive": "backups/performance-assets-2026-07-16/files/2af3908d-de8b-41ec-a4a4-124350732eb7.png",
+      "bytes": 3364724,
+      "sha256": "71002695f2fd18ef57b54c9ad0b7ac3a6ec40c4ce08ac5c5bb7f5c04ae323bf6"
+    },
+    {
+      "source": "4014fcf3-43b3-4d10-ac53-2cd1db56ed4e.png",
+      "archive": "backups/performance-assets-2026-07-16/files/4014fcf3-43b3-4d10-ac53-2cd1db56ed4e.png",
+      "bytes": 1654645,
+      "sha256": "2bb0496d72e858b40e25d047b620aa858b5f30d33b1cc74e28d72dae7ceca2bc"
+    },
+    {
+      "source": "4aa1520e-2f9d-453e-925d-4cffb9bfbc12.png",
+      "archive": "backups/performance-assets-2026-07-16/files/4aa1520e-2f9d-453e-925d-4cffb9bfbc12.png",
+      "bytes": 3460491,
+      "sha256": "308cfbb7f6eae6e12555fbc0f883b757d7e2a30bdda06c6d13d39c9cfd76313a"
+    },
+    {
+      "source": "5f9832e8-f36e-4c83-a359-0a0a9ef3c3f8.png",
+      "archive": "backups/performance-assets-2026-07-16/files/5f9832e8-f36e-4c83-a359-0a0a9ef3c3f8.png",
+      "bytes": 2110991,
+      "sha256": "f354e0daf9f30375714a68e3fda9166bffb13e7c74eb12bbee978191a0230ca2"
+    },
+    {
+      "source": "94159df4-7c4a-4f94-ae49-2c2777e9f3ba.png",
+      "archive": "backups/performance-assets-2026-07-16/files/94159df4-7c4a-4f94-ae49-2c2777e9f3ba.png",
+      "bytes": 2411827,
+      "sha256": "df23e5606ad31b1023acd4d416e6a58ab6e2ad4d907ee2800a5f890a6795f1d5"
+    },
+    {
+      "source": "98c90a60-1e94-4b60-b87e-e94574bab9c4.png",
+      "archive": "backups/performance-assets-2026-07-16/files/98c90a60-1e94-4b60-b87e-e94574bab9c4.png",
+      "bytes": 1302483,
+      "sha256": "18d47582e5a1b8ad427ba68de8ffe88ad599043ef0bc2f558387e64bebc84562"
+    },
+    {
+      "source": "991fcfc9-4474-4278-9693-5b1117294f4e.png",
+      "archive": "backups/performance-assets-2026-07-16/files/991fcfc9-4474-4278-9693-5b1117294f4e.png",
+      "bytes": 2209105,
+      "sha256": "a4dbdfe4c2fce214b0f078290c456924d7e1855efce2cb278df18cad047b2f0a"
+    },
+    {
+      "source": "all-numbered-area-outline-preview.png",
+      "archive": "backups/performance-assets-2026-07-16/files/all-numbered-area-outline-preview.png",
+      "bytes": 3443175,
+      "sha256": "6b98e517fa3a10d050dcd07d3e06ec32ad2dc5e387a386bd8dc7c1537401a24c"
+    },
+    {
+      "source": "assets/battle/battle-2.png",
+      "archive": "backups/performance-assets-2026-07-16/files/assets/battle/battle-2.png",
+      "bytes": 2396775,
+      "sha256": "b9ac1f48ce157f2c50c0e2c8d7d7f7d615487485b6238fb1671e7878a8472429"
+    },
+    {
+      "source": "assets/battle/battle-dead-center-right.png",
+      "archive": "backups/performance-assets-2026-07-16/files/assets/battle/battle-dead-center-right.png",
+      "bytes": 2719235,
+      "sha256": "1c30f90051d85fc56ffc1aafe5a92074bdcc3ed1a124f51ba223f3f51a7385eb"
+    },
+    {
+      "source": "assets/battle/battle-dead-center.png",
+      "archive": "backups/performance-assets-2026-07-16/files/assets/battle/battle-dead-center.png",
+      "bytes": 2683782,
+      "sha256": "8dc9a43784c0f6136d1fc7654acb88ed23a88d65e5b0efee39eb477c26bddf5c"
+    },
+    {
+      "source": "assets/battle/battle-dead-left-center.png",
+      "archive": "backups/performance-assets-2026-07-16/files/assets/battle/battle-dead-left-center.png",
+      "bytes": 2754272,
+      "sha256": "5af6455f2ae825f51f447fb7bb00de1a3e617b0bee1274ce2ad71926812e707c"
+    },
+    {
+      "source": "assets/battle/battle-dead-right.png",
+      "archive": "backups/performance-assets-2026-07-16/files/assets/battle/battle-dead-right.png",
+      "bytes": 2628534,
+      "sha256": "5260cb7acb388bf22d6cf75e558979600d771282fbe05e30365833b3b703b207"
+    },
+    {
+      "source": "assets/battle/battle-duo.png",
+      "archive": "backups/performance-assets-2026-07-16/files/assets/battle/battle-duo.png",
+      "bytes": 2925451,
+      "sha256": "096fc5703c647501b6a93eeace1b61e9e354e483cb00625c3b0f702f1b6c8517"
+    },
+    {
+      "source": "assets/battle/battle.png",
+      "archive": "backups/performance-assets-2026-07-16/files/assets/battle/battle.png",
+      "bytes": 2624602,
+      "sha256": "a7d5f5d1d569889e641e19891ec608b61c1c1b2ef243aa5ff4ca51c71e4b7617"
+    },
+    {
+      "source": "assets/battle/battle1.png",
+      "archive": "backups/performance-assets-2026-07-16/files/assets/battle/battle1.png",
+      "bytes": 2501340,
+      "sha256": "c1bb6d32d19ab8b6b5750b6f20bf1352abf07d544882416ec55865ab1ece3714"
+    },
+    {
+      "source": "assets/battle/battle3.png",
+      "archive": "backups/performance-assets-2026-07-16/files/assets/battle/battle3.png",
+      "bytes": 2353131,
+      "sha256": "10b7af1de7dd33a1dc4b44192d17849bab592279fde3099aa161d4098fa5a987"
+    },
+    {
+      "source": "assets/battle/solo-raid.png",
+      "archive": "backups/performance-assets-2026-07-16/files/assets/battle/solo-raid.png",
+      "bytes": 2174166,
+      "sha256": "c5950bcb26243e3933b19752653a5bfae732bef418a581057df6290da154199c"
+    },
+    {
+      "source": "assets/battle-room-bg.png",
+      "archive": "backups/performance-assets-2026-07-16/files/assets/battle-room-bg.png",
+      "bytes": 1397056,
+      "sha256": "d8a9d36a0482dea517aa08032ad4e682fe833848f055b89c0082209ddf7c8e9a"
+    },
+    {
+      "source": "assets/character/equipment-sheet.png",
+      "archive": "backups/performance-assets-2026-07-16/files/assets/character/equipment-sheet.png",
+      "bytes": 2144590,
+      "sha256": "eeb55c210615a4eff60a6dcbac8d373f75544082c22712dadf54f6a41d93f919"
+    },
+    {
+      "source": "assets/character/gangster-character.png",
+      "archive": "backups/performance-assets-2026-07-16/files/assets/character/gangster-character.png",
+      "bytes": 2367261,
+      "sha256": "cabc7434ee55e3b5e20d55b73792c6ed5d5f414a9151f9f078eefa0bf32e381e"
+    },
+    {
+      "source": "assets/character/player-avatar-boss.png",
+      "archive": "backups/performance-assets-2026-07-16/files/assets/character/player-avatar-boss.png",
+      "bytes": 2043650,
+      "sha256": "658521cce0408b26f56cff38c907082c674d1e395d31dda67538fab48369abbe"
+    },
+    {
+      "source": "assets/character/player-avatar-enforcer.png",
+      "archive": "backups/performance-assets-2026-07-16/files/assets/character/player-avatar-enforcer.png",
+      "bytes": 2209105,
+      "sha256": "a4dbdfe4c2fce214b0f078290c456924d7e1855efce2cb278df18cad047b2f0a"
+    },
+    {
+      "source": "assets/character/player-avatar-lady.png",
+      "archive": "backups/performance-assets-2026-07-16/files/assets/character/player-avatar-lady.png",
+      "bytes": 2110991,
+      "sha256": "f354e0daf9f30375714a68e3fda9166bffb13e7c74eb12bbee978191a0230ca2"
+    },
+    {
+      "source": "assets/harbor/fish-market-harbor.png",
+      "archive": "backups/performance-assets-2026-07-16/files/assets/harbor/fish-market-harbor.png",
+      "bytes": 2685395,
+      "sha256": "c78622b24b009755f012438aefda6a2aa44ca32181429d3b056f1602440db356"
+    },
+    {
+      "source": "assets/harbor/speakeasy-harbor.png",
+      "archive": "backups/performance-assets-2026-07-16/files/assets/harbor/speakeasy-harbor.png",
+      "bytes": 2251900,
+      "sha256": "4abb70e39be5f29a8cb949633415be1209291137d446826eea1bac967c041fa6"
+    },
+    {
+      "source": "assets/lot-house-level-1-source-v2.png",
+      "archive": "backups/performance-assets-2026-07-16/files/assets/lot-house-level-1-source-v2.png",
+      "bytes": 1952051,
+      "sha256": "900e9503a3dba42e7e0f0c9ed3fd31f8c6eecda0396e28c9321a749b0df2cd72"
+    },
+    {
+      "source": "assets/lot-house-level-1-source.png",
+      "archive": "backups/performance-assets-2026-07-16/files/assets/lot-house-level-1-source.png",
+      "bytes": 2055906,
+      "sha256": "56abea94f39e0491ad2872ac3f8c8ef7b913f37dc09e35fbe0e3a201010192e1"
+    },
+    {
+      "source": "assets/lot-house-level-1.png",
+      "archive": "backups/performance-assets-2026-07-16/files/assets/lot-house-level-1.png",
+      "bytes": 1469903,
+      "sha256": "98a20beeb53831e74b4525afae8c811abb4788adf2b94e1cc1c974d4b68fd8ac"
+    },
+    {
+      "source": "assets/lot-house-level-2-source.png",
+      "archive": "backups/performance-assets-2026-07-16/files/assets/lot-house-level-2-source.png",
+      "bytes": 2187537,
+      "sha256": "86a0a84881e33e067aa5cf6d1ecff66fac31f5297d76799cdb60d9a6c7f17ca4"
+    },
+    {
+      "source": "assets/lot-house-level-2.png",
+      "archive": "backups/performance-assets-2026-07-16/files/assets/lot-house-level-2.png",
+      "bytes": 1767911,
+      "sha256": "67645a8694e60b9dffece69ada7824444278ab4e9c08022949e9dbc84584e605"
+    },
+    {
+      "source": "assets/lot-house-level-3-source.png",
+      "archive": "backups/performance-assets-2026-07-16/files/assets/lot-house-level-3-source.png",
+      "bytes": 2376878,
+      "sha256": "958b4fc97851b04f5fabd41e98942a3b90b20972c8c02013b16c8ad31607b92d"
+    },
+    {
+      "source": "assets/lot-house-level-3.png",
+      "archive": "backups/performance-assets-2026-07-16/files/assets/lot-house-level-3.png",
+      "bytes": 2020703,
+      "sha256": "f8df11c45cee42983451394c95c7687c31ea4433595955d09f1f94ab2f3e0e0f"
+    },
+    {
+      "source": "assets/map/map-background-buildings-original.png",
+      "archive": "backups/performance-assets-2026-07-16/files/assets/map/map-background-buildings-original.png",
+      "bytes": 3672133,
+      "sha256": "23a4729f3e00a8af5413fed5287e0d3ee9535f337e00e11b653f181793ab8420"
+    },
+    {
+      "source": "assets/map/map-background-clean-roadfix.png",
+      "archive": "backups/performance-assets-2026-07-16/files/assets/map/map-background-clean-roadfix.png",
+      "bytes": 3589012,
+      "sha256": "74b0f6b92d92af183ec03bf2499d35e6cb3639af87dbd19ef2f33cdac379fea5"
+    },
+    {
+      "source": "assets/map/map-background-clean.png",
+      "archive": "backups/performance-assets-2026-07-16/files/assets/map/map-background-clean.png",
+      "bytes": 3260256,
+      "sha256": "3ac204ecd320db27d303a7621919a7fa62459c711926aacb499aed4bec724fa3"
+    },
+    {
+      "source": "assets/map/map-empty-lots-inpaint-source.png",
+      "archive": "backups/performance-assets-2026-07-16/files/assets/map/map-empty-lots-inpaint-source.png",
+      "bytes": 2719096,
+      "sha256": "aec4da46b8cf0e0c78c2d32f28fb82dbe3d27c275794a4f23c060b2c7660a10f"
+    },
+    {
+      "source": "assets/map/purchasable-houses-cutouts-v14/placement-debug.png",
+      "archive": "backups/performance-assets-2026-07-16/files/assets/map/purchasable-houses-cutouts-v14/placement-debug.png",
+      "bytes": 3288514,
+      "sha256": "ca79e52802461dd103fbd4833118dfa08c554eee7fc6164486d4e8dfe536effc"
+    },
+    {
+      "source": "assets/map/purchasable-houses-cutouts-v14/placement-preview.png",
+      "archive": "backups/performance-assets-2026-07-16/files/assets/map/purchasable-houses-cutouts-v14/placement-preview.png",
+      "bytes": 3272743,
+      "sha256": "7bd3677cdf2079f1d714b97c122aaff03af9767857a549206a42ba70086dd3ab"
+    },
+    {
+      "source": "assets/map/purchasable-houses-cutouts-v15/placement-debug.png",
+      "archive": "backups/performance-assets-2026-07-16/files/assets/map/purchasable-houses-cutouts-v15/placement-debug.png",
+      "bytes": 3289099,
+      "sha256": "e3bba868caead17a757c7ec7286e3b789940639730e3fd397af3529178c525b5"
+    },
+    {
+      "source": "assets/map/purchasable-houses-cutouts-v15/placement-preview.png",
+      "archive": "backups/performance-assets-2026-07-16/files/assets/map/purchasable-houses-cutouts-v15/placement-preview.png",
+      "bytes": 3268576,
+      "sha256": "827326cec1bc4a692cd93cca5fffd62ca103aeb2b3800bfaeeea359b83103974"
+    },
+    {
+      "source": "assets/map/purchasable-houses-cutouts-v16/placement-preview.png",
+      "archive": "backups/performance-assets-2026-07-16/files/assets/map/purchasable-houses-cutouts-v16/placement-preview.png",
+      "bytes": 3266602,
+      "sha256": "bba59364c0a9e89635b31e267b7edf767cbda8dd8c88254ff682f938f912716b"
+    },
+    {
+      "source": "assets/map/purchasable-houses-cutouts-v17/placement-preview.png",
+      "archive": "backups/performance-assets-2026-07-16/files/assets/map/purchasable-houses-cutouts-v17/placement-preview.png",
+      "bytes": 3263525,
+      "sha256": "27172966994bc8cbac571886db6996e55056568c6c41735d677f03526fb24467"
+    },
+    {
+      "source": "assets/map/purchasable-houses-cutouts-v18/placement-preview.png",
+      "archive": "backups/performance-assets-2026-07-16/files/assets/map/purchasable-houses-cutouts-v18/placement-preview.png",
+      "bytes": 3262283,
+      "sha256": "7e2de9abee99c7e9f452e771a185e02dbab0e111dedf91e41a00a5bcfebc2d00"
+    },
+    {
+      "source": "assets/map/purchasable-houses-cutouts-v19/placement-debug.png",
+      "archive": "backups/performance-assets-2026-07-16/files/assets/map/purchasable-houses-cutouts-v19/placement-debug.png",
+      "bytes": 3291328,
+      "sha256": "b94781a8ac14c30e21bfbc420f2600730f8d9a0ee28d1de0385e306e32714dc5"
+    },
+    {
+      "source": "assets/map/purchasable-houses-cutouts-v19/placement-preview.png",
+      "archive": "backups/performance-assets-2026-07-16/files/assets/map/purchasable-houses-cutouts-v19/placement-preview.png",
+      "bytes": 3270562,
+      "sha256": "55c6c5f710acab3cb172ea73b6d2998aa92db861ee5a1aaf6a31ae7a2c91c25f"
+    },
+    {
+      "source": "assets/map/purchasable-houses-v10/placement-preview.png",
+      "archive": "backups/performance-assets-2026-07-16/files/assets/map/purchasable-houses-v10/placement-preview.png",
+      "bytes": 3258477,
+      "sha256": "67374bef7cdf06a0dbb8acf6de248eb24658760063289e32f77eff3d9f694b9a"
+    },
+    {
+      "source": "assets/map/purchasable-houses-v11/placement-preview.png",
+      "archive": "backups/performance-assets-2026-07-16/files/assets/map/purchasable-houses-v11/placement-preview.png",
+      "bytes": 3257456,
+      "sha256": "251b28836c85ada7cb49950c116ace1a2e8639df3213fd73f3153f21d1c92bf9"
+    },
+    {
+      "source": "assets/map/purchasable-houses-v12/placement-preview.png",
+      "archive": "backups/performance-assets-2026-07-16/files/assets/map/purchasable-houses-v12/placement-preview.png",
+      "bytes": 3258475,
+      "sha256": "fcb4473bda1929d70b532b61b5799fa12695e6a39f3bf95e88c0214bcfa634a5"
+    },
+    {
+      "source": "assets/map/purchasable-houses-v13/placement-preview.png",
+      "archive": "backups/performance-assets-2026-07-16/files/assets/map/purchasable-houses-v13/placement-preview.png",
+      "bytes": 3262248,
+      "sha256": "9a094f400fef562bbf7d012eb9e35ba5ab48cfc11b300db2a9dd35c9c23f3dc7"
+    },
+    {
+      "source": "assets/map/purchasable-houses-v3-green-fit-trial-v21/inside-92/placement-preview.png",
+      "archive": "backups/performance-assets-2026-07-16/files/assets/map/purchasable-houses-v3-green-fit-trial-v21/inside-92/placement-preview.png",
+      "bytes": 3285191,
+      "sha256": "3151bb00584faddc2f156d5be9d6141a32cc5a3e4cbf4b09e348594d71286f20"
+    },
+    {
+      "source": "assets/map/purchasable-houses-v3-green-fit-trial-v21/inside-95/placement-preview.png",
+      "archive": "backups/performance-assets-2026-07-16/files/assets/map/purchasable-houses-v3-green-fit-trial-v21/inside-95/placement-preview.png",
+      "bytes": 3283816,
+      "sha256": "f96cddf574e59d1a4c8b3443eb9cc62cf17fdcbef16186514a258a1a0223a460"
+    },
+    {
+      "source": "assets/map/purchasable-houses-v3-green-fit-trial-v21/inside-98/placement-preview.png",
+      "archive": "backups/performance-assets-2026-07-16/files/assets/map/purchasable-houses-v3-green-fit-trial-v21/inside-98/placement-preview.png",
+      "bytes": 3281358,
+      "sha256": "1b4cabfcde30f636166e59a4ed93745c64ac87b778683948b174bf2061cdde16"
+    },
+    {
+      "source": "assets/map/purchasable-houses-v3-per-house-fit-trial-v22/placement-debug.png",
+      "archive": "backups/performance-assets-2026-07-16/files/assets/map/purchasable-houses-v3-per-house-fit-trial-v22/placement-debug.png",
+      "bytes": 3287315,
+      "sha256": "251a7c08341b29cf713e36ca784eb0f7284bfd5a86175be9f402674ec97eb44a"
+    },
+    {
+      "source": "assets/map/purchasable-houses-v3-per-house-fit-trial-v22/placement-preview.png",
+      "archive": "backups/performance-assets-2026-07-16/files/assets/map/purchasable-houses-v3-per-house-fit-trial-v22/placement-preview.png",
+      "bytes": 3286557,
+      "sha256": "e60c1200d50f61c0c1f6b48e3366604a3c6e566f479cf4558f5841a8ab0cd86d"
+    },
+    {
+      "source": "assets/map/purchasable-houses-v3-size-trial-v20/proportional/placement-preview.png",
+      "archive": "backups/performance-assets-2026-07-16/files/assets/map/purchasable-houses-v3-size-trial-v20/proportional/placement-preview.png",
+      "bytes": 3280606,
+      "sha256": "f1a16b3f9d1d0d1cafccf643e4883b49dcbfe84df3d152e35e2079a1a2bf8eef"
+    },
+    {
+      "source": "assets/map/purchasable-houses-v3-size-trial-v20/stretched/placement-preview.png",
+      "archive": "backups/performance-assets-2026-07-16/files/assets/map/purchasable-houses-v3-size-trial-v20/stretched/placement-preview.png",
+      "bytes": 3281380,
+      "sha256": "c791830561ec0b0b32657d485acf2b63583ffa94ac49e841c6b04df6f5420332"
+    },
+    {
+      "source": "assets/map/purchasable-houses-v4/placement-preview.png",
+      "archive": "backups/performance-assets-2026-07-16/files/assets/map/purchasable-houses-v4/placement-preview.png",
+      "bytes": 3351020,
+      "sha256": "d42fe58d6bcdc71d2a2ab774ebcb5b524c617d2ac4b615baa55b84ab608d2d8f"
+    },
+    {
+      "source": "assets/map/purchasable-houses-v5/placement-preview.png",
+      "archive": "backups/performance-assets-2026-07-16/files/assets/map/purchasable-houses-v5/placement-preview.png",
+      "bytes": 3279396,
+      "sha256": "4de2ef7355dc80ccf1f1cc3e4f4059339ee256286e2b5f09547e2a7e36f047ae"
+    },
+    {
+      "source": "assets/map/purchasable-houses-v6/placement-preview.png",
+      "archive": "backups/performance-assets-2026-07-16/files/assets/map/purchasable-houses-v6/placement-preview.png",
+      "bytes": 3269293,
+      "sha256": "50fb2680638b96e1e3d2fdf0c1571bd9a36d439ab002a7bf50a3130145bf7196"
+    },
+    {
+      "source": "assets/map/purchasable-houses-v7/placement-debug.png",
+      "archive": "backups/performance-assets-2026-07-16/files/assets/map/purchasable-houses-v7/placement-debug.png",
+      "bytes": 3266427,
+      "sha256": "25224390f028587a2d38f9393a1c17d5bd616fd973413bc9c519ed5b39c49866"
+    },
+    {
+      "source": "assets/map/purchasable-houses-v7/placement-preview.png",
+      "archive": "backups/performance-assets-2026-07-16/files/assets/map/purchasable-houses-v7/placement-preview.png",
+      "bytes": 3267271,
+      "sha256": "c75cc6ac6f707b9511fe5aa891e90dad2a04e60aa1506733c9c2c690e602ec2c"
+    },
+    {
+      "source": "assets/map/purchasable-houses-v8/placement-preview.png",
+      "archive": "backups/performance-assets-2026-07-16/files/assets/map/purchasable-houses-v8/placement-preview.png",
+      "bytes": 3258841,
+      "sha256": "51d10ebb20f84562f254c61ad55d72b3a9fff9c411f110a5cb6c741c2a13421f"
+    },
+    {
+      "source": "assets/map/purchasable-houses-v8-fit/placement-preview.png",
+      "archive": "backups/performance-assets-2026-07-16/files/assets/map/purchasable-houses-v8-fit/placement-preview.png",
+      "bytes": 3259408,
+      "sha256": "ee01f5c9c1a7ed46f213b32b8a3b7ebd2e0c39cd3307d3902ac9dd8872e5c3fb"
+    },
+    {
+      "source": "assets/map/purchasable-houses-v9/placement-preview.png",
+      "archive": "backups/performance-assets-2026-07-16/files/assets/map/purchasable-houses-v9/placement-preview.png",
+      "bytes": 3259082,
+      "sha256": "52f67df31b36c8f3b80f4f1d6878a27356829139e9aee0c12791914ab6ca77cc"
+    },
+    {
+      "source": "assets/map/sources/main-map-house-model-sheet.png",
+      "archive": "backups/performance-assets-2026-07-16/files/assets/map/sources/main-map-house-model-sheet.png",
+      "bytes": 2061720,
+      "sha256": "d6e536ece1098cabb88f14693b460804400231952ce513c86fb8c74610316eb7"
+    },
+    {
+      "source": "assets/world/harbor-button.png",
+      "archive": "backups/performance-assets-2026-07-16/files/assets/world/harbor-button.png",
+      "bytes": 2349843,
+      "sha256": "9607cf9a546fd48920f646d7556824c1f83c5d3cfb8d23754abfa2cfb0a380e1"
+    },
+    {
+      "source": "assets/world/harbor-map-clean-v3.png",
+      "archive": "backups/performance-assets-2026-07-16/files/assets/world/harbor-map-clean-v3.png",
+      "bytes": 3157043,
+      "sha256": "ef5e7bf50a6f30d07a670b21eb8d68cba62f19ecdcb201b91c0635fff584265e"
+    },
+    {
+      "source": "assets/world/npc-city-map-1.png",
+      "archive": "backups/performance-assets-2026-07-16/files/assets/world/npc-city-map-1.png",
+      "bytes": 3482172,
+      "sha256": "622d6c96a6c1bd673aee55f470a1b768364aecca02406d9d18bac7d1b9c04513"
+    },
+    {
+      "source": "assets/world/npc-city-map-2.png",
+      "archive": "backups/performance-assets-2026-07-16/files/assets/world/npc-city-map-2.png",
+      "bytes": 3624060,
+      "sha256": "36049cc040afe478a2153fd68b15acbe05017498509571e640410bf1647cd896"
+    },
+    {
+      "source": "assets/world/npc-city-map-3.png",
+      "archive": "backups/performance-assets-2026-07-16/files/assets/world/npc-city-map-3.png",
+      "bytes": 3679310,
+      "sha256": "c90bf505cc876e1ead624c84744bc0c68bcb4b4395f9224eb9a7d369bf8d8779"
+    },
+    {
+      "source": "assets/world/world-map-browser.webp",
+      "archive": "backups/performance-assets-2026-07-16/files/assets/world/world-map-browser.webp",
+      "bytes": 3890668,
+      "sha256": "5308d221792df81199082cf03003794f88d0db62a6d3a397f92e8b9e31239fa5"
+    },
+    {
+      "source": "assets/world/world-map-expanded-optimized.webp",
+      "archive": "backups/performance-assets-2026-07-16/files/assets/world/world-map-expanded-optimized.webp",
+      "bytes": 19848440,
+      "sha256": "015c1ffd5bfc835fc42080821110955581ecdab2afd37345e0da13d04c89687e"
+    },
+    {
+      "source": "assets/world/world-rival-castle-1.png",
+      "archive": "backups/performance-assets-2026-07-16/files/assets/world/world-rival-castle-1.png",
+      "bytes": 1784133,
+      "sha256": "d36b4b9fc5b8477696c84ba4b8df1aca724d069e05aff42d71389675d8fe16f3"
+    },
+    {
+      "source": "assets/world/world-rival-castle-2.png",
+      "archive": "backups/performance-assets-2026-07-16/files/assets/world/world-rival-castle-2.png",
+      "bytes": 1568343,
+      "sha256": "a888181db18ae30d9a54f56a8af3429a4ab1047d79f6f030871f9555847f0ba0"
+    },
+    {
+      "source": "assets/world/world-rival-castle-3.png",
+      "archive": "backups/performance-assets-2026-07-16/files/assets/world/world-rival-castle-3.png",
+      "bytes": 2076886,
+      "sha256": "acc3be4e247bab0eb24fb13815605a243f677013401a020ba7d446dfb30bf285"
+    },
+    {
+      "source": "assets/world/world-rival-ruin.png",
+      "archive": "backups/performance-assets-2026-07-16/files/assets/world/world-rival-ruin.png",
+      "bytes": 1754219,
+      "sha256": "eea61d252cce44dbfae4f210ab2ce1e47814c05e5e29a732d13d1b62ddacb711"
+    },
+    {
+      "source": "assets/world/world-rival-village-1.png",
+      "archive": "backups/performance-assets-2026-07-16/files/assets/world/world-rival-village-1.png",
+      "bytes": 1761230,
+      "sha256": "f967a979891c0cf5f38a5ed08bea3e7edbea87e3ecb34514e97fccf926e84794"
+    },
+    {
+      "source": "assets/world/world-rival-village-2.png",
+      "archive": "backups/performance-assets-2026-07-16/files/assets/world/world-rival-village-2.png",
+      "bytes": 1790150,
+      "sha256": "773df87a5374d40a4f3dc11b424099e90780e16e800f7d3b3c7ec2a2e3ba559c"
+    },
+    {
+      "source": "assets/world/world-rival-village-3.png",
+      "archive": "backups/performance-assets-2026-07-16/files/assets/world/world-rival-village-3.png",
+      "bytes": 1795166,
+      "sha256": "b69ccb542d325aaddfcac56b793e551badad4800aafb603490e0be89f96df011"
+    },
+    {
+      "source": "assets/world-map-background-continuous.png",
+      "archive": "backups/performance-assets-2026-07-16/files/assets/world-map-background-continuous.png",
+      "bytes": 2995009,
+      "sha256": "37bde8f696e4b5581e75a71c35a075fd64ae27de7b7d0535e019cb43af455585"
+    },
+    {
+      "source": "background.png",
+      "archive": "backups/performance-assets-2026-07-16/files/background.png",
+      "bytes": 3296170,
+      "sha256": "b27812626c6c7df3a939cd412b4e38b9d4cb7b2f7b7ce78feaaaecc6c0b6af4a"
+    },
+    {
+      "source": "boltok.png",
+      "archive": "backups/performance-assets-2026-07-16/files/boltok.png",
+      "bytes": 2907557,
+      "sha256": "ce2eb84212d9346f5573b0f941a706e32e898a365fb12bb0da4d267ef2e89c29"
+    },
+    {
+      "source": "car/gangster_car_1930_texture_atlas.png",
+      "archive": "backups/performance-assets-2026-07-16/files/car/gangster_car_1930_texture_atlas.png",
+      "bytes": 8124821,
+      "sha256": "8e60cf67f8d5e62d988dc40c5f07116d636532ad09513a7b0ea6f3bfcfce2f30"
+    },
+    {
+      "source": "car map.png",
+      "archive": "backups/performance-assets-2026-07-16/files/car map.png",
+      "bytes": 3194701,
+      "sha256": "37a14c343ef2e5361e34bf7bc84d17f84ff18d5f6d16a910372e5f7a6827a3f7"
+    },
+    {
+      "source": "csempészet/0391ff3c-7e67-4b77-91e0-cdb7ac0f0a9a.png",
+      "archive": "backups/performance-assets-2026-07-16/files/csempészet/0391ff3c-7e67-4b77-91e0-cdb7ac0f0a9a.png",
+      "bytes": 2324121,
+      "sha256": "a2a422d46c5d9267aa6f0beccd60010b7e94a165eb875e488d9db234c5cdceba"
+    },
+    {
+      "source": "csempészet/34d87e7a-d0ec-42bc-891e-eff98067be29.png",
+      "archive": "backups/performance-assets-2026-07-16/files/csempészet/34d87e7a-d0ec-42bc-891e-eff98067be29.png",
+      "bytes": 2682800,
+      "sha256": "2e50000e511936e745dc41dc1fe2bf8cae02392a6d4a5d0990f42e1bb03d0b7b"
+    },
+    {
+      "source": "csempészet/dd25759f-f94a-42dc-8df6-d9fab6211903.png",
+      "archive": "backups/performance-assets-2026-07-16/files/csempészet/dd25759f-f94a-42dc-8df6-d9fab6211903.png",
+      "bytes": 2417172,
+      "sha256": "91a69540cb7ecd6444e8f228986c19e00e0428dd18418bf84cb87670a7e9d0ac"
+    },
+    {
+      "source": "csempészet/f5b63510-d9c7-469c-ac33-71343b294ab1.png",
+      "archive": "backups/performance-assets-2026-07-16/files/csempészet/f5b63510-d9c7-469c-ac33-71343b294ab1.png",
+      "bytes": 2512208,
+      "sha256": "d97776c0757aaad1216bd9f06986681031f70a127ee56faa106fedeb80170a91"
+    },
+    {
+      "source": "d87678c6-dbbc-42b3-8b45-8a409b9b09d5.png",
+      "archive": "backups/performance-assets-2026-07-16/files/d87678c6-dbbc-42b3-8b45-8a409b9b09d5.png",
+      "bytes": 1919094,
+      "sha256": "56565f661bde5ac6141e077997661ba066f1867e0bb0f55a8f00c2d4ea5c655d"
+    },
+    {
+      "source": "e760dd7c-8241-40fd-a60b-50ef4c823eb2.png",
+      "archive": "backups/performance-assets-2026-07-16/files/e760dd7c-8241-40fd-a60b-50ef4c823eb2.png",
+      "bytes": 3453350,
+      "sha256": "118ebd47ae28078e086191d077915dbc66253d0196f24a986b2eab4694b6ff73"
+    },
+    {
+      "source": "e902b162-eeb5-40da-85c7-b9b4922fefea.png",
+      "archive": "backups/performance-assets-2026-07-16/files/e902b162-eeb5-40da-85c7-b9b4922fefea.png",
+      "bytes": 1667914,
+      "sha256": "5bbc65402870da3bd58cbfc795f904b85d4f2fc4adc4dc3dad3abcc6fa53b4ad"
+    },
+    {
+      "source": "f4c3393b-c4ab-4f58-9652-b58244ebd0cb.png",
+      "archive": "backups/performance-assets-2026-07-16/files/f4c3393b-c4ab-4f58-9652-b58244ebd0cb.png",
+      "bytes": 2755474,
+      "sha256": "7c956a3766f2f0ff382a80e634d7ee02daf0171106212b04c8ec823cae308806"
+    },
+    {
+      "source": "fac0da7f-90a7-4bf8-b2ae-0f310d3482ff.png",
+      "archive": "backups/performance-assets-2026-07-16/files/fac0da7f-90a7-4bf8-b2ae-0f310d3482ff.png",
+      "bytes": 3177417,
+      "sha256": "73dd94c61ff3aac0d60026e316ce5e8d33448687df95404c3e6b7b1bb3f4ad2b"
+    },
+    {
+      "source": "garage-assets/armored-money-car-1930.png",
+      "archive": "backups/performance-assets-2026-07-16/files/garage-assets/armored-money-car-1930.png",
+      "bytes": 2403988,
+      "sha256": "4469fc0bd0e948ad0c286769b324edc126e6b65cb89cb0f5cb1122cbfec37111"
+    },
+    {
+      "source": "garage-assets/sedan-1930.png",
+      "archive": "backups/performance-assets-2026-07-16/files/garage-assets/sedan-1930.png",
+      "bytes": 2252370,
+      "sha256": "6c951b43113cb683d3ec480a4ff2953c06e53356eebc3235dc021fe5b1d1c022"
+    },
+    {
+      "source": "garage-assets/smuggler-van-1930.png",
+      "archive": "backups/performance-assets-2026-07-16/files/garage-assets/smuggler-van-1930.png",
+      "bytes": 2132960,
+      "sha256": "3e411e19e24046233c12293b02aba80e4884d40c9aad256b28e23627908de18f"
+    },
+    {
+      "source": "house-outline-initial-placement-preview.png",
+      "archive": "backups/performance-assets-2026-07-16/files/house-outline-initial-placement-preview.png",
+      "bytes": 3692762,
+      "sha256": "3b40dd03efc72b6affe5e4424802f69e0ad00dab805d91d02bc35ddb75bf837e"
+    },
+    {
+      "source": "house-outline-tight-placement-preview.png",
+      "archive": "backups/performance-assets-2026-07-16/files/house-outline-tight-placement-preview.png",
+      "bytes": 3438805,
+      "sha256": "ebeaabad357303fe6d9c11fa1393ddeed8dfd088d8280baf8322352d01f12434"
+    },
+    {
+      "source": "kikötö/75ec3aa3-b38c-4731-b08e-fe5980085a47.png",
+      "archive": "backups/performance-assets-2026-07-16/files/kikötö/75ec3aa3-b38c-4731-b08e-fe5980085a47.png",
+      "bytes": 3797967,
+      "sha256": "5cb8995b5698c54b6a74ed7ae6ddaa930721f573adf6a8c185fc9536bbba20a1"
+    },
+    {
+      "source": "kikötö/c127f013-3679-40f6-af53-f81909110266.png",
+      "archive": "backups/performance-assets-2026-07-16/files/kikötö/c127f013-3679-40f6-af53-f81909110266.png",
+      "bytes": 2887651,
+      "sha256": "26c913c8525fc0b5707709f660af1feca8d3b434dd52cf9b723bece40f8d09c3"
+    },
+    {
+      "source": "kikötö/harbor-map-clean-v2.png",
+      "archive": "backups/performance-assets-2026-07-16/files/kikötö/harbor-map-clean-v2.png",
+      "bytes": 3489023,
+      "sha256": "b4d27e9e885ae051bbd38f50bdcd48fec9639df034b063c5583f5621be9bbe91"
+    },
+    {
+      "source": "kikötö/harbor-map-clean-v3.png",
+      "archive": "backups/performance-assets-2026-07-16/files/kikötö/harbor-map-clean-v3.png",
+      "bytes": 3157043,
+      "sha256": "ef5e7bf50a6f30d07a670b21eb8d68cba62f19ecdcb201b91c0635fff584265e"
+    },
+    {
+      "source": "kikötö/harbor-map-v1.png",
+      "archive": "backups/performance-assets-2026-07-16/files/kikötö/harbor-map-v1.png",
+      "bytes": 3104290,
+      "sha256": "f969efa986e4d73179482b08845c00844d93e5d5680d98b4d8ce0201ce001a4b"
+    },
+    {
+      "source": "kikötö/kikötö.png",
+      "archive": "backups/performance-assets-2026-07-16/files/kikötö/kikötö.png",
+      "bytes": 3336013,
+      "sha256": "3be0b458f8fc39c6a70cf17b0c6b406df6c810b623e2fc84e553e233173e69c0"
+    },
+    {
+      "source": "map-background-roadfill-preview.png",
+      "archive": "backups/performance-assets-2026-07-16/files/map-background-roadfill-preview.png",
+      "bytes": 3299698,
+      "sha256": "84200b49933caee7d9cc1056848ac33db0657c8c67dcbd1fd290a15a048485a2"
+    },
+    {
+      "source": "mentor-envelope-cutout.png",
+      "archive": "backups/performance-assets-2026-07-16/files/mentor-envelope-cutout.png",
+      "bytes": 1785767,
+      "sha256": "d2b8ce92b7a5b6e3e3bf2bf8757aaeb69258ab58d098128b5a996c812ddc7e4a"
+    },
+    {
+      "source": "register.png",
+      "archive": "backups/performance-assets-2026-07-16/files/register.png",
+      "bytes": 2132548,
+      "sha256": "46dedc82d9c8ea90dbe83288b202e14ca00698cbdbcdd4c8dd9d28c06c3410db"
+    },
+    {
+      "source": "tools/world-rival-clean/world-rival-village-1.png",
+      "archive": "backups/performance-assets-2026-07-16/files/tools/world-rival-clean/world-rival-village-1.png",
+      "bytes": 1761230,
+      "sha256": "f967a979891c0cf5f38a5ed08bea3e7edbea87e3ecb34514e97fccf926e84794"
+    },
+    {
+      "source": "tools/world-rival-clean/world-rival-village-2.png",
+      "archive": "backups/performance-assets-2026-07-16/files/tools/world-rival-clean/world-rival-village-2.png",
+      "bytes": 1790150,
+      "sha256": "773df87a5374d40a4f3dc11b424099e90780e16e800f7d3b3c7ec2a2e3ba559c"
+    },
+    {
+      "source": "tools/world-rival-clean/world-rival-village-3.png",
+      "archive": "backups/performance-assets-2026-07-16/files/tools/world-rival-clean/world-rival-village-3.png",
+      "bytes": 1795166,
+      "sha256": "b69ccb542d325aaddfcac56b793e551badad4800aafb603490e0be89f96df011"
+    },
+    {
+      "source": "tékép/112f4c8b-6d3b-48d6-8d4e-60cf498626b9.png",
+      "archive": "backups/performance-assets-2026-07-16/files/tékép/112f4c8b-6d3b-48d6-8d4e-60cf498626b9.png",
+      "bytes": 2898233,
+      "sha256": "3320cf7f9ea691d7d3fd7dc3a58620c7ce74546b29fc20dbb43693c614b3537c"
+    },
+    {
+      "source": "tékép/26414562-afef-4966-9f34-1a8eb9fe0a0e.png",
+      "archive": "backups/performance-assets-2026-07-16/files/tékép/26414562-afef-4966-9f34-1a8eb9fe0a0e.png",
+      "bytes": 2938010,
+      "sha256": "be5ee763fe8662196ed22d4f1ac12c01825d4cb2620f50730a382f32afe53815"
+    },
+    {
+      "source": "tékép/7fe4a123-f5d0-4381-b12f-6b208bff958c.png",
+      "archive": "backups/performance-assets-2026-07-16/files/tékép/7fe4a123-f5d0-4381-b12f-6b208bff958c.png",
+      "bytes": 2996744,
+      "sha256": "3f994013bf51de3d4ea6f0fdf468f74c8ad85376bb8e09a91dcd6fe3006b594a"
+    },
+    {
+      "source": "tékép/d8a5f237-a986-40e7-a2f6-3d2eb61c84a9.png",
+      "archive": "backups/performance-assets-2026-07-16/files/tékép/d8a5f237-a986-40e7-a2f6-3d2eb61c84a9.png",
+      "bytes": 2061937,
+      "sha256": "2741abb17e5e988ae651bfbea0c478b7586fdcd4263236b4549bae40e1bf88b7"
+    }
+  ]
+}

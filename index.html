@@ -4,8 +4,10 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Maffia: Birodalomépítő</title>
-    <link rel="stylesheet" href="./style.css?v=login-screen-2026-07-12-1" />
-    <script src="https://cdn.jsdelivr.net/npm/phaser@3.90.0/dist/phaser.min.js"></script>
+    <link rel="preload" as="image" href="./register-960.webp" media="(max-width: 1199px)" fetchpriority="high" />
+    <link rel="preload" as="image" href="./register-1440.webp" media="(min-width: 1200px) and (max-width: 1799px)" fetchpriority="high" />
+    <link rel="preload" as="image" href="./register.webp" media="(min-width: 1800px)" fetchpriority="high" />
+    <link rel="stylesheet" href="./style.css?v=perf-2026-07-19-3" />
   </head>
   <body>
     <div id="bootOverlay" class="boot-overlay">
@@ -56,26 +58,26 @@
         </header>
         <div class="avatar-selection__grid">
           <button class="avatar-choice" type="button" data-avatar-id="boss">
-            <img src="./assets/character/player-avatar-boss.png" alt="Elegans maffiavezer az irodajaban">
+            <img data-src="./assets/character/player-avatar-boss.webp" alt="Elegans maffiavezer az irodajaban" loading="lazy" decoding="async">
             <span class="avatar-choice__label"><strong>A Fonok</strong><small>Tekintely es hidegver</small></span>
           </button>
           <button class="avatar-choice" type="button" data-avatar-id="lady">
-            <img src="./assets/character/player-avatar-lady.png" alt="Elegans maffiaholgy egy klubban">
+            <img data-src="./assets/character/player-avatar-lady.webp" alt="Elegans maffiaholgy egy klubban" loading="lazy" decoding="async">
             <span class="avatar-choice__label"><strong>A Nagyasszony</strong><small>Befolyas es rafinaria</small></span>
           </button>
           <button class="avatar-choice" type="button" data-avatar-id="enforcer">
-            <img src="./assets/character/player-avatar-enforcer.png" alt="Maffiozo az ejszakai utcaban">
+            <img data-src="./assets/character/player-avatar-enforcer.webp" alt="Maffiozo az ejszakai utcaban" loading="lazy" decoding="async">
             <span class="avatar-choice__label"><strong>A Vegrehajto</strong><small>Ero es konyortelenseg</small></span>
           </button>
         </div>
       </div>
     </section>
 
-    <img id="mapBackgroundLayer" class="map-background-layer" src="./assets/map/map-background-clean-roadfix.png" alt="" aria-hidden="true">
+    <img id="mapBackgroundLayer" class="map-background-layer" data-src="./assets/map/map-background-clean-roadfix-960.webp" data-srcset="./assets/map/map-background-clean-roadfix-960.webp 960w, ./assets/map/map-background-clean-roadfix-1440.webp 1440w, ./assets/map/map-background-clean-roadfix.webp 1534w" data-defer-until-login="true" sizes="100vw" alt="" aria-hidden="true" decoding="async">
     <div id="gameRoot" class="game-root"></div>
 
     <section id="harborMapView" class="harbor-map-view hidden" aria-hidden="true">
-      <img id="harborMapImage" class="harbor-map-view__image" src="./assets/world/harbor-map-clean-v3.png" alt="Kikoto terkep">
+      <img id="harborMapImage" class="harbor-map-view__image" data-src="./assets/world/harbor-map-clean-v3-960.webp" data-srcset="./assets/world/harbor-map-clean-v3-960.webp 960w, ./assets/world/harbor-map-clean-v3.webp 1200w" sizes="100vw" alt="Kikoto terkep" loading="lazy" decoding="async">
       <div id="harborMapZones" class="harbor-map-view__zones"></div>
       <aside id="harborOperationPanel" class="harbor-operation-panel hidden" aria-hidden="true"></aside>
     </section>
@@ -216,13 +218,30 @@
 
         <div id="robberyTeamPicker" class="robbery-team-picker robbery-team-picker--cards" aria-label="Csapattarsak kivalasztasa"></div>
 
+        <div id="robberyCombatPreview" class="robbery-combat-preview" aria-live="polite">
+          <div class="robbery-combat-preview__stat">
+            <span>Sajat csapat</span>
+            <strong id="robberyTeamPowerPreview">0 ero</strong>
+          </div>
+          <div class="robbery-combat-preview__versus">VS</div>
+          <div class="robbery-combat-preview__stat">
+            <span>Ellenseg becsles</span>
+            <strong id="robberyEnemyPowerPreview">0 ero</strong>
+          </div>
+          <div class="robbery-combat-preview__chance">
+            <span>Becsult gyozelmi esely</span>
+            <strong id="robberyWinChancePreview">0%</strong>
+          </div>
+          <p id="robberyCombatAdvice">Valassz bandatagot a pontos becsleshez.</p>
+        </div>
+
         <div class="robbery-game__meters">
           <div class="robbery-meter robbery-meter--health">
             <div class="robbery-meter__copy"><span>Életerő</span><strong id="robberyHealthText">100%</strong></div>
             <div class="robbery-meter__track"><div id="robberyHealthFill" class="robbery-meter__fill"></div></div>
           </div>
           <div class="robbery-meter robbery-meter--control">
-            <div class="robbery-meter__copy"><span>Befolyás</span><strong id="robberyControlText">0%</strong></div>
+            <div class="robbery-meter__copy"><span>Harci fölény</span><strong id="robberyControlText">0%</strong></div>
             <div class="robbery-meter__track"><div id="robberyControlFill" class="robbery-meter__fill"></div></div>
           </div>
           <div class="robbery-meter robbery-meter--alert">
@@ -324,7 +343,7 @@
           <main class="character-figure">
             <div class="character-figure__name" id="characterName">Ismeretlen</div>
             <div class="character-figure__portrait">
-              <img id="characterPortrait" class="character-figure__art" src="./assets/character/gangster-character.png" alt="1930-as evekbeli maffiozo">
+              <img id="characterPortrait" class="character-figure__art" data-src="./assets/character/gangster-character.webp" alt="1930-as evekbeli maffiozo" loading="lazy" decoding="async">
             </div>
             <div class="character-figure__rank" id="characterRank">Kezdo gengszter</div>
           </main>
@@ -421,7 +440,7 @@
 
         <div class="crew-member-sheet__body">
           <div class="crew-member-sheet__portrait">
-            <img id="crewMemberPanelImage" src="./assets/character/gangster-character.png" alt="Bandatag">
+            <img id="crewMemberPanelImage" data-src="./assets/character/gangster-character.webp" alt="Bandatag" loading="lazy" decoding="async">
           </div>
 
           <div class="crew-member-sheet__content">
@@ -454,14 +473,81 @@
       </div>
     </section>
 
+    <section id="settingsDialog" class="settings-dialog hidden" aria-hidden="true">
+      <div id="settingsBackdrop" class="settings-dialog__backdrop"></div>
+      <article class="settings-dialog__panel" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+        <span class="settings-dialog__ornament settings-dialog__ornament--left" aria-hidden="true"></span>
+        <span class="settings-dialog__ornament settings-dialog__ornament--right" aria-hidden="true"></span>
+        <header class="settings-dialog__header">
+          <div><span class="settings-dialog__eyebrow">Családi iroda</span><h2 id="settingsTitle">Beállítások</h2></div>
+          <button id="settingsClose" class="settings-dialog__close" type="button" aria-label="Beállítások bezárása">×</button>
+        </header>
+        <div class="settings-dialog__content">
+          <section class="settings-group">
+            <div class="settings-group__heading">
+              <span class="settings-group__icon" aria-hidden="true">◈</span>
+              <div><strong>Megjelenés</strong><small>A játék felületének beállításai</small></div>
+            </div>
+            <label class="settings-row" for="settingsAnimations">
+              <span><strong>Animációk</strong><small>Harci és kezelőfelületi mozgások</small></span>
+              <input id="settingsAnimations" type="checkbox" checked><i aria-hidden="true"></i>
+            </label>
+            <button id="settingsFullscreen" class="settings-row settings-row--button" type="button">
+              <span><strong>Teljes képernyő</strong><small>Nagyobb, zavartalan játékfelület</small></span>
+              <b id="settingsFullscreenState">Bekapcsolás</b>
+            </button>
+          </section>
+        </div>
+        <footer class="settings-dialog__footer">
+          <button id="settingsLogout" class="settings-dialog__logout" type="button"><span aria-hidden="true">↪</span><strong>Kijelentkezés</strong></button>
+        </footer>
+      </article>
+    </section>
+
+    <section id="questOverview" class="quest-overview hidden" aria-hidden="true">
+      <article class="quest-overview__panel" role="dialog" aria-modal="false" aria-labelledby="questOverviewTitle">
+        <span class="settings-dialog__ornament settings-dialog__ornament--left" aria-hidden="true"></span>
+        <span class="settings-dialog__ornament settings-dialog__ornament--right" aria-hidden="true"></span>
+        <header class="quest-overview__header">
+          <div>
+            <span class="settings-dialog__eyebrow">Családi megbízások</span>
+            <h2 id="questOverviewTitle">Aktuális küldetések</h2>
+          </div>
+          <button id="questOverviewClose" class="settings-dialog__close" type="button" aria-label="Küldetések bezárása">×</button>
+        </header>
+        <div id="questOverviewList" class="quest-overview__list"></div>
+      </article>
+    </section>
+
     <div id="hudRoot" class="hud-root hidden">
+      <section class="hud-corner-brand" aria-label="La Cosa Nostra">
+        <img class="hud-corner-brand__city" src="./assets/hud-la-cosa-city.webp" alt="" aria-hidden="true" />
+        <div class="hud-corner-brand__portrait" aria-hidden="true">
+          <img src="./assets/character/player-avatar-boss.webp" alt="" />
+        </div>
+        <strong>La Cosa Nostra</strong>
+      </section>
       <header class="hud-topbar">
         <div class="hud-resources">
-          <div class="hud-pill hud-pill--money"><span>Pénz</span><strong id="hudMoney">120 $</strong></div>
-          <div class="hud-pill hud-pill--influence"><span>Befolyás</span><strong id="hudInfluence">0%</strong></div>
-          <div class="hud-pill hud-pill--heat"><span>Körözés</span><strong id="hudHeat">12%</strong></div>
+          <div class="hud-pill hud-pill--money">
+            <svg class="hud-pill__icon" viewBox="0 0 32 32" aria-hidden="true"><path d="M16 2v28M22 8c-1.7-2-4-3-7-3-4 0-7 2-7 5s2.6 4.4 7.5 5.5S24 18 24 22s-3.4 6-8 6c-3.7 0-7-1.4-9-4"/><path d="M4 25h4M24 7h4"/></svg>
+            <span>Pénz</span><strong id="hudMoney">120 $</strong>
+          </div>
+          <button id="hudInfluencePill" class="hud-pill hud-pill--influence" type="button" aria-expanded="false" aria-controls="hudInfluenceInfo">
+            <svg class="hud-pill__icon" viewBox="0 0 36 32" aria-hidden="true"><path d="M5 9l22-5 4 19-22 5z"/><path d="M9 12l14-3M11 16l15-3M12 20l10-2"/><circle cx="27" cy="18" r="2.5"/></svg>
+            <span>Befolyás</span><strong id="hudInfluence">0%</strong>
+          </button>
+          <div class="hud-pill hud-pill--heat">
+            <svg class="hud-pill__icon hud-pill__icon--police" viewBox="0 0 46 32" aria-hidden="true"><path d="M4 20l3-8h7l5-6h12l6 7 5 2v8H4z"/><path d="M16 12l5-5M22 7v6M31 7l4 6M8 16h31M6 20h36M20 4h8v3h-8z"/><circle cx="13" cy="24" r="4"/><circle cx="35" cy="24" r="4"/><circle cx="13" cy="24" r="1.5"/><circle cx="35" cy="24" r="1.5"/><path d="M8 17h5M36 17h5"/></svg>
+            <span>Körözés</span><strong id="hudHeat">12%</strong>
+          </div>
           <section id="hudProcessTasks" class="hud-process-tasks" aria-label="Folyamatban levo feladatok"></section>
+          <nav class="hud-utility-nav" aria-label="Gyorsmen&#252;">
+            <button type="button" data-hud-top-action="quests"><i aria-hidden="true"><svg viewBox="0 0 28 28"><path d="M7 3h14v22H7zM10 8h8M10 13h8M10 18h6"/></svg></i><span>K&#252;ldet&#233;sek</span></button>
+            <button type="button" data-hud-top-action="settings"><i aria-hidden="true"><svg viewBox="0 0 28 28"><path d="M14 4v3M14 21v3M4 14h3M21 14h3M7 7l2 2M19 19l2 2M21 7l-2 2M9 19l-2 2"/><circle cx="14" cy="14" r="6"/><circle cx="14" cy="14" r="2"/></svg></i><span>Be&#225;ll&#237;t&#225;sok</span></button>
+          </nav>
         </div>
+        <aside id="hudInfluenceInfo" class="hud-influence-info hidden" aria-hidden="true"></aside>
       </header>
 
       <aside class="hud-avatar-card hud-panel">
@@ -495,7 +581,7 @@
       </section>
 
       <button id="hudMentorToggle" class="hud-mentor-envelope" type="button" aria-label="Mentor kuldetes megnyitasa">
-        <img src="./mentor-envelope-cutout.png" alt="">
+        <img data-src="./mentor-envelope-cutout.webp" alt="" loading="lazy" decoding="async">
       </button>
 
       <section id="hudMentorCard" class="hud-mentor-card hud-panel" aria-label="Mentor kuldetes">
@@ -509,7 +595,7 @@
 
       <section class="hud-harbor-shortcut hud-panel" aria-label="Kikoto negyed">
         <button class="hud-harbor-button" id="hudQuickDock" type="button">
-          <img src="./assets/world/harbor-button.png" alt="Kikoto" />
+          <img data-src="./assets/world/harbor-button.webp" alt="Kikoto" loading="lazy" decoding="async" />
           <span id="hudQuickDockLabel" class="hud-harbor-button__label"></span>
         </button>
         <button class="hud-main-map-button hidden" id="hudMainMapButton" type="button" aria-label="Vissza a varosba">
@@ -521,6 +607,7 @@
         <header class="hud-quest-header">
           <div>
             <div class="hud-mini-title">Kuldetes</div>
+            <h2 id="hudQuestTitle"></h2>
           </div>
           <div class="hud-quest-actions">
             <button id="hudQuestAction" class="hud-inline-button" type="button">Elfogad</button>
@@ -550,8 +637,13 @@
       </aside>
 
       <div class="hud-log-card hud-panel">
-        <div class="hud-mini-title">Klán chat</div>
+        <div class="hud-mini-title">Világ chat</div>
         <div id="hudLog" class="hud-log"></div>
+        <form id="hudChatForm" class="hud-chat-compose">
+          <input id="hudChatInput" type="text" maxlength="120" placeholder="&#220;zenet &#237;r&#225;sa..." aria-label="Vil&#225;g&#252;zenet" />
+          <button type="submit" aria-label="&#220;zenet k&#252;ld&#233;se">&#10148;</button>
+        </form>
+        <div id="hudChatStatus" class="hud-chat-status" aria-live="polite"></div>
       </div>
 
       <nav class="hud-bottom-bar hud-panel">
@@ -611,6 +703,7 @@
           "hudRoot",
           "hudMentorToggle",
           "hudQuestCard",
+          "questOverview",
           "mapSvgOverlay",
           "lotHouseLayer",
           "worldPlayerWheel",
@@ -629,7 +722,18 @@
         }
       })();
     </script>
+    <script>
+      window.addEventListener("error", (event) => {
+        document.documentElement.dataset.bootError = `${event.message || "Script error"} @ ${event.filename || "inline"}:${event.lineno || 0}`;
+      });
+      window.addEventListener("unhandledrejection", (event) => {
+        document.documentElement.dataset.bootError = `Promise: ${event.reason?.message || event.reason || "unknown"}`;
+      });
+    </script>
+    <script src="./js/asset-runtime.js?v=perf-2026-07-19-2"></script>
     <script src="./assets-inline.js"></script>
-    <script src="./game.js?v=robbery-odds-2026-07-13-1"></script>
+    <script src="./js/world-map.js?v=influence-system-2026-07-30-1"></script>
+    <script src="./game.js?v=influence-system-2026-07-30-12"></script>
+    <script src="./js/app-shell.js?v=settings-popover-2026-07-27-1"></script>
   </body>
 </html>

@@ -1,0 +1,562 @@
+{
+  "projectBytes": 420640243,
+  "imageBytes": 388404301,
+  "imageCount": 791,
+  "imagesOver1MB": 120,
+  "referencedImageBytes": 99434811,
+  "referencedImages": [
+    {
+      "path": "assets/battle/battle-2.png",
+      "bytes": 2396775,
+      "width": 1330,
+      "height": 1182,
+      "mode": "RGB"
+    },
+    {
+      "path": "assets/battle/battle-dead-center-right.png",
+      "bytes": 2719235,
+      "width": 1254,
+      "height": 1254,
+      "mode": "RGB"
+    },
+    {
+      "path": "assets/battle/battle-dead-center.png",
+      "bytes": 2683782,
+      "width": 1254,
+      "height": 1254,
+      "mode": "RGB"
+    },
+    {
+      "path": "assets/battle/battle-dead-left-center.png",
+      "bytes": 2754272,
+      "width": 1254,
+      "height": 1254,
+      "mode": "RGB"
+    },
+    {
+      "path": "assets/battle/battle-dead-right.png",
+      "bytes": 2628534,
+      "width": 1254,
+      "height": 1254,
+      "mode": "RGB"
+    },
+    {
+      "path": "assets/battle/battle-duo.png",
+      "bytes": 2925451,
+      "width": 1536,
+      "height": 1024,
+      "mode": "RGB"
+    },
+    {
+      "path": "assets/battle/battle.png",
+      "bytes": 2624602,
+      "width": 1331,
+      "height": 1182,
+      "mode": "RGB"
+    },
+    {
+      "path": "assets/battle/battle1.png",
+      "bytes": 2501340,
+      "width": 1330,
+      "height": 1182,
+      "mode": "RGB"
+    },
+    {
+      "path": "assets/battle/battle3.png",
+      "bytes": 2353131,
+      "width": 1330,
+      "height": 1182,
+      "mode": "RGB"
+    },
+    {
+      "path": "assets/battle/solo-raid.png",
+      "bytes": 2174166,
+      "width": 1733,
+      "height": 907,
+      "mode": "RGB"
+    },
+    {
+      "path": "assets/battle-room-bg.png",
+      "bytes": 1397056,
+      "width": 1280,
+      "height": 820,
+      "mode": "RGB"
+    },
+    {
+      "path": "assets/character/gangster-character.png",
+      "bytes": 2367261,
+      "width": 853,
+      "height": 1844,
+      "mode": "RGB"
+    },
+    {
+      "path": "assets/character/player-avatar-boss.png",
+      "bytes": 2043650,
+      "width": 1086,
+      "height": 1448,
+      "mode": "RGB"
+    },
+    {
+      "path": "assets/character/player-avatar-enforcer.png",
+      "bytes": 2209105,
+      "width": 1086,
+      "height": 1448,
+      "mode": "RGB"
+    },
+    {
+      "path": "assets/character/player-avatar-lady.png",
+      "bytes": 2110991,
+      "width": 1086,
+      "height": 1448,
+      "mode": "RGB"
+    },
+    {
+      "path": "assets/harbor/fish-market-harbor.png",
+      "bytes": 2685395,
+      "width": 1774,
+      "height": 887,
+      "mode": "RGB"
+    },
+    {
+      "path": "assets/harbor/speakeasy-harbor.png",
+      "bytes": 2251900,
+      "width": 1701,
+      "height": 925,
+      "mode": "RGB"
+    },
+    {
+      "path": "assets/items/item-hat-gray.png",
+      "bytes": 22591,
+      "width": 136,
+      "height": 158,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/item-hat-red.png",
+      "bytes": 18758,
+      "width": 127,
+      "height": 135,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/item-hat-yellow.png",
+      "bytes": 24756,
+      "width": 136,
+      "height": 158,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/item-pants-gray.png",
+      "bytes": 18176,
+      "width": 108,
+      "height": 166,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/item-pants-red.png",
+      "bytes": 18176,
+      "width": 108,
+      "height": 166,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/item-pants-yellow.png",
+      "bytes": 18176,
+      "width": 108,
+      "height": 166,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/item-shirt-gray.png",
+      "bytes": 36630,
+      "width": 142,
+      "height": 166,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/item-shirt-red.png",
+      "bytes": 31622,
+      "width": 145,
+      "height": 166,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/item-shirt-yellow.png",
+      "bytes": 37856,
+      "width": 141,
+      "height": 166,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/item-shoes-gray.png",
+      "bytes": 25181,
+      "width": 138,
+      "height": 158,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/item-shoes-red.png",
+      "bytes": 26151,
+      "width": 139,
+      "height": 157,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/item-shoes-yellow.png",
+      "bytes": 26622,
+      "width": 138,
+      "height": 158,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/item-watch-gray.png",
+      "bytes": 40150,
+      "width": 142,
+      "height": 195,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/item-watch-red.png",
+      "bytes": 43587,
+      "width": 142,
+      "height": 195,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/item-watch-yellow.png",
+      "bytes": 43587,
+      "width": 142,
+      "height": 195,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/item-weapon-gray.png",
+      "bytes": 140426,
+      "width": 393,
+      "height": 255,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/item-weapon-red.png",
+      "bytes": 131262,
+      "width": 390,
+      "height": 254,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/item-weapon-yellow.png",
+      "bytes": 130922,
+      "width": 385,
+      "height": 255,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/lot-house-level-1.png",
+      "bytes": 1469903,
+      "width": 1402,
+      "height": 1122,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/lot-house-level-2.png",
+      "bytes": 1767911,
+      "width": 1254,
+      "height": 1254,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/lot-house-level-3.png",
+      "bytes": 2020703,
+      "width": 1254,
+      "height": 1254,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/map/map-background-clean-roadfix.png",
+      "bytes": 3589012,
+      "width": 1534,
+      "height": 1025,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/map/overlays/house-outline-hover-danger.png",
+      "bytes": 191464,
+      "width": 1534,
+      "height": 1025,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/map/overlays/house-outline-hover-easy.png",
+      "bytes": 190656,
+      "width": 1534,
+      "height": 1025,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/map/overlays/house-outline-hover-risk.png",
+      "bytes": 195209,
+      "width": 1534,
+      "height": 1025,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/map/overlays/map-outline-danger.png",
+      "bytes": 96115,
+      "width": 1550,
+      "height": 1014,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/map/overlays/map-outline-easy.png",
+      "bytes": 96093,
+      "width": 1550,
+      "height": 1014,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/map/overlays/map-outline-risk.png",
+      "bytes": 96372,
+      "width": 1550,
+      "height": 1014,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/map/overlays/territory-outline-hover-base.png",
+      "bytes": 220435,
+      "width": 1534,
+      "height": 1025,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/map/purchasable-houses-v4/central-bank.png",
+      "bytes": 155919,
+      "width": 257,
+      "height": 253,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/map/purchasable-houses-v4/courthouse.png",
+      "bytes": 173248,
+      "width": 282,
+      "height": 262,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/map/purchasable-houses-v4/east-office.png",
+      "bytes": 147220,
+      "width": 275,
+      "height": 228,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/map/purchasable-houses-v4/market-row.png",
+      "bytes": 140760,
+      "width": 281,
+      "height": 206,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/map/purchasable-houses-v4/southwest-tenement.png",
+      "bytes": 181053,
+      "width": 300,
+      "height": 273,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/map/purchasable-houses-v4/west-mid-block.png",
+      "bytes": 137131,
+      "width": 261,
+      "height": 220,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/world/harbor-button.png",
+      "bytes": 2349843,
+      "width": 1254,
+      "height": 1254,
+      "mode": "RGB"
+    },
+    {
+      "path": "assets/world/harbor-map-clean-v3.png",
+      "bytes": 3157043,
+      "width": 1402,
+      "height": 1122,
+      "mode": "RGB"
+    },
+    {
+      "path": "assets/world/npc-city-map-1.png",
+      "bytes": 3482172,
+      "width": 1536,
+      "height": 1024,
+      "mode": "RGB"
+    },
+    {
+      "path": "assets/world/npc-city-map-2.png",
+      "bytes": 3624060,
+      "width": 1536,
+      "height": 1024,
+      "mode": "RGB"
+    },
+    {
+      "path": "assets/world/npc-city-map-3.png",
+      "bytes": 3679310,
+      "width": 1536,
+      "height": 1024,
+      "mode": "RGB"
+    },
+    {
+      "path": "assets/world/world-base-house-l1-1.png",
+      "bytes": 39954,
+      "width": 198,
+      "height": 147,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/world/world-base-house-l1-2.png",
+      "bytes": 47221,
+      "width": 209,
+      "height": 149,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/world/world-base-house-l1-3.png",
+      "bytes": 52658,
+      "width": 276,
+      "height": 147,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/world/world-base-house-l2-1.png",
+      "bytes": 77309,
+      "width": 316,
+      "height": 221,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/world/world-base-house-l2-2.png",
+      "bytes": 86651,
+      "width": 331,
+      "height": 164,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/world/world-base-house-l2-3.png",
+      "bytes": 72825,
+      "width": 266,
+      "height": 198,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/world/world-base-house-l3-1.png",
+      "bytes": 94612,
+      "width": 326,
+      "height": 240,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/world/world-base-house-l3-2.png",
+      "bytes": 88355,
+      "width": 312,
+      "height": 228,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/world/world-base-house-l3-3.png",
+      "bytes": 88355,
+      "width": 312,
+      "height": 228,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/world/world-map-browser.webp",
+      "bytes": 3890668,
+      "width": 4096,
+      "height": 2135,
+      "mode": "RGB"
+    },
+    {
+      "path": "assets/world/world-rival-castle-1.png",
+      "bytes": 1784133,
+      "width": 1254,
+      "height": 1254,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/world/world-rival-castle-2.png",
+      "bytes": 1568343,
+      "width": 1254,
+      "height": 1254,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/world/world-rival-castle-3.png",
+      "bytes": 2076886,
+      "width": 1536,
+      "height": 1024,
+      "mode": "RGBA"
+    },
+    {
+      "path": "csempészet/0391ff3c-7e67-4b77-91e0-cdb7ac0f0a9a.png",
+      "bytes": 2324121,
+      "width": 1122,
+      "height": 1402,
+      "mode": "RGB"
+    },
+    {
+      "path": "csempészet/34d87e7a-d0ec-42bc-891e-eff98067be29.png",
+      "bytes": 2682800,
+      "width": 1122,
+      "height": 1402,
+      "mode": "RGB"
+    },
+    {
+      "path": "csempészet/dd25759f-f94a-42dc-8df6-d9fab6211903.png",
+      "bytes": 2417172,
+      "width": 1122,
+      "height": 1402,
+      "mode": "RGB"
+    },
+    {
+      "path": "csempészet/f5b63510-d9c7-469c-ac33-71343b294ab1.png",
+      "bytes": 2512208,
+      "width": 1122,
+      "height": 1402,
+      "mode": "RGB"
+    },
+    {
+      "path": "garage-assets/armored-money-car-1930.png",
+      "bytes": 2403988,
+      "width": 1672,
+      "height": 941,
+      "mode": "RGB"
+    },
+    {
+      "path": "garage-assets/sedan-1930.png",
+      "bytes": 2252370,
+      "width": 1672,
+      "height": 941,
+      "mode": "RGB"
+    },
+    {
+      "path": "garage-assets/smuggler-van-1930.png",
+      "bytes": 2132960,
+      "width": 1672,
+      "height": 941,
+      "mode": "RGB"
+    },
+    {
+      "path": "mentor-envelope-cutout.png",
+      "bytes": 1785767,
+      "width": 1295,
+      "height": 679,
+      "mode": "RGBA"
+    },
+    {
+      "path": "register.png",
+      "bytes": 2132548,
+      "width": 1672,
+      "height": 941,
+      "mode": "RGB"
+    }
+  ]
+}

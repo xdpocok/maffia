@@ -1,0 +1,9 @@
+{
+  "maxInitialTransferBytes": 4500000,
+  "maxInitialImageBytes": 2800000,
+  "maxScriptBytes": 850000,
+  "maxStylesheetBytes": 260000,
+  "maxSingleImageBytes": 2500000,
+  "maxReferencedImagesOver1MB": 0,
+  "notes": "A keret a tomoritett halozati atvitelre vonatkozik; a scripts/check-performance.mjs ellenorzi."
+}

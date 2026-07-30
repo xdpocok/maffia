@@ -2,6 +2,8 @@ const http = require("node:http");
 const path = require("node:path");
 const fs = require("node:fs");
 const fsp = require("node:fs/promises");
+const zlib = require("node:zlib");
+const { randomUUID } = require("node:crypto");
 const { createMysqlDatabase } = require("./mysql-database");
 
 const HOST = "127.0.0.1";
@@ -72,6 +74,13 @@ const selectPlayerStmt = db.prepare(`
     last_seen_at
   FROM players
   WHERE profile_name = ?
+`);
+
+const lockPlayerStmt = db.prepare(`
+  SELECT profile_name
+  FROM players
+  WHERE profile_name = ?
+  FOR UPDATE
 `);
 
 const listPlayersStmt = db.prepare(`
@@ -529,6 +538,36 @@ const selectPlayerHarborGarageStmt = db.prepare(`
   WHERE profile_name = ?
 `);
 
+const selectActiveActionSessionStmt = db.prepare(`
+  SELECT action_id, profile_name, action_type, action_status, payload_json, created_at, updated_at, expires_at
+  FROM player_action_sessions
+  WHERE profile_name = ?
+    AND action_type = ?
+    AND action_status = 'active'
+  ORDER BY updated_at DESC
+  LIMIT 1
+  FOR UPDATE
+`);
+
+const selectActionSessionStmt = db.prepare(`
+  SELECT action_id, profile_name, action_type, action_status, payload_json, created_at, updated_at, expires_at
+  FROM player_action_sessions
+  WHERE action_id = ? AND profile_name = ?
+  FOR UPDATE
+`);
+
+const upsertActionSessionStmt = db.prepare(`
+  INSERT INTO player_action_sessions (
+    action_id, profile_name, action_type, action_status, payload_json, created_at, updated_at, expires_at
+  )
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  ON DUPLICATE KEY UPDATE
+    action_status = VALUES(action_status),
+    payload_json = VALUES(payload_json),
+    updated_at = VALUES(updated_at),
+    expires_at = VALUES(expires_at)
+`);
+
 const selectOwnedWorldLotStmt = db.prepare(`
   SELECT lot_id, coord, owner_profile_name, base_level, district, status, claimed_at, updated_at
   FROM world_lots
@@ -660,6 +699,19 @@ const listMarketItemsStmt = db.prepare(`
   LIMIT ?
 `);
 
+const selectMarketItemStmt = db.prepare(`
+  SELECT item_id, market_scope, owner_profile_name, slot_key, item_name, rarity, stat_kind, stat_value, price, stock, expires_at, payload_json, updated_at
+  FROM market_items
+  WHERE item_id = ? AND owner_profile_name = ?
+  FOR UPDATE
+`);
+
+const markMarketItemSoldStmt = db.prepare(`
+  UPDATE market_items
+  SET stock = 0, updated_at = ?
+  WHERE item_id = ? AND owner_profile_name = ?
+`);
+
 const insertGameConfigEntryStmt = db.prepare(`
   INSERT IGNORE INTO game_config_entries (
     config_key,
@@ -668,6 +720,12 @@ const insertGameConfigEntryStmt = db.prepare(`
     updated_at
   )
   VALUES (?, ?, ?, ?)
+`);
+
+const updateGameConfigEntryStmt = db.prepare(`
+  UPDATE game_config_entries
+  SET config_group = ?, payload_json = ?, updated_at = ?
+  WHERE config_key = ?
 `);
 
 const listGameConfigEntriesStmt = db.prepare(`
@@ -984,6 +1042,20 @@ const deleteMessagesByProfileStmt = db.prepare(`
   WHERE recipient_profile_name = ? OR sender_profile_name = ?
 `);
 
+const listWorldChatMessagesStmt = db.prepare(`
+  SELECT id, sender_profile_name, body, created_at
+  FROM world_chat_messages
+  ORDER BY created_at DESC, id DESC
+  LIMIT ?
+`);
+
+const insertWorldChatMessageStmt = db.prepare(`
+  INSERT INTO world_chat_messages (sender_profile_name, body, created_at)
+  VALUES (?, ?, ?)
+`);
+
+const worldChatLastSentAt = new Map();
+
 const deleteClansByBossStmt = db.prepare(`
   DELETE FROM clans
   WHERE boss_profile_name = ?
@@ -997,6 +1069,8 @@ const contentTypes = {
   ".png": "image/png",
   ".jpg": "image/jpeg",
   ".jpeg": "image/jpeg",
+  ".webp": "image/webp",
+  ".avif": "image/avif",
   ".svg": "image/svg+xml",
   ".ico": "image/x-icon",
   ".glb": "model/gltf-binary",
@@ -1005,6 +1079,7 @@ const contentTypes = {
   ".fbx": "application/octet-stream",
   ".txt": "text/plain; charset=utf-8",
   ".zip": "application/zip",
+  ".woff2": "font/woff2",
 };
 
 function normalizeProfileName(rawValue = "") {
@@ -1068,25 +1143,31 @@ function toSafeInt(value, fallback = 0, min = null) {
   return min === null ? rounded : Math.max(min, rounded);
 }
 
+const SERVER_RANK_NAMES = [
+  "Kezdo gengszter", "Utcai ember", "Kisfiu", "Sarokfonok", "Behajto",
+  "Utcai fonok", "Raktarvezeto", "Keruleti ember", "Keruletvezeto", "Befolyasos figura",
+  "Varosi kapcsolat", "Csaladi megbizott", "Maffia hadnagy", "Alvezeto", "Maffia kozepvezeto",
+  "Kereskedelmi fonok", "Kikoto ura", "Varosi arnyek", "Csaladi tanacsado", "Birodalmi ember",
+  "Sotet patronus", "Varosresz ura", "Maffia kapitany", "Csaladi jobbkez", "Szervezeti fonok",
+  "Birodalmi fonok", "Nagyfonok", "Don helyettese", "Don", "Maffia legenda",
+];
+const SERVER_EARLY_RANK_THRESHOLDS = [0, 10, 24, 42, 68, 100];
+
+function getServerRankThreshold(index) {
+  return SERVER_EARLY_RANK_THRESHOLDS[index] ?? Math.round(100 + ((index - 5) * (index - 5) * 34));
+}
+
 function getRankLevel(fame) {
   const normalizedFame = Math.max(0, toSafeInt(fame, 0, 0));
   let level = 1;
-  while (level < 30) {
-    const threshold = 30 * (level ** 2);
-    if (normalizedFame < threshold) break;
-    level += 1;
+  for (let index = 0; index < SERVER_RANK_NAMES.length; index += 1) {
+    if (normalizedFame >= getServerRankThreshold(index)) level = index + 1;
   }
-  return level;
+  return Math.max(1, Math.min(level, SERVER_RANK_NAMES.length));
 }
 
 function rankForFame(fame) {
-  const normalizedFame = Math.max(0, toSafeInt(fame, 0, 0));
-  if (normalizedFame >= 800) return "Don";
-  if (normalizedFame >= 500) return "Capo";
-  if (normalizedFame >= 280) return "Vegrehajto";
-  if (normalizedFame >= 140) return "Felhajto";
-  if (normalizedFame >= 60) return "Megfigyelo";
-  return "Utcai figura";
+  return SERVER_RANK_NAMES[getRankLevel(fame) - 1] || SERVER_RANK_NAMES[0];
 }
 
 function getOwnedCrewMembers(state = {}) {
@@ -1132,7 +1213,7 @@ function summarizeState(profileName, state = {}, now = Date.now()) {
     fame,
     money: Math.max(0, toSafeInt(state.money, 0, 0)),
     heat: Math.max(0, toSafeInt(state.heat, 0, 0)),
-    influence: Math.max(0, toSafeInt(state.influence, 0, 0)),
+    influence: normalizeServerInfluence(state.influence, SERVER_STARTING_INFLUENCE),
     cityLevel: Math.max(1, toSafeInt(state.cityLevel, 1, 1)),
     crewCount: Math.max(0, hasCrewMembers ? hiredCrewCount : storedCrewCount),
     health: Math.max(0, toSafeInt(state.health, 100, 0)),
@@ -1154,7 +1235,7 @@ function mapPlayerRow(row) {
     fame: row.fame,
     money: row.money,
     heat: row.heat,
-    influence: row.influence,
+    influence: normalizeServerInfluence(row.influence, SERVER_STARTING_INFLUENCE),
     cityLevel: row.city_level,
     crewCount: row.crew_count,
     health: row.health,
@@ -1376,17 +1457,17 @@ const defaultGameConfigEntries = {
   harbor_garage_vehicles: {
     group: "harbor",
     payload: [
-      { id: "sedan", title: "Utcai sedan", cost: 0, requiredLevel: 1, speed: 2, stealth: 2, load: 1, accent: "Sedan", image: "./garage-assets/sedan-1930.png", description: "Kompakt menekuloauto. Kisebb utcai atjatszasokra jo, mindenbol keveset hoz.", rewardProfile: "balanced", lootText: "Kisebb penz, hamis papir es hamis penz." },
-      { id: "van", title: "Csempesz furgon", cost: 520, requiredLevel: 2, speed: 1, stealth: 2, load: 3, accent: "Furgon", image: "./garage-assets/smuggler-van-1930.png", description: "Megerositett rakteru furgon. Csempesz aruhoz kell, drogot, fegyvert es papirokat hoz jobban.", rewardProfile: "cargo", lootText: "Csempesz aru: drog, fegyver, hamis papirok." },
-      { id: "armor", title: "Pancelkocsi", cost: 980, requiredLevel: 3, speed: 2, stealth: 1, load: 4, accent: "Pancel", image: "./garage-assets/armored-money-car-1930.png", description: "Nehez pancelkocsi. Nagy penzes korokhoz kell, foleg hamis penzt es nagyobb kasszat hoz.", rewardProfile: "cash", lootText: "Nagy penz, hamis penz es vedettebb rakomany." },
+      { id: "sedan", title: "Utcai sedan", cost: 0, requiredLevel: 1, speed: 2, stealth: 2, load: 1, accent: "Sedan", image: "./garage-assets/sedan-1930.webp", description: "Kompakt menekuloauto. Kisebb utcai atjatszasokra jo, mindenbol keveset hoz.", rewardProfile: "balanced", lootText: "Kisebb penz, hamis papir es hamis penz." },
+      { id: "van", title: "Csempesz furgon", cost: 520, requiredLevel: 2, speed: 1, stealth: 2, load: 3, accent: "Furgon", image: "./garage-assets/smuggler-van-1930.webp", description: "Megerositett rakteru furgon. Csempesz aruhoz kell, drogot, fegyvert es papirokat hoz jobban.", rewardProfile: "cargo", lootText: "Csempesz aru: drog, fegyver, hamis papirok." },
+      { id: "armor", title: "Pancelkocsi", cost: 980, requiredLevel: 3, speed: 2, stealth: 1, load: 4, accent: "Pancel", image: "./garage-assets/armored-money-car-1930.webp", description: "Nehez pancelkocsi. Nagy penzes korokhoz kell, foleg hamis penzt es nagyobb kasszat hoz.", rewardProfile: "cash", lootText: "Nagy penz, hamis penz es vedettebb rakomany." },
     ],
   },
   harbor_garage_missions: {
     group: "harbor",
     payload: [
-      { id: "alley-run", title: "Sikatori atjatszas", vehicleId: "sedan", description: "Utcai sedan kell hozza. Kis csomag, kevesebb penz, de stabil kezdo fuvar.", requiredLevel: 1, rewardMoney: 140, rewardXp: 18, heatSuccess: 2, heatFail: 7, failurePenalty: 55, cargoReward: { papers: 1, counterfeitMoney: 1 }, rounds: 3, requiredHits: 2, baseSafeWidth: 0.24, baseSpeed: 0.032 },
-      { id: "night-convoy", title: "Ejjeli konvoj", vehicleId: "van", description: "Csempesz furgon kell hozza. Rakteres fuvar, ahol a csempesz aru a fo jutalom.", requiredLevel: 2, rewardMoney: 240, rewardXp: 31, heatSuccess: 3, heatFail: 10, failurePenalty: 95, cargoReward: { drugs: 2, papers: 1 }, rounds: 4, requiredHits: 3, baseSafeWidth: 0.2, baseSpeed: 0.037 },
-      { id: "vault-route", title: "Pancelkocsis kor", vehicleId: "armor", description: "Pancelkocsi kell hozza. Nagy penzes kor, nehezebb utvonallal es komolyabb kasszaval.", requiredLevel: 3, rewardMoney: 410, rewardXp: 46, heatSuccess: 4, heatFail: 14, failurePenalty: 155, cargoReward: { weapons: 2, counterfeitMoney: 2, papers: 1 }, rounds: 5, requiredHits: 4, baseSafeWidth: 0.17, baseSpeed: 0.043 },
+      { id: "alley-run", title: "Sikatori atjatszas", vehicleId: "sedan", description: "Utcai sedan kell hozza. Kis csomag, kevesebb penz, de stabil kezdo fuvar.", requiredLevel: 1, rewardMoney: 140, rewardXp: 18, heatSuccess: 2, heatFail: 7, failurePenalty: 55, cargoReward: { papers: 1, counterfeitMoney: 1 }, rounds: 3, requiredHits: 2, baseSafeWidth: 0.3, baseSpeed: 0.02 },
+      { id: "night-convoy", title: "Ejjeli konvoj", vehicleId: "van", description: "Csempesz furgon kell hozza. Rakteres fuvar, ahol a csempesz aru a fo jutalom.", requiredLevel: 2, rewardMoney: 240, rewardXp: 31, heatSuccess: 3, heatFail: 10, failurePenalty: 95, cargoReward: { drugs: 2, papers: 1 }, rounds: 4, requiredHits: 3, baseSafeWidth: 0.26, baseSpeed: 0.023 },
+      { id: "vault-route", title: "Pancelkocsis kor", vehicleId: "armor", description: "Pancelkocsi kell hozza. Nagy penzes kor, nehezebb utvonallal es komolyabb kasszaval.", requiredLevel: 3, rewardMoney: 410, rewardXp: 46, heatSuccess: 4, heatFail: 14, failurePenalty: 155, cargoReward: { weapons: 2, counterfeitMoney: 2, papers: 1 }, rounds: 5, requiredHits: 4, baseSafeWidth: 0.23, baseSpeed: 0.026 },
     ],
   },
   harbor_missions: {
@@ -1408,12 +1489,19 @@ const defaultGameConfigEntries = {
         { type: "robbery", title: "Gyors kassza", description: "Rabolj ki 1 boltot a varosban.", objective: "1 sikeres bolti kirablas.", goal: { action: "robbery", mode: "shop", target: 1, progress: 0 }, xp: 5, money: 150 },
         { type: "robbery", title: "Utcai villanas", description: "Hajts vegre 2 sikeres kirablast.", objective: "2 sikeres kirablas barmelyik epuletnel.", goal: { action: "robbery", mode: "any", target: 2, progress: 0 }, xp: 5, money: 165 },
         { type: "protection", title: "Elso boritek", description: "Szedj be vedelmi penzt 1 helyrol.", objective: "1 sikeres vedelmi penz beszedese.", goal: { action: "protection", mode: "any", target: 1, progress: 0 }, xp: 5, money: 145 },
+        { type: "harbor_job", title: "Elso rakparti munka", description: "Teljesits 1 munkat a Kikoto negyedben.", objective: "1 sikeres kikotoi megbizas.", goal: { action: "harbor_job", mode: "any", target: 1, progress: 0 }, xp: 5, money: 155 },
+        { type: "cargo_acquire", title: "Kezdo rakomany", description: "Szerezz {target} darab {cargo} arut a Kikoto negyedben.", objective: "Szerezz {target} darab {cargo} arut.", goal: { action: "cargo_acquire", mode: "randomCargo", targetMin: 1, targetMax: 3, progress: 0 }, xp: 5, money: 160 },
       ],
       standard: [
         { type: "robbery", title: "Bolti szuret", description: "Rabolj ki 2 boltot a varosban.", objective: "Sikeres kirablas 2 shop/bolt tipusu hazon.", goal: { action: "robbery", mode: "shop", target: 2, progress: 0 }, xp: 32, money: 140 },
         { type: "robbery", title: "Negy utcai melo", description: "Hajts vegre 4 sikeres kirablast barmelyik hazon.", objective: "4 sikeres kirablas barmelyik epuletnel.", goal: { action: "robbery", mode: "any", target: 4, progress: 0 }, xp: 46, money: 210 },
         { type: "protection", title: "Vedett kirakatok", description: "Szedj be vedelmi penzt 3 helyrol.", objective: "3 sikeres vedelmi penz beszedese.", goal: { action: "protection", mode: "any", target: 3, progress: 0 }, xp: 36, money: 170 },
         { type: "robbery", title: "Gazdag celpont", description: "Rabolj ki egy boltot a(z) {district} kornyeken.", objective: "1 sikeres bolti kirablas.", goal: { action: "robbery", mode: "shop", target: 1, progress: 0 }, xp: 24, money: 110 },
+        { type: "harbor_job", title: "Rakparti muszak", description: "Teljesits {target} kikotoi megbizast barmelyik kikotoi helyszinen.", objective: "Fejezz be {target} sikeres kikotoi munkat.", goal: { action: "harbor_job", mode: "any", targetMin: 1, targetMax: 3, progress: 0 }, xp: 38, money: 190 },
+        { type: "cargo_acquire", title: "Hianyzo rakomany", description: "Szerezz {target} darab {cargo} arut a Kikoto negyedben.", objective: "Szerezz osszesen {target} darab {cargo} arut.", goal: { action: "cargo_acquire", mode: "randomCargo", targetMin: 2, targetMax: 6, progress: 0 }, xp: 34, money: 175 },
+        { type: "cargo_spend", title: "Titkos atadas", description: "Adj le {target} darab {cargo} arut lejart kikotoi megbizasokkal.", objective: "Varj, amig a rakomanyt felhasznalo kikotoi munka befejezodik.", goal: { action: "cargo_spend", mode: "randomCargo", targetMin: 2, targetMax: 7, progress: 0 }, xp: 42, money: 225 },
+        { type: "garage_run", title: "Menekuloauto probaja", description: "Teljesits {target} sikeres fuvaros minijatekot a kikotoi garazsban.", objective: "Nyerj meg {target} garazsfuvart.", goal: { action: "garage_run", mode: "garage", targetMin: 1, targetMax: 2, progress: 0 }, xp: 46, money: 245 },
+        { type: "market_buy", title: "Piaci beszerzes", description: "Vasarolj {target} felszerelest a feketepiacon.", objective: "Vegyel meg {target} piaci felszerelest.", goal: { action: "market_buy", mode: "any", targetMin: 1, targetMax: 2, progress: 0 }, xp: 30, money: 165 },
       ],
     },
   },
@@ -1812,6 +1900,7 @@ async function buildProfileState(profileName) {
     merged.health = playerRow.health;
     merged.energy = playerRow.energy;
   }
+  ensureServerInfluenceState(merged);
   if (ownedLot) {
     merged.worldBaseLotId = ownedLot.lot_id;
     merged.worldBaseLevel = ownedLot.base_level;
@@ -1849,6 +1938,7 @@ async function writePlayerSnapshot(profileName, state, now, existingSaveRow = nu
     ...state,
     fame: preservedFame,
   };
+  ensureServerInfluenceState(normalizedState);
   const summary = summarizeState(profileName, normalizedState, now);
   const registeredAt = existingPlayer?.registered_at ?? existingSaveRow?.created_at ?? now;
   await upsertPlayerStmt.run(
@@ -1889,7 +1979,8 @@ async function writePlayerState(profileName, state, now) {
     money: state.money ?? 0,
     fame: preservedFame,
     heat: state.heat ?? 0,
-    influence: state.influence ?? 0,
+    influence: normalizeServerInfluence(state.influence, SERVER_STARTING_INFLUENCE),
+    influenceSystemVersion: SERVER_INFLUENCE_SYSTEM_VERSION,
     health: state.health ?? 100,
     energy: state.energy ?? 100,
     gearPower: state.gearPower ?? 0,
@@ -1908,6 +1999,7 @@ async function writePlayerState(profileName, state, now) {
     marketRefreshAt: state.marketRefreshAt ?? 0,
     selectedQuestSlot: state.selectedQuestSlot ?? 0,
     questNextSpawnAt: state.questNextSpawnAt ?? 0,
+    questHistory: Array.isArray(state.questHistory) ? state.questHistory.slice(-40) : [],
     pendingProtectionRewards: state.pendingProtectionRewards ?? [],
     processTasks: state.processTasks ?? [],
     harborProcessTasks: state.harborProcessTasks ?? [],
@@ -1922,6 +2014,7 @@ async function writePlayerState(profileName, state, now) {
     mentorFlags: state.mentorFlags ?? {},
     protectionCooldowns: state.protectionCooldowns ?? {},
     recoveryEffects: state.recoveryEffects ?? { health: null, energy: null },
+    recoveryUsage: state.recoveryUsage ?? {},
     naturalRecoveryAt: state.naturalRecoveryAt ?? { health: now, energy: now },
     nextPolicePressureAt: state.nextPolicePressureAt ?? 0,
     mainBaseClaimDay: state.mainBaseClaimDay ?? 0,
@@ -2302,25 +2395,27 @@ async function writeClanData(profileName, state, now) {
 }
 
 async function syncStructuredTables(profileName, state, now, existingSaveRow = null) {
-  const { summary, existed } = await writePlayerSnapshot(profileName, state, now, existingSaveRow);
+  const normalizedState = { ...state };
+  ensureServerInfluenceState(normalizedState);
+  const { summary, existed } = await writePlayerSnapshot(profileName, normalizedState, now, existingSaveRow);
   await Promise.all([
-    writePlayerState(profileName, state, now),
-    writePlayerRuntimeState(profileName, state, now),
-    writePlayerProcessTasks(profileName, state, now),
-    writePlayerTerritories(profileName, state, now),
-    writePlayerEquipment(profileName, state, now),
-    writePlayerInventory(profileName, state, now),
-    writePlayerCrewMembers(profileName, state, now),
-    writePlayerQuests(profileName, state, now),
-    writePlayerNotifications(profileName, state, now),
-    writePlayerDistricts(profileName, state, now),
-    writePlayerBuildingDifficulties(profileName, state, now),
-    writePlayerWorldRivals(profileName, state, now),
-    writePlayerHarborGarage(profileName, state, now),
-    writeWorldLotOwnership(profileName, state, now),
+    writePlayerState(profileName, normalizedState, now),
+    writePlayerRuntimeState(profileName, normalizedState, now),
+    writePlayerProcessTasks(profileName, normalizedState, now),
+    writePlayerTerritories(profileName, normalizedState, now),
+    writePlayerEquipment(profileName, normalizedState, now),
+    writePlayerInventory(profileName, normalizedState, now),
+    writePlayerCrewMembers(profileName, normalizedState, now),
+    writePlayerQuests(profileName, normalizedState, now),
+    writePlayerNotifications(profileName, normalizedState, now),
+    writePlayerDistricts(profileName, normalizedState, now),
+    writePlayerBuildingDifficulties(profileName, normalizedState, now),
+    writePlayerWorldRivals(profileName, normalizedState, now),
+    writePlayerHarborGarage(profileName, normalizedState, now),
+    writeWorldLotOwnership(profileName, normalizedState, now),
     writeLeaderboardEntry(summary, now),
-    writeMarketStock(profileName, state, now),
-    writeClanData(profileName, state, now),
+    writeMarketStock(profileName, normalizedState, now),
+    writeClanData(profileName, normalizedState, now),
   ]);
   return { summary, existed };
 }
@@ -2408,23 +2503,37 @@ function getCrewCombatStats(member = {}) {
       toSafeInt(member.baseAttack, 0, 0)
         + toSafeInt(member.attackBonus, 0, 0)
         + equipment.attack
-        + Math.floor(level * 0.45),
+        + Math.floor((level - 1) * 0.65),
     ),
     defense: Math.max(
       0,
       toSafeInt(member.baseDefense, 0, 0)
         + toSafeInt(member.defenseBonus, 0, 0)
         + equipment.defense
-        + Math.floor(defenseLevel * 0.4),
+        + Math.floor((defenseLevel - 1) * 0.55),
     ),
     level,
+    defenseLevel,
+    maxHealth,
+    health,
     readiness: health / maxHealth,
   };
 }
 
+const SERVER_EARLY_GAME_WINDOW_MS = 30 * 60 * 1000;
+
+function getServerEarlyGameActionBonus(state = {}, now = Date.now()) {
+  if (!state.registered) return 0;
+  const startedAt = Number(state.profileStartedAt) || 0;
+  const elapsed = Math.max(0, now - startedAt);
+  if (elapsed >= SERVER_EARLY_GAME_WINDOW_MS) return 0;
+  const remainingRatio = 1 - Math.max(0, Math.min(1, elapsed / SERVER_EARLY_GAME_WINDOW_MS));
+  return Math.round(12 + remainingRatio * 14);
+}
+
 function getPvpCombatStats(state = {}) {
   const gear = getEquipmentCombatStats(state);
-  const crew = getOwnedCrewMembers(state);
+  const crew = normalizeServerCrewMembers(state).filter((member) => member.hired);
   const memberStats = crew.map(getCrewCombatStats);
   const requestedActiveIndex = crew.findIndex((member) => member?.id === state.activeCrewMemberId);
   const active = memberStats[requestedActiveIndex >= 0 ? requestedActiveIndex : 0] || {
@@ -2440,40 +2549,40 @@ function getPvpCombatStats(state = {}) {
     ? memberStats.reduce((sum, member) => sum + member.readiness, 0) / memberStats.length
     : 1;
   const level = getRankLevel(state.fame || 0);
-  const playerAttack = gear.attack + Math.max(0, Math.floor(level * 0.6));
-  const playerDefense = gear.defense + Math.max(0, Math.floor(level * 0.55));
+  const playerAttack = gear.attack + 5 + Math.max(0, Math.floor(level * 1.1));
+  const playerDefense = gear.defense + 4 + Math.max(0, Math.floor(level * 0.9));
   const baseProfilePower = (
     gear.attack
     + gear.defense
-    + level * 8
-    + Math.max(1, toSafeInt(state.cityLevel, 1, 1)) * 5
-    + Math.max(0, Number(state.fame) || 0) * 0.1
-    + crew.length * 4
+    + level * 6
+    + Math.max(1, toSafeInt(state.cityLevel, 1, 1)) * 4
+    + crew.length * 3
+    + getServerEarlyGameActionBonus(state)
   );
   const assault = Math.max(1, Math.round(
     baseProfilePower
       + active.attack
-      + crewAttack * 0.72
-      + crewDefense * 0.18
-      + crewLevelTotal * 0.8
-      + readiness * 14,
+      + crewAttack * 0.75
+      + crewDefense * 0.2
+      + crewLevelTotal * 0.4
+      + readiness * 10,
   ));
   const pressure = Math.max(1, Math.round(
     baseProfilePower
-      + active.attack * 0.55
-      + active.defense * 0.6
-      + crewAttack * 0.42
-      + crewDefense * 0.48
-      + crewLevelTotal * 0.65
-      + readiness * 18,
+      + active.attack * 0.5
+      + active.defense * 0.65
+      + crewAttack * 0.4
+      + crewDefense * 0.52
+      + crewLevelTotal * 0.35
+      + readiness * 12,
   ));
   const resilience = Math.max(1, Math.round(
     baseProfilePower
       + active.defense
-      + crewDefense * 0.72
+      + crewDefense * 0.76
       + crewAttack * 0.16
-      + crewLevelTotal * 0.7
-      + readiness * 22,
+      + crewLevelTotal * 0.38
+      + readiness * 16,
   ));
   return {
     attack: assault,
@@ -2491,6 +2600,1909 @@ function getPvpCombatStats(state = {}) {
   };
 }
 
+const ROBBERY_ACTION_TTL_MS = 20 * 60 * 1000;
+const ROBBERY_DISTRICT_SECURITY = [55, 48, 62, 40, 72, 36];
+const ROBBERY_TACTICS = {
+  stealth: { name: "Lopakodas", strongAgainst: "watcher", damage: 1.04, alert: 1 },
+  force: { name: "Fegyveres roham", strongAgainst: "bodyguard", damage: 1.13, alert: 3 },
+  intimidation: { name: "Megfelemlites", strongAgainst: "boss", damage: 1.08, alert: 2 },
+};
+
+function clampServer(value, minimum, maximum) {
+  return Math.max(minimum, Math.min(maximum, Number(value) || 0));
+}
+
+const SERVER_INFLUENCE_SYSTEM_VERSION = 1;
+const SERVER_STARTING_INFLUENCE = 10;
+
+function normalizeServerInfluence(value, fallback = SERVER_STARTING_INFLUENCE) {
+  const numericValue = Number(value);
+  return clampServer(Number.isFinite(numericValue) ? Math.round(numericValue) : fallback, 0, 100);
+}
+
+function ensureServerInfluenceState(state = {}) {
+  const version = Math.max(0, toSafeInt(state.influenceSystemVersion, 0, 0));
+  state.influence = version < SERVER_INFLUENCE_SYSTEM_VERSION
+    ? Math.max(SERVER_STARTING_INFLUENCE, normalizeServerInfluence(state.influence, SERVER_STARTING_INFLUENCE))
+    : normalizeServerInfluence(state.influence, SERVER_STARTING_INFLUENCE);
+  state.influenceSystemVersion = SERVER_INFLUENCE_SYSTEM_VERSION;
+  return state;
+}
+
+function changeServerInfluence(state, requestedDelta) {
+  ensureServerInfluenceState(state);
+  const before = state.influence;
+  state.influence = normalizeServerInfluence(before + Math.round(Number(requestedDelta) || 0), before);
+  return state.influence - before;
+}
+
+function getServerInfluenceBenefits(state = {}) {
+  ensureServerInfluenceState(state);
+  const progress = clampServer((state.influence - SERVER_STARTING_INFLUENCE) / (100 - SERVER_STARTING_INFLUENCE), 0, 1);
+  return {
+    progress,
+    marketDiscountRate: 0.08 * progress,
+    dailyIncomeRate: 0.1 * progress,
+    protectionChanceBonus: 0.04 * progress,
+    worldTributeRate: 0.1 * progress,
+    harborPenaltyReductionRate: 0.1 * progress,
+    marketYellowChanceBonus: 0.06 * progress,
+    marketRedChanceBonus: 0.1 * progress,
+  };
+}
+
+function hashStringUnit(value = "") {
+  let hash = 2166136261;
+  for (const char of String(value)) {
+    hash ^= char.charCodeAt(0);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0) / 4294967295;
+}
+
+function randomServerInt(minimum, maximum) {
+  return Math.floor(Math.random() * (maximum - minimum + 1)) + minimum;
+}
+
+function normalizeRobberyTarget(body = {}, state = {}) {
+  const spotId = String(body.spotId || "").trim().slice(0, 64);
+  if (!spotId || !/^[a-zA-Z0-9_-]+$/.test(spotId)) return null;
+  const mode = body.mode === "shop" ? "shop" : "street";
+  const districtIndex = clampServer(Math.round(Number(body.districtIndex) || 0), 0, ROBBERY_DISTRICT_SECURITY.length - 1);
+  const cycle = Math.floor(Date.now() / (4 * 60 * 60 * 1000));
+  const security = ROBBERY_DISTRICT_SECURITY[districtIndex] || 50;
+  const variance = hashStringUnit(`${state.profileName}:${spotId}:${cycle}`);
+  const storedDifficulty = Number(state.buildingDifficulties?.[spotId]);
+  const combat = getPvpCombatStats(state);
+  const generatedPowerRatio = variance < 0.56
+    ? 0.75 + variance * (0.15 / 0.56)
+    : variance < 0.84
+      ? 0.95 + ((variance - 0.56) / 0.28) * 0.15
+      : 1.15 + ((variance - 0.84) / 0.16) * 0.2;
+  const generatedDifficulty = Math.max(
+    1,
+    Math.round(
+      combat.assault
+      * generatedPowerRatio
+      * (mode === "shop" ? 1.015 : 1)
+      * (1 + (security - 50) * 0.0006),
+    ),
+  );
+  const difficulty = Number.isFinite(storedDifficulty) ? storedDifficulty : generatedDifficulty;
+  return {
+    spotId,
+    name: String(body.name || (mode === "shop" ? "Uzlet" : "Utcai celpont")).trim().slice(0, 80),
+    mode,
+    districtIndex,
+    difficulty: clampServer(difficulty, 1, 5000),
+    cycle,
+  };
+}
+
+function getServerRobberyDifficultyInfo(state, difficulty) {
+  const combat = getPvpCombatStats(state);
+  const actionPower = Math.max(1, combat.assault);
+  const powerRatio = Math.max(0.01, Number(difficulty) / actionPower);
+  if (powerRatio <= 0.9) {
+    const progress = clampServer((powerRatio - 0.75) / 0.15, 0, 1);
+    return {
+      label: "Konnyu",
+      successChance: clampServer(0.96 - progress * 0.12, 0.84, 0.96),
+      actionPower,
+      powerRatio,
+      recommendedMin: 0.75,
+      recommendedMax: 0.9,
+    };
+  }
+  if (powerRatio <= 1.1) {
+    const progress = clampServer((powerRatio - 0.95) / 0.15, 0, 1);
+    return {
+      label: "Kockazatos",
+      successChance: clampServer(0.72 - progress * 0.2, 0.5, 0.72),
+      actionPower,
+      powerRatio,
+      recommendedMin: 0.95,
+      recommendedMax: 1.1,
+    };
+  }
+  const progress = clampServer((powerRatio - 1.15) / 0.2, 0, 1);
+  return {
+    label: "Veszelyes",
+    successChance: clampServer(0.44 - progress * 0.22, 0.18, 0.44),
+    actionPower,
+    powerRatio,
+    recommendedMin: 1.15,
+    recommendedMax: 1.35,
+  };
+}
+
+function getServerCrewPassive(memberId) {
+  if (memberId === "luca") {
+    return { id: "boss_hunter", label: "Fonokvadasz: +28% sebzes a fonok ellen" };
+  }
+  if (memberId === "marco") {
+    return { id: "marksman", label: "Mesterlovesz: 22% kritikus esely" };
+  }
+  if (memberId === "enzo") {
+    return { id: "guardian", label: "Testor: 22% sebzescsokkentes es magara vonja a tuzet" };
+  }
+  return { id: "", label: "" };
+}
+
+function createServerRobberyAllies(profileName, state, selectedMemberIds = []) {
+  const ownedById = new Map(
+    normalizeServerCrewMembers(state)
+      .filter((member) => member.hired)
+      .map((member) => [String(member.id || ""), member]),
+  );
+  const members = selectedMemberIds
+    .map((id) => ownedById.get(String(id || "")))
+    .filter((member) => member && Number(member.health) > 0)
+    .slice(0, 2)
+    .map((member) => {
+      const stats = getCrewCombatStats(member);
+      const passive = getServerCrewPassive(String(member.id || ""));
+      return {
+        id: String(member.id),
+        name: String(member.name || "Bandatag").slice(0, 64),
+        role: String(member.role || "Ember").slice(0, 64),
+        level: stats.level,
+        maxHealth: stats.maxHealth,
+        health: stats.health,
+        attack: stats.attack,
+        defense: stats.defense,
+        passiveId: passive.id,
+        passiveLabel: passive.label,
+        isPlayer: false,
+      };
+    });
+  const combat = getPvpCombatStats(state);
+  const player = {
+    id: "player",
+    name: profileName,
+    role: "Te",
+    level: combat.level,
+    maxHealth: 100,
+    health: clampServer(state.health, 0, 100),
+    attack: Math.max(6, combat.playerAttack),
+    defense: Math.max(5, combat.playerDefense),
+    passiveId: "",
+    passiveLabel: "",
+    isPlayer: true,
+  };
+  return [members[0], player, members[1]].filter(Boolean);
+}
+
+function createServerRobberyReferenceAllies(profileName, state) {
+  const strongestMemberIds = normalizeServerCrewMembers(state)
+    .filter((member) => member.hired && Number(member.health) > 0)
+    .map((member) => {
+      const stats = getCrewCombatStats(member);
+      const score = stats.attack * 1.2 + stats.defense + stats.maxHealth * 0.15 + stats.level * 0.5;
+      return { id: member.id, score };
+    })
+    .sort((left, right) => right.score - left.score)
+    .slice(0, 2)
+    .map((entry) => entry.id);
+  return createServerRobberyAllies(profileName, state, strongestMemberIds);
+}
+
+function getServerRobberyTier(label) {
+  if (label === "Veszelyes") {
+    return { attack: 1.28, defense: 1.2, damage: 1.16, threatScale: 1.08, maximumTeamRatio: 1.35 };
+  }
+  if (label === "Kockazatos") {
+    return { attack: 1.08, defense: 1.04, damage: 1.32, threatScale: 1.06, maximumTeamRatio: 1.1 };
+  }
+  return { attack: 0.88, defense: 0.86, damage: 0.98, threatScale: 1, maximumTeamRatio: 0.9 };
+}
+
+function getRobberyUnitPower(unit, useCurrentHealth = true) {
+  const maxHealth = Math.max(1, Number(unit?.maxHealth) || 1);
+  const readiness = useCurrentHealth
+    ? clampServer((Number(unit?.health) || 0) / maxHealth, 0, 1)
+    : 1;
+  const attack = Math.max(0, Number(unit?.attack) || 0) * (0.68 + readiness * 0.32);
+  const defense = Math.max(0, Number(unit?.defense) || 0) * (0.64 + readiness * 0.36);
+  const health = maxHealth * readiness;
+  const level = Math.max(1, Number(unit?.level) || 1);
+  return attack * 1.2 + defense + health * 0.15 + level * 0.5;
+}
+
+function getRobberyTeamPower(units = [], useCurrentHealth = true) {
+  return Math.max(
+    1,
+    Math.round(units.reduce((sum, unit) => sum + getRobberyUnitPower(unit, useCurrentHealth), 0)),
+  );
+}
+
+function getServerRobberyEnemyCount(label, seed = "") {
+  const highCount = hashStringUnit(seed) >= 0.5;
+  if (label === "Veszelyes") return 3;
+  if (label === "Kockazatos") return highCount ? 3 : 2;
+  return highCount ? 2 : 1;
+}
+
+function getRobberyCombatProfile(units = []) {
+  const validUnits = units.filter(Boolean);
+  const count = Math.max(1, validUnits.length);
+  return {
+    averageAttack: validUnits.reduce((sum, unit) => sum + Math.max(0, Number(unit.attack) || 0), 0) / count,
+    averageDefense: validUnits.reduce((sum, unit) => sum + Math.max(0, Number(unit.defense) || 0), 0) / count,
+    averageLevel: validUnits.reduce((sum, unit) => sum + Math.max(1, Number(unit.level) || 1), 0) / count,
+    totalHealth: validUnits.reduce((sum, unit) => sum + Math.max(1, Number(unit.maxHealth) || 1), 0),
+  };
+}
+
+function getServerRobberyEnemyProfile(action, allies) {
+  const selectedProfile = getRobberyCombatProfile(allies);
+  const referenceProfile = action.referenceCombatProfile || selectedProfile;
+  const actionPower = Math.max(
+    1,
+    Number(action.difficultyInfo?.actionPower) || Number(action.target.difficulty) || 1,
+  );
+  const storedRatio = clampServer(Number(action.target.difficulty) / actionPower, 0.45, 1.65);
+  const tier = getServerRobberyTier(action.difficultyInfo?.label);
+  const blend = (referenceValue, selectedValue) => (
+    referenceValue * storedRatio * 0.7 + selectedValue * 0.3
+  );
+  const healthScale = action.difficultyInfo?.label === "Veszelyes"
+    ? 1.05
+    : action.difficultyInfo?.label === "Kockazatos"
+      ? 1.02
+      : 1;
+  return {
+    averageAttack: Math.max(5, Math.min(
+      blend(referenceProfile.averageAttack, selectedProfile.averageAttack),
+      referenceProfile.averageAttack * tier.maximumTeamRatio,
+    )),
+    averageDefense: Math.max(4, Math.min(
+      blend(referenceProfile.averageDefense, selectedProfile.averageDefense),
+      referenceProfile.averageDefense * tier.maximumTeamRatio,
+    )),
+    averageLevel: clampServer(
+      blend(referenceProfile.averageLevel, selectedProfile.averageLevel),
+      1,
+      30,
+    ),
+    totalHealth: Math.max(40, Math.min(
+      blend(referenceProfile.totalHealth, selectedProfile.totalHealth) * healthScale,
+      referenceProfile.totalHealth * tier.maximumTeamRatio,
+    )),
+  };
+}
+
+function getServerRobberyUnderdogBonus(battleMode = "full") {
+  if (battleMode === "lone") {
+    return { allyDamageBoost: 1.08, enemyDamageReduction: 0.94, defenseIgnore: 0.08 };
+  }
+  if (battleMode === "solo") {
+    return { allyDamageBoost: 1.04, enemyDamageReduction: 0.97, defenseIgnore: 0.04 };
+  }
+  return { allyDamageBoost: 1, enemyDamageReduction: 1, defenseIgnore: 0 };
+}
+
+function estimateServerRobberyWinChance(allies, enemyPower, battleMode = "full") {
+  const currentTeamPower = getRobberyTeamPower(allies, true);
+  const underdogBonus = getServerRobberyUnderdogBonus(battleMode);
+  const adjustedTeamPower = currentTeamPower
+    * underdogBonus.allyDamageBoost
+    / underdogBonus.enemyDamageReduction
+    * (1 + underdogBonus.defenseIgnore * 0.35);
+  const maximumPower = Math.max(adjustedTeamPower, enemyPower, 1);
+  const passiveBonus = Math.min(
+    0.1,
+    allies.reduce((sum, ally) => sum + (ally.passiveId ? (ally.passiveId === "guardian" ? 0.03 : 0.035) : 0), 0),
+  );
+  return clampServer(0.5 + ((adjustedTeamPower - enemyPower) / maximumPower) * 0.9 + passiveBonus, 0.08, 0.95);
+}
+
+function createServerRobberyDefenders(action, allies) {
+  const names = ["Salvatore", "Vincent", "Tommy"];
+  const types = ["watcher", "boss", "bodyguard"];
+  const count = clampServer(
+    action.enemyCount || getServerRobberyEnemyCount(action.difficultyInfo.label, action.actionId),
+    1,
+    3,
+  );
+  const tier = getServerRobberyTier(action.difficultyInfo.label);
+  const enemyProfile = getServerRobberyEnemyProfile(action, allies);
+  const roleProfiles = {
+    watcher: { attack: 1.04, defense: 0.92, health: 0.9, level: 0 },
+    boss: { attack: 1.08, defense: 1.02, health: 1.05, level: 1 },
+    bodyguard: { attack: 0.9, defense: 1.1, health: 1.05, level: 0 },
+  };
+  const selectedRoleProfiles = types.slice(0, count).map((type) => roleProfiles[type]);
+  const healthWeightTotal = selectedRoleProfiles.reduce((sum, profile) => sum + profile.health, 0);
+  const defenders = names.slice(0, count).map((name, index) => {
+    const type = types[index];
+    const roleProfile = roleProfiles[type];
+    const variance = 0.96 + hashStringUnit(`${action.actionId}:${index}`) * 0.08;
+    const level = clampServer(
+      Math.round(enemyProfile.averageLevel + roleProfile.level),
+      1,
+      30,
+    );
+    const maxHealth = clampServer(
+      Math.round(enemyProfile.totalHealth * (roleProfile.health / healthWeightTotal) * variance),
+      50,
+      420,
+    );
+    return {
+      id: `${action.target.spotId}-guard-${index}`,
+      name,
+      type,
+      level,
+      maxHealth,
+      health: maxHealth,
+      attack: Math.max(6, Math.round(enemyProfile.averageAttack * roleProfile.attack * variance)),
+      defense: Math.max(5, Math.round(enemyProfile.averageDefense * roleProfile.defense * variance)),
+      damageScale: tier.damage,
+    };
+  });
+  action.enemyCount = count;
+  action.enemyPower = getRobberyTeamPower(defenders, false);
+  action.enemyPowerTarget = action.enemyPower;
+  action.teamPower = getRobberyTeamPower(allies, true);
+  action.estimatedWinChance = estimateServerRobberyWinChance(allies, action.enemyPower, action.battleMode);
+  return defenders;
+}
+
+function getRobberyBattleMode(allyCount) {
+  if (allyCount <= 1) return "lone";
+  if (allyCount === 2) return "solo";
+  return "full";
+}
+
+function getRobberyRewardMultiplier(battleMode) {
+  if (battleMode === "lone") return 0.52;
+  if (battleMode === "solo") return 0.76;
+  return 1;
+}
+
+function getRobberyDifficultyRewardProfile(label) {
+  if (label === "Veszelyes") return { money: 1.35, fame: 1.5 };
+  if (label === "Kockazatos") return { money: 1.15, fame: 1.25 };
+  return { money: 1, fame: 1 };
+}
+
+function getRobberyPlayerHealthPenalty(action, outcome) {
+  if (outcome === "won") return 0;
+  if (outcome === "retreated") return 2;
+  if (action?.difficultyInfo?.label === "Veszelyes") return 5;
+  if (action?.difficultyInfo?.label === "Kockazatos") return 4;
+  return 3;
+}
+
+function getRobberyInfluencePenalty(action, outcome) {
+  if (outcome !== "lost") return 0;
+  if (action?.difficultyInfo?.label === "Veszelyes") return 4;
+  if (action?.difficultyInfo?.label === "Kockazatos") return 3;
+  return 2;
+}
+
+function getEffectiveUnitStat(unit, key, baseShare) {
+  const readiness = clampServer(unit.health / Math.max(1, unit.maxHealth), 0, 1);
+  return Math.max(1, Math.round((Number(unit[key]) || 0) * (baseShare + readiness * (1 - baseShare))));
+}
+
+function syncRobberyHealthToState(state, action) {
+  const player = action.allies.find((ally) => ally.isPlayer);
+  if (player) state.health = clampServer(player.health, 0, 100);
+  if (!Array.isArray(state.crewMembers)) return;
+  const allyById = new Map(action.allies.filter((ally) => !ally.isPlayer).map((ally) => [String(ally.id), ally]));
+  state.crewMembers = state.crewMembers.map((member) => {
+    const ally = allyById.get(String(member.id || ""));
+    if (!ally) return member;
+    const storedMaxHealth = Math.max(1, Number(member.baseHealth) || 100);
+    const healthPercent = clampServer(ally.health / Math.max(1, ally.maxHealth), 0, 1);
+    return { ...member, health: Math.round(storedMaxHealth * healthPercent) };
+  });
+  state.naturalRecoveryAt = state.naturalRecoveryAt && typeof state.naturalRecoveryAt === "object"
+    ? state.naturalRecoveryAt
+    : { health: Date.now(), energy: Date.now() };
+  state.naturalRecoveryAt.health = Date.now();
+}
+
+function advanceServerRobberyQuests(state, mode) {
+  advanceServerQuests(state, "robbery", mode, 1);
+}
+
+function buildRobberyClientState(state) {
+  return {
+    money: Math.max(0, toSafeInt(state.money, 0, 0)),
+    fame: Math.max(0, toSafeInt(state.fame, 0, 0)),
+    heat: clampServer(state.heat, 0, 100),
+    influence: normalizeServerInfluence(state.influence, SERVER_STARTING_INFLUENCE),
+    influenceSystemVersion: SERVER_INFLUENCE_SYSTEM_VERSION,
+    health: clampServer(state.health, 0, 100),
+    energy: clampServer(state.energy, 0, 100),
+    crewMembers: Array.isArray(state.crewMembers) ? state.crewMembers : [],
+    activeQuests: Array.isArray(state.activeQuests) ? state.activeQuests : [],
+    districts: Array.isArray(state.districts) ? state.districts : [],
+    naturalRecoveryAt: state.naturalRecoveryAt || null,
+  };
+}
+
+function mapRobberyActionForClient(action) {
+  const difficultyReward = getRobberyDifficultyRewardProfile(action.difficultyInfo?.label);
+  return {
+    actionId: action.actionId,
+    status: action.status,
+    target: action.target,
+    difficulty: action.target.difficulty,
+    difficultyInfo: action.difficultyInfo,
+    energyCost: action.energyCost,
+    battleStarted: Boolean(action.battleStarted),
+    battleMode: action.battleMode || "full",
+    playerHealthAtStart: Number.isFinite(Number(action.playerHealthAtStart))
+      ? clampServer(action.playerHealthAtStart, 0, 100)
+      : null,
+    rewardMultiplier: action.rewardMultiplier || 1,
+    difficultyRewardMultiplier: action.difficultyRewardMultiplier || difficultyReward.money,
+    difficultyFameMultiplier: action.difficultyFameMultiplier || difficultyReward.fame,
+    selectedMemberIds: action.selectedMemberIds || [],
+    allies: action.allies || [],
+    defenders: action.defenders || [],
+    enemyCount: Math.max(1, toSafeInt(action.enemyCount, 1, 1)),
+    teamPower: Math.max(0, toSafeInt(action.teamPower, 0, 0)),
+    enemyPower: Math.max(0, toSafeInt(action.enemyPower, 0, 0)),
+    enemyPowerTarget: Math.max(0, toSafeInt(action.enemyPowerTarget, 0, 0)),
+    referenceTeamPower: Math.max(0, toSafeInt(action.referenceTeamPower, 0, 0)),
+    referenceCombatProfile: action.referenceCombatProfile || null,
+    estimatedWinChance: clampServer(action.estimatedWinChance, 0, 1),
+    combatVersion: Math.max(1, toSafeInt(action.combatVersion, 1, 1)),
+    allyTurnIndex: action.allyTurnIndex || 0,
+    round: action.round || 1,
+    loot: action.loot || 0,
+    alert: action.alert || 0,
+    message: action.message || "",
+    result: action.result || null,
+  };
+}
+
+function parseActionSession(row) {
+  if (!row) return null;
+  const payload = parseJsonSafely(row.payload_json, null);
+  if (!payload || typeof payload !== "object") return null;
+  return { ...payload, actionId: row.action_id, status: payload.status || row.action_status };
+}
+
+async function writeRobberyActionSession(profileName, action, now = Date.now()) {
+  await upsertActionSessionStmt.run(
+    action.actionId,
+    profileName,
+    "robbery",
+    action.status === "selection" || action.status === "battle" ? "active" : "completed",
+    JSON.stringify(action),
+    action.createdAt || now,
+    now,
+    action.expiresAt || (now + ROBBERY_ACTION_TTL_MS),
+  );
+}
+
+const SERVER_EQUIPMENT_SLOTS = ["hat", "shirt", "pants", "weapon", "shoes", "watch"];
+const SERVER_CREW_TEMPLATES = [
+  { id: "luca", name: "Luca Moretti", role: "Vegrehajto", baseAttack: 12, baseDefense: 9, baseHealth: 100, hireCost: 155 },
+  { id: "marco", name: "Marco Bellini", role: "Fegyveres", baseAttack: 15, baseDefense: 8, baseHealth: 88, hireCost: 700 },
+  { id: "enzo", name: "Enzo Romano", role: "Megfigyelo", baseAttack: 10, baseDefense: 12, baseHealth: 112, hireCost: 1500 },
+];
+
+function getServerCrewMaxHealth(template, level = 1, defenseLevel = 1) {
+  return Math.max(
+    1,
+    toSafeInt(template?.baseHealth, 100, 1)
+      + Math.max(0, toSafeInt(level, 1, 1) - 1) * 2
+      + Math.max(0, toSafeInt(defenseLevel, 1, 1) - 1),
+  );
+}
+
+function getEmptyServerEquipment() {
+  return Object.fromEntries(SERVER_EQUIPMENT_SLOTS.map((slot) => [slot, null]));
+}
+
+function normalizeServerEquipment(source = {}) {
+  const output = getEmptyServerEquipment();
+  for (const slot of SERVER_EQUIPMENT_SLOTS) {
+    const item = source?.[slot];
+    output[slot] = item && typeof item === "object" ? { ...item, slot } : null;
+  }
+  return output;
+}
+
+function normalizeServerCrewMembers(state = {}) {
+  const savedById = new Map((Array.isArray(state.crewMembers) ? state.crewMembers : []).map((member) => [String(member?.id || ""), member]));
+  return SERVER_CREW_TEMPLATES.map((template) => {
+    const saved = savedById.get(template.id) || {};
+    const level = clampServer(toSafeInt(saved.level, 1, 1), 1, 20);
+    const defenseLevel = clampServer(toSafeInt(saved.defenseLevel, 1, 1), 1, 20);
+    const maxHealth = getServerCrewMaxHealth(template, level, defenseLevel);
+    const savedMaxHealth = Math.max(1, toSafeInt(saved.baseHealth, template.baseHealth, 1));
+    const savedHealth = clampServer(saved.health ?? savedMaxHealth, 0, savedMaxHealth);
+    const health = Math.round(maxHealth * (savedHealth / savedMaxHealth));
+    return {
+      ...template,
+      baseHealth: maxHealth,
+      hired: saved.hired === true,
+      level,
+      defenseLevel,
+      attackBonus: clampServer(toSafeInt(saved.attackBonus, 0, 0), 0, (level - 1) * 3),
+      defenseBonus: clampServer(toSafeInt(saved.defenseBonus, 0, 0), 0, (defenseLevel - 1) * 3),
+      health: clampServer(health, 0, maxHealth),
+      equipment: normalizeServerEquipment(saved.equipment),
+    };
+  });
+}
+
+function normalizeServerInventory(source = {}) {
+  return Object.fromEntries(SERVER_EQUIPMENT_SLOTS.map((slot) => [
+    slot,
+    Array.isArray(source?.[slot])
+      ? source[slot].filter((item) => item && typeof item === "object" && item.id).map((item) => ({ ...item, slot }))
+      : [],
+  ]));
+}
+
+function getServerEquipmentMarketPrice(item = {}) {
+  const rarity = ["gray", "yellow", "red"].includes(item?.rarity) ? item.rarity : "gray";
+  const power = Math.max(0, toSafeInt(item?.power, 0, 0));
+  const base = rarity === "red" ? 260 : rarity === "yellow" ? 145 : 68;
+  const powerRate = rarity === "red" ? 26 : rarity === "yellow" ? 18 : 10;
+  return Math.max(1, Math.round(base + power * powerRate));
+}
+
+function getServerEquipmentSellPrice(item = {}) {
+  const purchasePrice = Math.max(0, toSafeInt(item?.purchasePrice, 0, 0));
+  const referencePrice = purchasePrice || getServerEquipmentMarketPrice(item);
+  return Math.max(1, Math.floor(referencePrice * 0.4));
+}
+
+function isServerItemEquipped(state, itemId, except = {}) {
+  if (!itemId) return false;
+  if (except.owner !== "player" && Object.values(state.equipment || {}).some((item) => item?.id === itemId)) return true;
+  return (state.crewMembers || []).some((member) => {
+    if (except.owner === "crew" && except.memberId === member.id) return false;
+    return Object.values(member.equipment || {}).some((item) => item?.id === itemId);
+  });
+}
+
+function recalculateServerGearPower(state) {
+  state.gearPower = Object.values(state.equipment || {}).reduce((sum, item) => sum + Math.max(0, toSafeInt(item?.power, 0, 0)), 0);
+}
+
+function buildEconomyClientState(state) {
+  return {
+    ...buildRobberyClientState(state),
+    crew: Math.max(0, toSafeInt(state.crew, 0, 0)),
+    activeCrewMemberId: state.activeCrewMemberId || null,
+    equipment: normalizeServerEquipment(state.equipment),
+    itemInventory: normalizeServerInventory(state.itemInventory),
+    gearPower: Math.max(0, toSafeInt(state.gearPower, 0, 0)),
+    marketStock: Array.isArray(state.marketStock) ? state.marketStock : [],
+    marketRefreshAt: Number(state.marketRefreshAt) || 0,
+    mentorFlags: state.mentorFlags && typeof state.mentorFlags === "object" ? state.mentorFlags : {},
+  };
+}
+
+async function runCrewEconomyCommand(profileName, body = {}) {
+  return db.transaction(async () => {
+    await lockPlayerStmt.get(profileName);
+    const profile = await buildProfileState(profileName);
+    if (!profile) return { statusCode: 404, error: "A jatekosprofil nem talalhato." };
+    const now = Date.now();
+    const state = {
+      ...profile.state,
+      cityLevel: clampServer(toSafeInt(profile.state.cityLevel, 1, 1), 1, 100),
+      crewMembers: normalizeServerCrewMembers(profile.state),
+      equipment: normalizeServerEquipment(profile.state.equipment),
+      itemInventory: normalizeServerInventory(profile.state.itemInventory),
+    };
+    const operation = String(body.operation || "");
+    const memberId = String(body.memberId || "").slice(0, 64);
+    const member = state.crewMembers.find((entry) => entry.id === memberId);
+    if (!member) return { statusCode: 404, error: "A bandatag nem talalhato." };
+    let cost = 0;
+    let gainedPoints = 0;
+    if (operation === "hire") {
+      if (member.hired) return { statusCode: 409, error: "Ez az ember mar a bandad tagja." };
+      cost = SERVER_CREW_TEMPLATES.find((entry) => entry.id === memberId)?.hireCost || 0;
+      if (Number(state.money) < cost) return { statusCode: 409, error: "Nincs eleg penz a felberleshez." };
+      state.money -= cost;
+      member.hired = true;
+      member.health = member.baseHealth;
+      state.activeCrewMemberId = member.id;
+    } else if (operation === "upgrade") {
+      if (!member.hired) return { statusCode: 409, error: "Elobb fel kell berelned ezt az embert." };
+      if (member.level >= 20) return { statusCode: 409, error: "A bandatag elerte a maximalis szintet." };
+      cost = 45 + member.level * 35;
+      if (Number(state.money) < cost) return { statusCode: 409, error: "Nincs eleg penz a fejleszteshez." };
+      state.money -= cost;
+      const previousMaxHealth = member.baseHealth;
+      gainedPoints = 2;
+      member.level += 1;
+      member.attackBonus += gainedPoints;
+      const template = SERVER_CREW_TEMPLATES.find((entry) => entry.id === member.id);
+      member.baseHealth = getServerCrewMaxHealth(template, member.level, member.defenseLevel);
+      member.health = clampServer(member.health + (member.baseHealth - previousMaxHealth), 0, member.baseHealth);
+    } else if (operation === "defense") {
+      if (!member.hired) return { statusCode: 409, error: "Elobb fel kell berelned ezt az embert." };
+      if (member.defenseLevel >= 20) return { statusCode: 409, error: "A bandatag vedelme mar maximalis." };
+      cost = 35 + member.defenseLevel * 30;
+      if (Number(state.money) < cost) return { statusCode: 409, error: "Nincs eleg penz a vedelmi fejleszteshez." };
+      state.money -= cost;
+      const previousMaxHealth = member.baseHealth;
+      gainedPoints = 2;
+      member.defenseLevel += 1;
+      member.defenseBonus += gainedPoints;
+      const template = SERVER_CREW_TEMPLATES.find((entry) => entry.id === member.id);
+      member.baseHealth = getServerCrewMaxHealth(template, member.level, member.defenseLevel);
+      member.health = clampServer(member.health + (member.baseHealth - previousMaxHealth), 0, member.baseHealth);
+    } else if (operation === "heal") {
+      if (!member.hired) return { statusCode: 409, error: "Elobb fel kell berelned ezt az embert." };
+      const missingHealth = Math.max(0, member.baseHealth - member.health);
+      if (!missingHealth) return { statusCode: 409, error: "A bandatag mar teljes eleteron van." };
+      cost = 4 + Math.ceil(missingHealth * 0.55);
+      if (Number(state.money) < cost) return { statusCode: 409, error: "Nincs eleg penz a gyogyitashoz." };
+      state.money -= cost;
+      member.health = member.baseHealth;
+    } else {
+      return { statusCode: 400, error: "Ismeretlen bandamuvelet." };
+    }
+    state.crew = state.crewMembers.filter((entry) => entry.hired).length;
+    await persistPvpState(profileName, state, now);
+    await logEvent(profileName, `crew_${operation}`, "Bandamuvelet vegrehajtva", { memberId, cost, gainedPoints }, now);
+    return { statusCode: 200, payload: { ok: true, operation, memberId, cost, gainedPoints, state: buildEconomyClientState(state) } };
+  });
+}
+
+async function runEquipEconomyCommand(profileName, body = {}) {
+  return db.transaction(async () => {
+    await lockPlayerStmt.get(profileName);
+    const profile = await buildProfileState(profileName);
+    if (!profile) return { statusCode: 404, error: "A jatekosprofil nem talalhato." };
+    const now = Date.now();
+    const state = {
+      ...profile.state,
+      crewMembers: normalizeServerCrewMembers(profile.state),
+      equipment: normalizeServerEquipment(profile.state.equipment),
+      itemInventory: normalizeServerInventory(profile.state.itemInventory),
+    };
+    const owner = body.owner === "crew" ? "crew" : "player";
+    const slot = SERVER_EQUIPMENT_SLOTS.includes(body.slot) ? body.slot : null;
+    const itemId = String(body.itemId || "").slice(0, 128);
+    if (!slot || !itemId) return { statusCode: 400, error: "Ervenytelen felszereles." };
+    const item = state.itemInventory[slot].find((entry) => entry.id === itemId);
+    if (!item) return { statusCode: 404, error: "A targy nincs a leltaradban." };
+    let targetEquipment = state.equipment;
+    let targetName = profileName;
+    let member = null;
+    if (owner === "crew") {
+      member = state.crewMembers.find((entry) => entry.id === String(body.memberId || ""));
+      if (!member?.hired) return { statusCode: 409, error: "A bandatag nincs felberelve." };
+      targetEquipment = member.equipment;
+      targetName = member.name;
+    }
+    const currentlyEquipped = targetEquipment[slot]?.id === itemId;
+    if (!currentlyEquipped && isServerItemEquipped(state, itemId, { owner, memberId: member?.id })) {
+      return { statusCode: 409, error: "Ezt a targyat mar mas viseli." };
+    }
+    targetEquipment[slot] = currentlyEquipped ? null : { ...item, slot };
+    if (member) state.activeCrewMemberId = member.id;
+    if (owner === "player" && slot === "weapon" && !currentlyEquipped) {
+      state.mentorFlags = state.mentorFlags && typeof state.mentorFlags === "object" ? state.mentorFlags : {};
+      state.mentorFlags.equippedItem = true;
+    }
+    recalculateServerGearPower(state);
+    await persistPvpState(profileName, state, now);
+    await logEvent(profileName, "equipment_changed", "Felszereles modositva", { owner, memberId: member?.id || null, slot, itemId, equipped: !currentlyEquipped }, now);
+    return {
+      statusCode: 200,
+      payload: { ok: true, equipped: !currentlyEquipped, owner, targetName, itemName: item.name, slot, state: buildEconomyClientState(state) },
+    };
+  });
+}
+
+async function runMarketBuyCommand(profileName, body = {}) {
+  return db.transaction(async () => {
+    await lockPlayerStmt.get(profileName);
+    const itemId = String(body.itemId || "").slice(0, 128);
+    const marketRow = await selectMarketItemStmt.get(itemId, profileName);
+    const profile = await buildProfileState(profileName);
+    if (!profile) return { statusCode: 404, error: "A jatekosprofil nem talalhato." };
+    if (!marketRow || Number(marketRow.stock) <= 0) return { statusCode: 404, error: "Ez az aru mar lekerult a piacrol." };
+    if (marketRow.expires_at && Number(marketRow.expires_at) <= Date.now()) return { statusCode: 409, error: "A piaci ajanlat lejart." };
+    const state = {
+      ...profile.state,
+      crewMembers: normalizeServerCrewMembers(profile.state),
+      equipment: normalizeServerEquipment(profile.state.equipment),
+      itemInventory: normalizeServerInventory(profile.state.itemInventory),
+    };
+    const slot = SERVER_EQUIPMENT_SLOTS.includes(marketRow.slot_key) ? marketRow.slot_key : null;
+    if (!slot) return { statusCode: 409, error: "A piaci aru tipusa ervenytelen." };
+    if (state.itemInventory[slot].some((item) => item.id === itemId)) return { statusCode: 409, error: "Ez a targy mar a leltaradban van." };
+    const basePrice = Math.max(0, toSafeInt(marketRow.price, 0, 0));
+    const marketDiscountRate = getServerInfluenceBenefits(state).marketDiscountRate;
+    const price = Math.max(1, Math.round(basePrice * (1 - marketDiscountRate)));
+    if (Number(state.money) < price) return { statusCode: 409, error: "Nincs eleg penzed ehhez az aruhoz." };
+    const offer = parseJsonSafely(marketRow.payload_json, {});
+    const sourceItem = offer?.item && typeof offer.item === "object" ? offer.item : {};
+    const item = {
+      ...sourceItem,
+      id: itemId,
+      slot,
+      name: String(marketRow.item_name || sourceItem.name || "Ismeretlen targy").slice(0, 160),
+      rarity: ["gray", "yellow", "red"].includes(marketRow.rarity) ? marketRow.rarity : "gray",
+      stat: marketRow.stat_kind === "defense" ? "defense" : "attack",
+      power: Math.max(0, toSafeInt(marketRow.stat_value, sourceItem.power || 0, 0)),
+      purchasePrice: price,
+    };
+    state.money -= price;
+    state.itemInventory[slot].push(item);
+    advanceServerQuests(state, "market_buy", "any", 1);
+    state.marketStock = (Array.isArray(state.marketStock) ? state.marketStock : []).filter((entry) => entry?.item?.id !== itemId);
+    const now = Date.now();
+    await markMarketItemSoldStmt.run(now, itemId, profileName);
+    await persistPvpState(profileName, state, now);
+    await logEvent(profileName, "market_purchase", "Feketepiaci vasarlas", {
+      itemId,
+      slot,
+      basePrice,
+      price,
+      discountPercent: Math.round(marketDiscountRate * 1000) / 10,
+    }, now);
+    return {
+      statusCode: 200,
+      payload: {
+        ok: true,
+        item,
+        basePrice,
+        price,
+        discountPercent: Math.round(marketDiscountRate * 1000) / 10,
+        state: buildEconomyClientState(state),
+      },
+    };
+  });
+}
+
+async function runMarketSellCommand(profileName, body = {}) {
+  return db.transaction(async () => {
+    await lockPlayerStmt.get(profileName);
+    const profile = await buildProfileState(profileName);
+    if (!profile) return { statusCode: 404, error: "A jatekosprofil nem talalhato." };
+    const state = {
+      ...profile.state,
+      crewMembers: normalizeServerCrewMembers(profile.state),
+      equipment: normalizeServerEquipment(profile.state.equipment),
+      itemInventory: normalizeServerInventory(profile.state.itemInventory),
+    };
+    const slot = SERVER_EQUIPMENT_SLOTS.includes(body.slot) ? body.slot : null;
+    const itemId = String(body.itemId || "").slice(0, 128);
+    if (!slot || !itemId) return { statusCode: 400, error: "Ervenytelen eladasi tetel." };
+    const itemIndex = state.itemInventory[slot].findIndex((item) => String(item?.id || "") === itemId);
+    if (itemIndex < 0) return { statusCode: 404, error: "Ez a targy mar nincs a leltaradban." };
+    const item = state.itemInventory[slot][itemIndex];
+    if (isServerItemEquipped(state, itemId)) {
+      return { statusCode: 409, error: "A hasznalatban levo targyat elobb le kell venned." };
+    }
+    const price = getServerEquipmentSellPrice(item);
+    state.itemInventory[slot].splice(itemIndex, 1);
+    state.money = Math.max(0, toSafeInt(state.money, 0, 0) + price);
+    const now = Date.now();
+    await persistPvpState(profileName, state, now);
+    await logEvent(profileName, "market_sale", "Feketepiaci eladas", {
+      itemId,
+      itemName: item.name,
+      slot,
+      price,
+    }, now);
+    return {
+      statusCode: 200,
+      payload: {
+        ok: true,
+        item: { ...item, slot },
+        price,
+        state: buildEconomyClientState(state),
+      },
+    };
+  });
+}
+
+async function runCraftEconomyCommand(profileName, body = {}) {
+  return db.transaction(async () => {
+    await lockPlayerStmt.get(profileName);
+    const profile = await buildProfileState(profileName);
+    if (!profile) return { statusCode: 404, error: "A jatekosprofil nem talalhato." };
+    const state = {
+      ...profile.state,
+      crewMembers: normalizeServerCrewMembers(profile.state),
+      equipment: normalizeServerEquipment(profile.state.equipment),
+      itemInventory: normalizeServerInventory(profile.state.itemInventory),
+    };
+    const refs = Array.isArray(body.ingredients) ? body.ingredients.slice(0, 3) : [];
+    if (refs.length !== 3) return { statusCode: 400, error: "Pontosan harom alapanyag kell a crafthoz." };
+    const keys = new Set();
+    const ingredients = [];
+    for (const ref of refs) {
+      const slot = SERVER_EQUIPMENT_SLOTS.includes(ref?.slot) ? ref.slot : null;
+      const itemId = String(ref?.itemId || "").slice(0, 128);
+      const key = `${slot}:${itemId}`;
+      if (!slot || !itemId || keys.has(key)) return { statusCode: 400, error: "Ervenytelen craft alapanyag." };
+      keys.add(key);
+      const item = state.itemInventory[slot].find((entry) => entry.id === itemId);
+      if (!item || isServerItemEquipped(state, itemId)) return { statusCode: 409, error: "Az egyik alapanyag hianyzik vagy hasznalatban van." };
+      ingredients.push({ slot, item });
+    }
+    const fromRarity = ingredients[0].item.rarity;
+    if (!["gray", "yellow"].includes(fromRarity) || !ingredients.every((entry) => entry.item.rarity === fromRarity)) {
+      return { statusCode: 409, error: "Harom azonos ritkasagu szabad targy kell." };
+    }
+    for (const ingredient of ingredients) {
+      state.itemInventory[ingredient.slot] = state.itemInventory[ingredient.slot].filter((item) => item.id !== ingredient.item.id);
+    }
+    const toRarity = fromRarity === "gray" ? "yellow" : "red";
+    const success = toRarity !== "red" || Math.random() <= 0.35;
+    let craftedItem = null;
+    if (success) {
+      const target = ingredients[randomServerInt(0, ingredients.length - 1)];
+      const catalog = defaultGameConfigEntries.equipment_catalog.payload[target.slot] || [];
+      const template = catalog.find((item) => item.rarity === toRarity) || catalog[0] || {};
+      const averagePower = Math.max(1, Math.round(ingredients.reduce((sum, entry) => sum + toSafeInt(entry.item.power, 0, 0), 0) / 3));
+      craftedItem = {
+        ...template,
+        id: `crafted-${target.slot}-${toRarity}-${randomUUID()}`,
+        slot: target.slot,
+        name: `${template.name || target.slot} (craft)`,
+        rarity: toRarity,
+        stat: template.stat === "defense" ? "defense" : "attack",
+        power: Math.max(toSafeInt(template.power, 1, 1), averagePower + (toRarity === "red" ? 3 : 2)),
+      };
+      state.itemInventory[target.slot].unshift(craftedItem);
+    }
+    const now = Date.now();
+    await persistPvpState(profileName, state, now);
+    await logEvent(profileName, "equipment_crafted", success ? "Craft sikeres" : "Craft sikertelen", {
+      fromRarity, toRarity, success, craftedItemId: craftedItem?.id || null,
+    }, now);
+    return { statusCode: 200, payload: { ok: true, success, fromRarity, toRarity, craftedItem, state: buildEconomyClientState(state) } };
+  });
+}
+
+const SERVER_RECOVERY_DURATION_MS = 20 * 60 * 1000;
+const SERVER_RECOVERY_AMOUNT = 50;
+const SERVER_RECOVERY_USAGE_LIMIT = 3;
+const SERVER_RECOVERY_USAGE_RESET_MS = 3 * 60 * 60 * 1000;
+const SERVER_NATURAL_RECOVERY_POINT_MS = (12 * 60 * 60 * 1000) / 100;
+const SERVER_PROTECTION_COOLDOWN_MS = 3 * 60 * 1000;
+
+function normalizeServerRecoveryEffects(source = {}) {
+  const normalize = (effect) => {
+    if (!effect || typeof effect !== "object") return null;
+    const startedAt = Number(effect.startedAt);
+    const endsAt = Number(effect.endsAt);
+    if (!Number.isFinite(startedAt) || !Number.isFinite(endsAt) || endsAt <= startedAt) return null;
+    return {
+      startedAt,
+      endsAt,
+      appliedAmount: clampServer(toSafeInt(effect.appliedAmount, 0, 0), 0, SERVER_RECOVERY_AMOUNT),
+    };
+  };
+  return { health: normalize(source?.health), energy: normalize(source?.energy) };
+}
+
+function normalizeServerRecoveryUsage(source = {}, now = Date.now()) {
+  const normalize = (entry) => {
+    const uses = clampServer(toSafeInt(entry?.uses, 0, 0), 0, SERVER_RECOVERY_USAGE_LIMIT);
+    const resetAt = Number(entry?.resetAt);
+    if (Number.isFinite(resetAt) && resetAt > now) return { uses, resetAt };
+    if (uses > 0 && !Number.isFinite(resetAt)) return { uses, resetAt: now + SERVER_RECOVERY_USAGE_RESET_MS };
+    return {
+      uses: 0,
+      resetAt: 0,
+    };
+  };
+  return {
+    health: normalize(source?.health),
+    energy: normalize(source?.energy),
+  };
+}
+
+function applyServerRecoveryProgress(state, now = Date.now()) {
+  state.recoveryEffects = normalizeServerRecoveryEffects(state.recoveryEffects);
+  state.recoveryUsage = normalizeServerRecoveryUsage(state.recoveryUsage, now);
+  state.naturalRecoveryAt = state.naturalRecoveryAt && typeof state.naturalRecoveryAt === "object"
+    ? { ...state.naturalRecoveryAt }
+    : { health: now, energy: now };
+  for (const stat of ["health", "energy"]) {
+    state[stat] = clampServer(state[stat] ?? 100, 0, 100);
+    const naturalAt = Math.min(now, Number(state.naturalRecoveryAt[stat]) || now);
+    if (state[stat] < 100) {
+      const recovered = Math.floor((now - naturalAt) / SERVER_NATURAL_RECOVERY_POINT_MS);
+      if (recovered > 0) {
+        state[stat] = clampServer(state[stat] + recovered, 0, 100);
+        state.naturalRecoveryAt[stat] = state[stat] >= 100 ? now : naturalAt + recovered * SERVER_NATURAL_RECOVERY_POINT_MS;
+      }
+    } else {
+      state.naturalRecoveryAt[stat] = now;
+    }
+    const effect = state.recoveryEffects[stat];
+    if (!effect) continue;
+    const progress = clampServer((now - effect.startedAt) / (effect.endsAt - effect.startedAt), 0, 1);
+    const shouldBeApplied = Math.floor(SERVER_RECOVERY_AMOUNT * progress);
+    const delta = Math.max(0, shouldBeApplied - effect.appliedAmount);
+    if (delta > 0) {
+      state[stat] = clampServer(state[stat] + delta, 0, 100);
+      effect.appliedAmount += delta;
+    }
+    if (progress >= 1 || effect.appliedAmount >= SERVER_RECOVERY_AMOUNT || state[stat] >= 100) state.recoveryEffects[stat] = null;
+  }
+  return state;
+}
+
+function buildProgressionClientState(state) {
+  return {
+    ...buildEconomyClientState(state),
+    recoveryEffects: normalizeServerRecoveryEffects(state.recoveryEffects),
+    recoveryUsage: normalizeServerRecoveryUsage(state.recoveryUsage),
+    naturalRecoveryAt: state.naturalRecoveryAt || null,
+    protectionCooldowns: state.protectionCooldowns && typeof state.protectionCooldowns === "object" ? state.protectionCooldowns : {},
+    hideUsesToday: Math.max(0, toSafeInt(state.hideUsesToday, 0, 0)),
+    hideUsesDay: Math.max(1, toSafeInt(state.hideUsesDay, state.day || 1, 1)),
+    day: Math.max(1, toSafeInt(state.day, 1, 1)),
+  };
+}
+
+function normalizeServerQuestReward(reward, questId) {
+  if (!reward || typeof reward !== "object") return null;
+  const slot = reward.slot === "trousers"
+    ? "pants"
+    : (reward.slot === "suit" || reward.slot === "vest" ? "shirt" : String(reward.slot || ""));
+  if (!SERVER_EQUIPMENT_SLOTS.includes(slot)) return null;
+  const rarity = ["gray", "yellow", "red"].includes(reward.rarity) ? reward.rarity : "gray";
+  const templateId = String(reward.templateId || reward.id || `${slot}-quest-reward`).replace(/[^a-zA-Z0-9_-]+/g, "-").slice(0, 64);
+  return {
+    id: `owned-quest-${slot}-${String(questId).replace(/[^a-zA-Z0-9_-]+/g, "-").slice(0, 48)}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+    templateId,
+    slot,
+    name: String(reward.name || "Kuldetes jutalma").trim().slice(0, 80),
+    power: clampServer(toSafeInt(reward.power, 0, 0), 0, 10),
+    stat: reward.stat === "defense" ? "defense" : "attack",
+    rarity,
+    image: typeof reward.image === "string" ? reward.image.slice(0, 240) : "",
+  };
+}
+
+function normalizeServerQuest(quest, allowedStatuses = ["offered", "accepted", "completed"]) {
+  if (!quest || typeof quest !== "object") return null;
+  const id = String(quest.id || "").trim().slice(0, 128);
+  const spotId = String(quest.spotId || "").trim().slice(0, 64);
+  if (!id || !spotId || !allowedStatuses.includes(quest.status)) return null;
+  const allowedActions = new Set(["robbery", "protection", "harbor_job", "cargo_spend", "cargo_acquire", "market_buy", "garage_run"]);
+  const requestedAction = String(quest.goal?.action || quest.type || "robbery");
+  const action = allowedActions.has(requestedAction) ? requestedAction : "robbery";
+  const allowedModes = new Set(["any", "shop", "street", "docks", "customs", "rail", "warehouse", "fish", "garage", "counterfeitMoney", "drugs", "weapons", "papers"]);
+  const mode = allowedModes.has(quest.goal?.mode) ? quest.goal.mode : "any";
+  const target = clampServer(toSafeInt(quest.goal?.target, 1, 1), 1, 12);
+  const progress = clampServer(toSafeInt(quest.goal?.progress, 0, 0), 0, target);
+  const steps = (Array.isArray(quest.steps) ? quest.steps : []).slice(0, 3).map((step, index) => {
+    const stepAction = allowedActions.has(step?.action) ? step.action : null;
+    if (!stepAction) return null;
+    const stepMode = allowedModes.has(step?.mode) ? step.mode : "any";
+    const stepTarget = clampServer(toSafeInt(step?.target, 1, 1), 1, 12);
+    return {
+      id: String(step?.id || `step-${index + 1}`).slice(0, 40),
+      action: stepAction,
+      mode: stepMode,
+      target: stepTarget,
+      progress: clampServer(toSafeInt(step?.progress, 0, 0), 0, stepTarget),
+      label: String(step?.label || "Teljesitsd a reszfeladatot.").trim().slice(0, 180),
+    };
+  }).filter(Boolean);
+  const aggregateTarget = steps.length ? steps.reduce((sum, step) => sum + step.target, 0) : target;
+  const aggregateProgress = steps.length ? steps.reduce((sum, step) => sum + step.progress, 0) : progress;
+  const primaryAction = steps.length > 1 ? "mixed" : (steps[0]?.action || action);
+  return {
+    ...quest,
+    id,
+    spotId,
+    spotName: String(quest.spotName || "Ismeretlen hely").trim().slice(0, 80),
+    districtName: String(quest.districtName || "Kerulet").trim().slice(0, 80),
+    type: primaryAction,
+    status: quest.status,
+    title: String(quest.title || "Kuldetes").trim().slice(0, 100),
+    signature: String(quest.signature || "").trim().slice(0, 240),
+    description: String(quest.description || "").trim().slice(0, 500),
+    objective: String(quest.objective || "").trim().slice(0, 240),
+    moneyReward: clampServer(toSafeInt(quest.moneyReward, 0, 0), 0, 500),
+    xpReward: clampServer(toSafeInt(quest.xpReward, 0, 0), 0, 100),
+    reward: quest.reward && typeof quest.reward === "object" ? { ...quest.reward } : null,
+    goal: {
+      action: primaryAction,
+      mode: steps.length > 1 ? "any" : (steps[0]?.mode || mode),
+      target: aggregateTarget,
+      progress: aggregateProgress,
+    },
+    steps,
+    createdAt: Number.isFinite(Number(quest.createdAt)) ? Number(quest.createdAt) : Date.now(),
+  };
+}
+
+function advanceServerQuests(state, action, mode = "any", amount = 1) {
+  if (!Array.isArray(state.activeQuests)) return false;
+  let changed = false;
+  state.activeQuests = state.activeQuests.map((quest) => {
+    if (quest?.status !== "accepted") return quest;
+    const increment = Math.max(0, toSafeInt(amount, 0, 0));
+    if (Array.isArray(quest.steps) && quest.steps.length) {
+      let questChanged = false;
+      const steps = quest.steps.map((step) => {
+        if (step.action !== action || (step.mode !== "any" && step.mode !== mode)) return step;
+        const stepTarget = Math.max(1, toSafeInt(step.target, 1, 1));
+        const stepProgress = clampServer(toSafeInt(step.progress, 0, 0) + increment, 0, stepTarget);
+        questChanged = questChanged || stepProgress !== step.progress;
+        return { ...step, progress: stepProgress };
+      });
+      if (!questChanged) return quest;
+      changed = true;
+      const target = steps.reduce((sum, step) => sum + Math.max(1, toSafeInt(step.target, 1, 1)), 0);
+      const progress = steps.reduce((sum, step) => sum + Math.max(0, toSafeInt(step.progress, 0, 0)), 0);
+      return {
+        ...quest,
+        status: steps.every((step) => step.progress >= step.target) ? "completed" : quest.status,
+        steps,
+        goal: { ...quest.goal, target, progress },
+      };
+    }
+    if (quest?.goal?.action !== action || (quest.goal.mode !== "any" && quest.goal.mode !== mode)) return quest;
+    const target = Math.max(1, toSafeInt(quest.goal.target, 1, 1));
+    const progress = clampServer(toSafeInt(quest.goal.progress, 0, 0) + increment, 0, target);
+    changed = changed || progress !== quest.goal.progress;
+    return { ...quest, status: progress >= target ? "completed" : quest.status, goal: { ...quest.goal, progress } };
+  });
+  return changed;
+}
+
+function hasPendingLegacyHarborQuestWork(state, quest) {
+  const cargoSpendModes = (Array.isArray(quest?.steps) && quest.steps.length
+    ? quest.steps
+    : [quest?.goal])
+    .filter((step) => step?.action === "cargo_spend")
+    .map((step) => String(step.mode || "any"));
+  if (!cargoSpendModes.length) return false;
+  return normalizeServerHarborTasks(state.harborProcessTasks).some((task) => {
+    if (task.payload?.questProgressOnCompletion === true) return false;
+    const mission = getServerHarborMissions().find((entry) => entry.id === task.payload?.missionId);
+    if (!mission) return false;
+    const requires = normalizeServerCargo(mission.requires);
+    return cargoSpendModes.some((mode) => mode === "any" || Number(requires[mode]) > 0);
+  });
+}
+
+function buildQuestClientState(state) {
+  return {
+    ...buildProgressionClientState(state),
+    activeQuest: state.activeQuest && typeof state.activeQuest === "object" ? state.activeQuest : null,
+    activeQuests: Array.isArray(state.activeQuests) ? state.activeQuests : [],
+    offeredQuests: Array.isArray(state.offeredQuests) ? state.offeredQuests : [],
+    selectedQuestSlot: clampServer(toSafeInt(state.selectedQuestSlot, 0, 0), 0, 1),
+    questNextSpawnAt: Math.max(0, Number(state.questNextSpawnAt) || 0),
+    mentorStep: Math.max(0, toSafeInt(state.mentorStep, 0, 0)),
+    mentorCompleted: state.mentorCompleted === true,
+  };
+}
+
+async function runQuestProgressionCommand(profileName, body = {}) {
+  return db.transaction(async () => {
+    await lockPlayerStmt.get(profileName);
+    const profile = await buildProfileState(profileName);
+    if (!profile) return { statusCode: 404, error: "A jatekosprofil nem talalhato." };
+    const now = Date.now();
+    const state = {
+      ...profile.state,
+      equipment: normalizeServerEquipment(profile.state.equipment),
+      itemInventory: normalizeServerInventory(profile.state.itemInventory),
+      activeQuests: Array.isArray(profile.state.activeQuests)
+        ? profile.state.activeQuests.map((quest) => normalizeServerQuest(quest, ["accepted", "completed"])).filter(Boolean).slice(0, 2)
+        : [],
+      offeredQuests: Array.isArray(profile.state.offeredQuests)
+        ? profile.state.offeredQuests.map((quest) => normalizeServerQuest(quest, ["offered"])).filter(Boolean).slice(0, 3)
+        : [],
+    };
+    const operation = String(body.operation || "");
+    const questId = String(body.questId || "").trim().slice(0, 128);
+    if (!questId) return { statusCode: 400, error: "Hianyzik a kuldetes azonositoja." };
+    let quest = null;
+    let reward = null;
+    let mentorReward = null;
+
+    if (operation === "accept") {
+      const offeredIndex = state.offeredQuests.findIndex((entry) => entry.id === questId);
+      if (offeredIndex < 0) {
+        if (state.activeQuests.some((entry) => entry.id === questId)) return { statusCode: 409, error: "Ez a kuldetes mar el van fogadva." };
+        return { statusCode: 404, error: "A felajanlott kuldetes nem talalhato." };
+      }
+      if (state.activeQuests.length >= 2) return { statusCode: 409, error: "Mar ket felvett kuldetesed van." };
+      quest = {
+        ...state.offeredQuests[offeredIndex],
+        status: "accepted",
+        goal: { ...state.offeredQuests[offeredIndex].goal, progress: 0 },
+        steps: Array.isArray(state.offeredQuests[offeredIndex].steps)
+          ? state.offeredQuests[offeredIndex].steps.map((step) => ({ ...step, progress: 0 }))
+          : [],
+      };
+      state.offeredQuests.splice(offeredIndex, 1);
+      state.activeQuests.push(quest);
+      state.selectedQuestSlot = state.activeQuests.length - 1;
+      if (state.activeQuest?.id === questId) state.activeQuest = null;
+    } else if (operation === "abandon") {
+      const activeIndex = state.activeQuests.findIndex((entry) => entry.id === questId);
+      if (activeIndex < 0) return { statusCode: 404, error: "A felvett kuldetes nem talalhato." };
+      [quest] = state.activeQuests.splice(activeIndex, 1);
+      state.selectedQuestSlot = clampServer(toSafeInt(state.selectedQuestSlot, 0, 0), 0, Math.max(0, state.activeQuests.length - 1));
+      if (state.activeQuest?.id === questId) state.activeQuest = null;
+    } else if (operation === "claim") {
+      const activeIndex = state.activeQuests.findIndex((entry) => entry.id === questId);
+      if (activeIndex < 0) return { statusCode: 404, error: "A felvett kuldetes nem talalhato." };
+      quest = state.activeQuests[activeIndex];
+      if (hasPendingLegacyHarborQuestWork(state, quest)) {
+        return { statusCode: 409, error: "A kuldeteshez tartozo kikotoi munka meg folyamatban van." };
+      }
+      if (quest.status !== "completed" || quest.goal.progress < quest.goal.target) {
+        return { statusCode: 409, error: "Ez a kuldetes meg nincs kesz az atadasra." };
+      }
+      reward = {
+        money: quest.moneyReward,
+        xp: quest.xpReward,
+        item: normalizeServerQuestReward(quest.reward, quest.id),
+      };
+      state.money = Math.max(0, toSafeInt(state.money, 0, 0) + reward.money);
+      state.fame = Math.max(0, toSafeInt(state.fame, 0, 0) + reward.xp);
+      state.heat = clampServer(state.heat + 4, 0, 100);
+      if (reward.item) state.itemInventory[reward.item.slot].push(reward.item);
+      state.activeQuests.splice(activeIndex, 1);
+      state.selectedQuestSlot = clampServer(toSafeInt(state.selectedQuestSlot, 0, 0), 0, Math.max(0, state.activeQuests.length - 1));
+      if (!state.mentorCompleted && toSafeInt(state.mentorStep, 0, 0) === 5) {
+        mentorReward = { money: 130, xp: 2 };
+        state.money += mentorReward.money;
+        state.fame += mentorReward.xp;
+        state.mentorStep = 6;
+      }
+    } else {
+      return { statusCode: 400, error: "Ismeretlen kuldetesmuvelet." };
+    }
+
+    await persistPvpState(profileName, state, now);
+    await logEvent(profileName, `quest_${operation}`, operation === "claim" ? "Kuldetes atadva" : operation === "accept" ? "Kuldetes elfogadva" : "Kuldetes torolve", {
+      questId, title: quest?.title || "Kuldetes", reward, mentorReward,
+    }, now);
+    return { statusCode: 200, payload: { ok: true, operation, quest, reward, mentorReward, state: buildQuestClientState(state) } };
+  });
+}
+
+const SERVER_DISTRICTS = [
+  { id: "center", value: 3, security: 55 },
+  { id: "market", value: 3, security: 48 },
+  { id: "harbor", value: 4, security: 62 },
+  { id: "industrial", value: 2, security: 40 },
+  { id: "luxury", value: 5, security: 72 },
+  { id: "suburb", value: 2, security: 36 },
+];
+const SERVER_LOTS = {
+  "east-empty-lot": { maxLevel: 3, restoredHouse: false },
+  "central-empty-lot": { maxLevel: 3, restoredHouse: false },
+  "southeast-empty-lot": { maxLevel: 3, restoredHouse: false },
+  "market-row": { maxLevel: 1, restoredHouse: true, privateCost: 120, cityCost: 80, privateIncome: 24 },
+  "west-mid-block": { maxLevel: 1, restoredHouse: true, privateCost: 120, cityCost: 80, privateIncome: 24 },
+  "east-office": { maxLevel: 1, restoredHouse: true, privateCost: 120, cityCost: 80, privateIncome: 24 },
+  "central-bank": { maxLevel: 1, restoredHouse: true, privateCost: 120, cityCost: 80, privateIncome: 24 },
+  "southwest-tenement": { maxLevel: 1, restoredHouse: true, privateCost: 120, cityCost: 80, privateIncome: 24 },
+  courthouse: { maxLevel: 1, restoredHouse: true, privateCost: 120, cityCost: 80, privateIncome: 24 },
+};
+const SERVER_LOT_LEVEL_COSTS = { 0: 80, 1: 180, 2: 320 };
+const SERVER_LOT_LEVEL_INCOME = { 1: 80, 2: 190, 3: 360 };
+
+function normalizeServerTerritories(source = {}) {
+  const territories = {};
+  for (const [lotId, lot] of Object.entries(SERVER_LOTS)) {
+    const saved = source?.[lotId];
+    if (!saved || typeof saved !== "object") continue;
+    const level = clampServer(toSafeInt(saved.level, 0, 0), 0, lot.maxLevel);
+    if (level <= 0) continue;
+    const ownerType = lot.restoredHouse && saved.ownerType === "city" ? "city" : "private";
+    territories[lotId] = { level, ownerType };
+  }
+  return territories;
+}
+
+function getServerTerritoryIncome(territories = {}) {
+  return Object.entries(territories).reduce((sum, [lotId, territory]) => {
+    const lot = SERVER_LOTS[lotId];
+    if (!lot || !territory) return sum;
+    if (lot.restoredHouse) return sum + (territory.ownerType === "private" ? lot.privateIncome : 0);
+    return sum + (SERVER_LOT_LEVEL_INCOME[territory.level] || 0);
+  }, 0);
+}
+
+function normalizeServerDistricts(source = []) {
+  return SERVER_DISTRICTS.map((definition, index) => {
+    const saved = Array.isArray(source) ? source[index] : null;
+    return {
+      ...(saved && typeof saved === "object" ? saved : {}),
+      id: definition.id,
+      value: definition.value,
+      security: definition.security,
+      controlled: saved?.controlled === true,
+      loyalty: clampServer(saved?.loyalty, 0, 100),
+    };
+  });
+}
+
+function getServerPoliceMoneyLoss(money, heat, severe = false) {
+  const availableMoney = Math.max(0, toSafeInt(money, 0, 0));
+  const normalizedHeat = clampServer(heat, 0, 100);
+  const lossRate = severe
+    ? clampServer(0.25 + Math.max(0, normalizedHeat - 75) * 0.004, 0.25, 0.35)
+    : clampServer(0.05 + Math.max(0, normalizedHeat - 25) * (0.1 / 75), 0.05, 0.15);
+  const moneyLoss = availableMoney > 0
+    ? Math.min(availableMoney, Math.max(1, Math.floor(availableMoney * lossRate)))
+    : 0;
+  return { moneyLoss, lossRate };
+}
+
+function applyServerPoliceBust(state) {
+  const heatBefore = clampServer(state.heat, 0, 100);
+  if (heatBefore < 100) return null;
+  const { moneyLoss, lossRate } = getServerPoliceMoneyLoss(state.money, heatBefore, true);
+  state.money = Math.max(0, state.money - moneyLoss);
+  state.heat = clampServer(heatBefore - 15, 0, 100);
+  state.crew = normalizeServerCrewMembers(state).filter((member) => member.hired).length;
+  return {
+    moneyLoss,
+    moneyLossPercent: Math.round(lossRate * 100),
+    heatBefore,
+    heatLoss: 15,
+  };
+}
+
+function buildEmpireClientState(state) {
+  return {
+    ...buildQuestClientState(state),
+    cityLevel: clampServer(toSafeInt(state.cityLevel, 1, 1), 1, 100),
+    territories: normalizeServerTerritories(state.territories),
+    districts: normalizeServerDistricts(state.districts),
+    day: Math.max(1, toSafeInt(state.day, 1, 1)),
+    lastDayEndedAt: Math.max(0, Number(state.lastDayEndedAt) || 0),
+  };
+}
+
+async function runEmpireProgressionCommand(profileName, body = {}) {
+  return db.transaction(async () => {
+    await lockPlayerStmt.get(profileName);
+    const profile = await buildProfileState(profileName);
+    if (!profile) return { statusCode: 404, error: "A jatekosprofil nem talalhato." };
+    const now = Date.now();
+    const state = {
+      ...profile.state,
+      crewMembers: normalizeServerCrewMembers(profile.state),
+      districts: normalizeServerDistricts(profile.state.districts),
+      territories: normalizeServerTerritories(profile.state.territories),
+    };
+    applyServerRecoveryProgress(state, now);
+    const operation = String(body.operation || "");
+    let result = null;
+
+    if (operation === "city-upgrade") {
+      const currentLevel = clampServer(toSafeInt(state.cityLevel, 1, 1), 1, 100);
+      if (currentLevel >= 100) return { statusCode: 409, error: "A varos elerte a maximalis szintet." };
+      const cost = 140 + currentLevel * 70;
+      if (state.money < cost) return { statusCode: 409, error: "Nincs eleg penz a varos fejlesztesere." };
+      if (state.energy < 15) return { statusCode: 409, error: "A varos fejlesztesehez 15 energia kell." };
+      state.money -= cost;
+      state.energy = clampServer(state.energy - 15, 0, 100);
+      state.naturalRecoveryAt.energy = now;
+      state.cityLevel = currentLevel + 1;
+      state.fame = Math.max(0, toSafeInt(state.fame, 0, 0) + 10);
+      state.districts = state.districts.map((district) => district.controlled
+        ? { ...district, loyalty: clampServer(district.loyalty + 10, 0, 100) }
+        : district);
+      result = { cost, cityLevel: state.cityLevel, fameGain: 10 };
+    } else if (operation === "district-takeover") {
+      const districtIndex = clampServer(toSafeInt(body.districtIndex, 0, 0), 0, SERVER_DISTRICTS.length - 1);
+      const district = state.districts[districtIndex];
+      if (!district || district.controlled) return { statusCode: 409, error: "Ez a kerulet mar a tied, vagy nem letezik." };
+      const hiredCrew = state.crewMembers.filter((member) => member.hired).length;
+      const requiredCrew = Math.max(2, Math.ceil(district.security / 25));
+      const requiredFame = district.security + 10;
+      if (hiredCrew < requiredCrew || state.fame < requiredFame) return { statusCode: 409, error: "Meg nem eleg eros a bandad ehhez a kerulethez." };
+      if (state.energy < 25) return { statusCode: 409, error: "A kerulet atvetelehez 25 energia kell." };
+      state.energy = clampServer(state.energy - 25, 0, 100);
+      state.naturalRecoveryAt.energy = now;
+      district.controlled = true;
+      district.loyalty = 35;
+      state.fame = Math.max(0, toSafeInt(state.fame, 0, 0) + 12);
+      state.heat = clampServer(state.heat + 8, 0, 100);
+      const healthLoss = randomServerInt(5, 18);
+      state.health = clampServer(state.health - healthLoss, 0, 100);
+      state.naturalRecoveryAt.health = now;
+      const influenceGain = Math.max(0, changeServerInfluence(state, 3));
+      const bust = applyServerPoliceBust(state);
+      result = { districtIndex, districtName: district.name || district.id, healthLoss, fameGain: 12, heatGain: 8, influenceGain, bust };
+    } else if (operation === "lot-invest") {
+      const lotId = String(body.lotId || "").trim().slice(0, 64);
+      const lot = SERVER_LOTS[lotId];
+      if (!lot) return { statusCode: 404, error: "A telek nem talalhato." };
+      const current = state.territories[lotId] || { level: 0, ownerType: "" };
+      if (current.level >= lot.maxLevel) return { statusCode: 409, error: "Ez az epulet mar maximalis szintu." };
+      let ownerType = "private";
+      let cost = SERVER_LOT_LEVEL_COSTS[current.level] || 0;
+      let energyCost = 15;
+      if (lot.restoredHouse) {
+        if (current.level > 0) return { statusCode: 409, error: "Ezt az epuletet mar helyreallitottad." };
+        ownerType = body.ownerType === "city" ? "city" : "private";
+        cost = ownerType === "city" ? lot.cityCost : lot.privateCost;
+        energyCost = 0;
+      }
+      if (state.money < cost) return { statusCode: 409, error: `Nincs eleg penz. Szükséges: ${cost} $.` };
+      if (state.energy < energyCost) return { statusCode: 409, error: `A fejleszteshez ${energyCost} energia kell.` };
+      state.money -= cost;
+      state.energy = clampServer(state.energy - energyCost, 0, 100);
+      if (energyCost) state.naturalRecoveryAt.energy = now;
+      const newLevel = current.level + 1;
+      state.territories[lotId] = { level: newLevel, ownerType };
+      const fameGain = current.level === 0 ? (lot.restoredHouse && ownerType === "city" ? 4 : 6) : 4;
+      state.fame = Math.max(0, toSafeInt(state.fame, 0, 0) + fameGain);
+      const income = lot.restoredHouse
+        ? (ownerType === "private" ? lot.privateIncome : 0)
+        : (SERVER_LOT_LEVEL_INCOME[newLevel] || 0);
+      result = { lotId, level: newLevel, ownerType, cost, energyCost, fameGain, income, restoredHouse: lot.restoredHouse };
+    } else if (operation === "end-day") {
+      const controlled = state.districts.filter((district) => district.controlled);
+      const districtIncome = controlled.reduce((sum, district) => sum + district.value * 20 + district.loyalty, 0);
+      const territoryIncome = getServerTerritoryIncome(state.territories);
+      const baseIncome = districtIncome + territoryIncome;
+      const incomeBonusRate = getServerInfluenceBenefits(state).dailyIncomeRate;
+      const influenceIncomeBonus = Math.max(0, Math.round(baseIncome * incomeBonusRate));
+      const income = baseIncome + influenceIncomeBonus;
+      const fameGain = controlled.length * 2 + clampServer(toSafeInt(state.cityLevel, 1, 1), 1, 100);
+      state.money = Math.max(0, toSafeInt(state.money, 0, 0) + income);
+      state.fame = Math.max(0, toSafeInt(state.fame, 0, 0) + fameGain);
+      state.day = Math.max(1, toSafeInt(state.day, 1, 1)) + 1;
+      state.hideUsesToday = 0;
+      state.hideUsesDay = state.day;
+      state.health = clampServer(state.health + 10, 0, 100);
+      state.energy = 100;
+      state.recoveryEffects = { health: null, energy: null };
+      state.naturalRecoveryAt = { health: now, energy: now };
+      state.districts = state.districts.map((district) => ({
+        ...district,
+        loyalty: clampServer(district.loyalty + (district.controlled ? 5 + state.cityLevel : 1), 0, 100),
+      }));
+      state.heat = clampServer(state.heat - 6, 0, 100);
+      state.lastDayEndedAt = now;
+      result = {
+        income,
+        baseIncome,
+        influenceIncomeBonus,
+        incomeBonusPercent: Math.round(incomeBonusRate * 1000) / 10,
+        districtIncome,
+        territoryIncome,
+        fameGain,
+        controlledCount: controlled.length,
+        day: state.day,
+      };
+    } else {
+      return { statusCode: 400, error: "Ismeretlen birodalommuvelet." };
+    }
+
+    await persistPvpState(profileName, state, now);
+    await logEvent(profileName, `empire_${operation}`, "Birodalmi muvelet vegrehajtva", { operation, result }, now);
+    return { statusCode: 200, payload: { ok: true, operation, result, state: buildEmpireClientState(state) } };
+  });
+}
+
+const SERVER_HARBOR_TASK_LIMIT = 3;
+const SERVER_GARAGE_RUN_WINDOW_MS = 12 * 60 * 60 * 1000;
+const SERVER_GARAGE_RUN_LIMIT = 4;
+const SERVER_GARAGE_RUN_TTL_MS = 20 * 60 * 1000;
+
+function getServerHarborMissions() {
+  return [
+    ...(defaultGameConfigEntries.harbor_missions?.payload || []),
+    ...(defaultGameConfigEntries.harbor_fish_missions?.payload || []),
+  ];
+}
+
+function getServerGarageVehicles() {
+  return defaultGameConfigEntries.harbor_garage_vehicles?.payload || [];
+}
+
+function getServerGarageMissions() {
+  return defaultGameConfigEntries.harbor_garage_missions?.payload || [];
+}
+
+function normalizeServerCargo(source = {}) {
+  return Object.fromEntries(["counterfeitMoney", "drugs", "weapons", "papers"].map((key) => [
+    key, Math.max(0, toSafeInt(source?.[key], 0, 0)),
+  ]));
+}
+
+function normalizeServerGarage(source = {}, now = Date.now()) {
+  const vehicles = getServerGarageVehicles();
+  const validIds = new Set(vehicles.map((vehicle) => vehicle.id));
+  const unlocked = Array.from(new Set(["sedan", ...(Array.isArray(source?.unlockedVehicleIds) ? source.unlockedVehicleIds : [])]))
+    .map(String).filter((id) => validIds.has(id));
+  const activeVehicleId = unlocked.includes(source?.activeVehicleId) ? source.activeVehicleId : "sedan";
+  const runTimestamps = (Array.isArray(source?.runTimestamps) ? source.runTimestamps : [])
+    .map(Number)
+    .filter((timestamp) => Number.isFinite(timestamp) && timestamp > now - SERVER_GARAGE_RUN_WINDOW_MS && timestamp <= now + 60000)
+    .sort((left, right) => left - right)
+    .slice(-SERVER_GARAGE_RUN_LIMIT);
+  return {
+    level: clampServer(toSafeInt(source?.level, 1, 1), 1, 3),
+    wins: Math.max(0, toSafeInt(source?.wins, 0, 0)),
+    losses: Math.max(0, toSafeInt(source?.losses, 0, 0)),
+    activeVehicleId,
+    unlockedVehicleIds: unlocked,
+    runTimestamps,
+  };
+}
+
+function normalizeServerHarborTasks(source = []) {
+  return (Array.isArray(source) ? source : []).map((task) => ({
+    id: String(task?.id || randomUUID()).slice(0, 128),
+    type: "harbor",
+    title: String(task?.title || "Kikotoi munka").slice(0, 100),
+    icon: String(task?.icon || "C").slice(0, 3),
+    durationMs: clampServer(toSafeInt(task?.durationMs, 300000, 5000), 5000, 24 * 60 * 60 * 1000),
+    startedAt: Math.max(0, Number(task?.startedAt) || 0),
+    payload: task?.payload && typeof task.payload === "object" ? { ...task.payload } : {},
+  })).slice(0, SERVER_HARBOR_TASK_LIMIT);
+}
+
+function buildHarborClientState(state) {
+  return {
+    ...buildEmpireClientState(state),
+    smuggledGoods: normalizeServerCargo(state.smuggledGoods),
+    smugglerFame: Math.max(0, toSafeInt(state.smugglerFame, 0, 0)),
+    harborProcessTasks: normalizeServerHarborTasks(state.harborProcessTasks),
+    harborGarage: normalizeServerGarage(state.harborGarage),
+  };
+}
+
+function applyServerHarborReward(state, mission) {
+  const influenceBenefits = getServerInfluenceBenefits(state);
+  const spentCargo = normalizeServerCargo(mission.requires);
+  for (const [key, amount] of Object.entries(spentCargo)) {
+    if (amount > 0) advanceServerQuests(state, "cargo_spend", key, amount);
+  }
+  const successChance = Number.isFinite(Number(mission.successChance)) ? clampServer(mission.successChance, 0.05, 1) : (mission.zone === "fish" ? 1 : 0.86);
+  const success = Math.random() <= successChance;
+  const result = {
+    missionId: mission.id,
+    title: mission.title,
+    success,
+    moneyGain: 0,
+    xpGain: 0,
+    fine: 0,
+    baseFine: 0,
+    penaltyReductionPercent: Math.round(influenceBenefits.harborPenaltyReductionRate * 1000) / 10,
+    influenceGain: 0,
+    cargo: {},
+    heal: 0,
+    energy: 0,
+  };
+  if (!success) {
+    result.baseFine = Math.max(12, Math.round(Number(mission.rewardMoney || 0) * 0.18));
+    result.fine = Math.min(
+      state.money,
+      Math.max(1, Math.round(result.baseFine * (1 - influenceBenefits.harborPenaltyReductionRate))),
+    );
+    state.money = Math.max(0, state.money - result.fine);
+    state.heat = clampServer(state.heat + 1, 0, 100);
+    return result;
+  }
+  result.moneyGain = Math.max(0, toSafeInt(mission.rewardMoney, 0, 0));
+  result.xpGain = Math.max(0, toSafeInt(mission.rewardXp, 0, 0));
+  result.cargo = normalizeServerCargo(mission.gives);
+  result.heal = Math.max(0, toSafeInt(mission.heal, 0, 0));
+  result.energy = Math.max(0, toSafeInt(mission.energy, 0, 0));
+  state.money += result.moneyGain;
+  state.fame += result.xpGain;
+  state.smugglerFame = Math.max(0, toSafeInt(state.smugglerFame, 0, 0) + Math.max(1, Math.round(result.xpGain / 5)));
+  for (const [key, amount] of Object.entries(result.cargo)) state.smuggledGoods[key] += amount;
+  advanceServerQuests(state, "harbor_job", mission.zone || "any", 1);
+  for (const [key, amount] of Object.entries(result.cargo)) {
+    if (amount > 0) advanceServerQuests(state, "cargo_acquire", key, amount);
+  }
+  state.health = clampServer(state.health + result.heal, 0, 100);
+  state.energy = clampServer(state.energy + result.energy, 0, 100);
+  result.influenceGain = Math.max(0, changeServerInfluence(state, 1));
+  return result;
+}
+
+function syncServerHarborTasks(state, now = Date.now()) {
+  const completed = [];
+  const tasks = normalizeServerHarborTasks(state.harborProcessTasks);
+  if (tasks[0] && !tasks[0].startedAt) tasks[0].startedAt = now;
+  while (tasks.length && tasks[0].startedAt && now - tasks[0].startedAt >= tasks[0].durationMs) {
+    const task = tasks.shift();
+    const mission = getServerHarborMissions().find((entry) => entry.id === task.payload?.missionId);
+    if (mission) completed.push(applyServerHarborReward(state, mission));
+    const nextStart = task.startedAt + task.durationMs;
+    if (tasks[0] && !tasks[0].startedAt) tasks[0].startedAt = Math.min(now, nextStart);
+  }
+  state.harborProcessTasks = tasks;
+  return completed;
+}
+
+async function runHarborCommand(profileName, body = {}) {
+  return db.transaction(async () => {
+    await lockPlayerStmt.get(profileName);
+    const profile = await buildProfileState(profileName);
+    if (!profile) return { statusCode: 404, error: "A jatekosprofil nem talalhato." };
+    const now = Date.now();
+    const state = {
+      ...profile.state,
+      smuggledGoods: normalizeServerCargo(profile.state.smuggledGoods),
+      harborProcessTasks: normalizeServerHarborTasks(profile.state.harborProcessTasks),
+      harborGarage: normalizeServerGarage(profile.state.harborGarage, now),
+    };
+    applyServerRecoveryProgress(state, now);
+    const completed = syncServerHarborTasks(state, now);
+    const operation = String(body.operation || "sync");
+    let result = null;
+    if (operation === "start") {
+      const missionId = String(body.missionId || "").slice(0, 64);
+      const mission = getServerHarborMissions().find((entry) => entry.id === missionId);
+      if (!mission) return { statusCode: 404, error: "A kikotoi munka nem talalhato." };
+      if (state.harborProcessTasks.some((task) => task.payload?.missionId === missionId)) return { statusCode: 409, error: "Ugyanez a kikotoi munka mar folyamatban van." };
+      if (state.harborProcessTasks.length >= SERVER_HARBOR_TASK_LIMIT) return { statusCode: 409, error: "Nincs szabad kikotoi feladathely." };
+      const requires = normalizeServerCargo(mission.requires);
+      if (Object.entries(requires).some(([key, amount]) => state.smuggledGoods[key] < amount)) return { statusCode: 409, error: "Nincs eleg csempesz aru ehhez a munkahoz." };
+      for (const [key, amount] of Object.entries(requires)) state.smuggledGoods[key] -= amount;
+      const task = {
+        id: `harbor-${randomUUID()}`,
+        type: "harbor",
+        title: mission.zone === "fish" ? "Halaszat" : "Csempeszet",
+        icon: mission.zone === "fish" ? "H" : "C",
+        durationMs: mission.durationMs,
+        startedAt: state.harborProcessTasks.length ? 0 : now,
+        payload: {
+          missionId: mission.id,
+          title: mission.title,
+          zone: mission.zone,
+          questProgressOnCompletion: true,
+        },
+      };
+      state.harborProcessTasks.push(task);
+      result = { task, mission: { id: mission.id, title: mission.title, zone: mission.zone } };
+    } else if (operation === "cancel") {
+      const taskId = String(body.taskId || "").slice(0, 128);
+      const index = state.harborProcessTasks.findIndex((task) => task.id === taskId);
+      if (index < 0) return { statusCode: 404, error: "A kikotoi feladat nem talalhato." };
+      const [task] = state.harborProcessTasks.splice(index, 1);
+      if (index === 0 && state.harborProcessTasks[0] && !state.harborProcessTasks[0].startedAt) state.harborProcessTasks[0].startedAt = now;
+      result = { task };
+    } else if (operation !== "sync") {
+      return { statusCode: 400, error: "Ismeretlen kikotoi muvelet." };
+    }
+    await persistPvpState(profileName, state, now);
+    if (operation !== "sync" || completed.length > 0) {
+      await logEvent(profileName, `harbor_${operation}`, "Kikotoi muvelet", { result, completed }, now);
+    }
+    return { statusCode: 200, payload: { ok: true, operation, result, completed, serverNow: now, state: buildHarborClientState(state) } };
+  });
+}
+
+function createServerGarageRunConfig(mission, garage, vehicle) {
+  const load = Math.max(1, toSafeInt(vehicle.load, 1, 1));
+  const quantityBonus = Math.max(0, garage.level - 1);
+  const cargo = normalizeServerCargo(mission.cargoReward);
+  const cargoBonus = Math.max(0, load - 1) + quantityBonus;
+  for (const key of Object.keys(cargo)) if (cargo[key] > 0) cargo[key] += cargoBonus;
+  let rewardMoney = mission.rewardMoney + Math.max(0, load - 1) * 20;
+  let rewardXp = mission.rewardXp + Math.max(0, load - 1) * 3;
+  if (vehicle.rewardProfile === "cash") rewardMoney += 160 + load * 20;
+  if (vehicle.rewardProfile === "cargo") { rewardMoney -= 30; rewardXp += 8; }
+  if (mission.id === "night-convoy") { rewardMoney = Math.round(rewardMoney * 0.5); rewardXp = Math.round(rewardXp * 0.5); }
+  if (vehicle.id === "armor") rewardMoney = Math.min(666, rewardMoney);
+  return {
+    totalRounds: mission.rounds + Math.max(0, load - 1),
+    requiredHits: mission.requiredHits + Math.max(0, Math.min(2, load - 1)),
+    rewardMoney: Math.max(40, rewardMoney), rewardXp: Math.max(10, rewardXp), cargo,
+    baseSafeWidth: clampServer(mission.baseSafeWidth + vehicle.stealth * 0.018, 0.18, 0.36),
+    baseSpeed: clampServer(mission.baseSpeed - vehicle.speed * 0.0022, 0.014, 0.03),
+  };
+}
+
+async function writeGarageActionSession(profileName, action, now = Date.now()) {
+  await upsertActionSessionStmt.run(action.actionId, profileName, "garage", action.status === "active" ? "active" : "completed", JSON.stringify(action), action.createdAt || now, now, action.expiresAt || now + SERVER_GARAGE_RUN_TTL_MS);
+}
+
+async function runGarageCommand(profileName, body = {}) {
+  return db.transaction(async () => {
+    await lockPlayerStmt.get(profileName);
+    const profile = await buildProfileState(profileName);
+    if (!profile) return { statusCode: 404, error: "A jatekosprofil nem talalhato." };
+    const now = Date.now();
+    const state = { ...profile.state, smuggledGoods: normalizeServerCargo(profile.state.smuggledGoods), harborGarage: normalizeServerGarage(profile.state.harborGarage, now) };
+    const operation = String(body.operation || "");
+    let action = null;
+    let result = null;
+    if (operation === "upgrade") {
+      if (state.harborGarage.level >= 3) return { statusCode: 409, error: "A muhely mar maximalis szintu." };
+      const cost = 360 + (state.harborGarage.level - 1) * 290;
+      if (state.money < cost) return { statusCode: 409, error: "Nincs eleg penz a muhely fejlesztesere." };
+      state.money -= cost; state.harborGarage.level += 1; result = { cost, level: state.harborGarage.level };
+    } else if (operation === "vehicle") {
+      const vehicle = getServerGarageVehicles().find((entry) => entry.id === body.vehicleId);
+      if (!vehicle) return { statusCode: 404, error: "A jarmu nem talalhato." };
+      let cost = 0;
+      if (!state.harborGarage.unlockedVehicleIds.includes(vehicle.id)) {
+        if (state.harborGarage.level < vehicle.requiredLevel) return { statusCode: 409, error: "A garazs szintje meg tul alacsony ehhez a jarmuhoz." };
+        cost = vehicle.cost;
+        if (state.money < cost) return { statusCode: 409, error: "Nincs eleg penz a jarmuhoz." };
+        state.money -= cost; state.harborGarage.unlockedVehicleIds.push(vehicle.id);
+      }
+      state.harborGarage.activeVehicleId = vehicle.id; result = { vehicleId: vehicle.id, title: vehicle.title, cost };
+    } else if (operation === "start") {
+      const active = await selectActiveActionSessionStmt.get(profileName, "garage");
+      if (active && Number(active.expires_at) > now) return { statusCode: 409, error: "Egy garazsfuvar mar folyamatban van." };
+      const mission = getServerGarageMissions().find((entry) => entry.id === body.missionId);
+      const vehicle = getServerGarageVehicles().find((entry) => entry.id === state.harborGarage.activeVehicleId);
+      if (!mission || !vehicle || mission.vehicleId !== vehicle.id) return { statusCode: 409, error: "Ehhez a fuvarhoz a megfelelo aktiv jarmu kell." };
+      if (state.harborGarage.runTimestamps.length >= SERVER_GARAGE_RUN_LIMIT) {
+        return { statusCode: 409, error: "Tizenket oran belul csak negy fuvar indithato.", resetAt: state.harborGarage.runTimestamps[0] + SERVER_GARAGE_RUN_WINDOW_MS };
+      }
+      const config = createServerGarageRunConfig(mission, state.harborGarage, vehicle);
+      state.harborGarage.runTimestamps.push(now);
+      action = { actionId: randomUUID(), status: "active", missionId: mission.id, missionTitle: mission.title, createdAt: now, expiresAt: now + SERVER_GARAGE_RUN_TTL_MS, round: 1, hits: 0, misses: 0, attempts: 0, safeCenter: 0.22 + Math.random() * 0.56, safeWidth: config.baseSafeWidth, speed: config.baseSpeed, direction: 1, ...config };
+      await writeGarageActionSession(profileName, action, now);
+      result = { started: true };
+    } else if (operation === "checkpoint") {
+      const row = await selectActionSessionStmt.get(String(body.actionId || ""), profileName);
+      action = parseActionSession(row);
+      if (!action || row.action_type !== "garage" || row.action_status !== "active" || action.expiresAt <= now) return { statusCode: 404, error: "Nincs aktiv garazsfuvar." };
+      const pointer = clampServer(Number(body.pointer), 0, 1);
+      const hit = pointer >= action.safeCenter - action.safeWidth / 2 - 0.018 && pointer <= action.safeCenter + action.safeWidth / 2 + 0.018;
+      action.attempts += 1; action.hits += hit ? 1 : 0; action.misses += hit ? 0 : 1; action.round += 1;
+      if (action.round > action.totalRounds) {
+        const mission = getServerGarageMissions().find((entry) => entry.id === action.missionId);
+        const success = action.hits >= action.requiredHits;
+        if (success) {
+          const factor = clampServer(1 - action.misses * 0.15, 0.45, 1);
+          result = {
+            success,
+            moneyGain: Math.max(20, Math.round(action.rewardMoney * factor)),
+            xpGain: Math.max(6, Math.round(action.rewardXp * factor)),
+            influenceGain: 0,
+            cargo: {},
+          };
+          for (const [key, amount] of Object.entries(action.cargo)) result.cargo[key] = amount > 0 ? Math.max(1, Math.round(amount * factor)) : 0;
+          state.money += result.moneyGain; state.fame += result.xpGain; state.heat = clampServer(state.heat + mission.heatSuccess, 0, 100);
+          for (const [key, amount] of Object.entries(result.cargo)) state.smuggledGoods[key] += amount;
+          advanceServerQuests(state, "garage_run", "garage", 1);
+          for (const [key, amount] of Object.entries(result.cargo)) {
+            if (amount > 0) advanceServerQuests(state, "cargo_acquire", key, amount);
+          }
+          state.smugglerFame = Math.max(0, toSafeInt(state.smugglerFame, 0, 0) + Math.max(2, Math.round(result.xpGain / 4)));
+          state.harborGarage.wins += 1;
+          result.influenceGain = Math.max(0, changeServerInfluence(state, action.misses === 0 ? 2 : 1));
+        } else {
+          const penaltyReductionRate = getServerInfluenceBenefits(state).harborPenaltyReductionRate;
+          const basePenalty = Math.min(state.money, mission.failurePenalty);
+          result = {
+            success,
+            basePenalty,
+            penalty: Math.min(state.money, Math.max(1, Math.round(basePenalty * (1 - penaltyReductionRate)))),
+            penaltyReductionPercent: Math.round(penaltyReductionRate * 1000) / 10,
+            heatGain: mission.heatFail,
+          };
+          state.money -= result.penalty; state.heat = clampServer(state.heat + mission.heatFail, 0, 100); state.harborGarage.losses += 1;
+        }
+        action.status = "completed"; action.result = result;
+      } else {
+        action.safeWidth = clampServer(action.baseSafeWidth - action.attempts * 0.01, 0.14, 0.36);
+        action.speed = clampServer(action.baseSpeed + action.attempts * 0.0012, 0.014, 0.034);
+        action.direction = Math.random() > 0.5 ? 1 : -1; action.safeCenter = 0.22 + Math.random() * 0.56;
+        result = { hit };
+      }
+      await writeGarageActionSession(profileName, action, now);
+    } else if (operation === "abort") {
+      const row = await selectActionSessionStmt.get(String(body.actionId || ""), profileName);
+      action = parseActionSession(row);
+      if (!action || row.action_type !== "garage" || row.action_status !== "active") return { statusCode: 404, error: "Nincs aktiv garazsfuvar." };
+      action.status = "aborted"; await writeGarageActionSession(profileName, action, now); result = { aborted: true };
+    } else return { statusCode: 400, error: "Ismeretlen garazsmuvelet." };
+    await persistPvpState(profileName, state, now);
+    await logEvent(profileName, `garage_${operation}`, "Garazsmuvelet", { result, actionId: action?.actionId }, now);
+    return { statusCode: 200, payload: { ok: true, operation, result, action, serverNow: now, state: buildHarborClientState(state) } };
+  });
+}
+
+function advanceServerActionQuests(state, actionType, mode) {
+  advanceServerQuests(state, actionType, mode, 1);
+}
+
+async function runRecoveryProgressionCommand(profileName, body = {}) {
+  return db.transaction(async () => {
+    await lockPlayerStmt.get(profileName);
+    const profile = await buildProfileState(profileName);
+    if (!profile) return { statusCode: 404, error: "A jatekosprofil nem talalhato." };
+    const now = Date.now();
+    const state = {
+      ...profile.state,
+      crewMembers: normalizeServerCrewMembers(profile.state),
+      equipment: normalizeServerEquipment(profile.state.equipment),
+      itemInventory: normalizeServerInventory(profile.state.itemInventory),
+      districts: Array.isArray(profile.state.districts) ? profile.state.districts.map((district) => ({ ...district })) : [],
+    };
+    applyServerRecoveryProgress(state, now);
+    const operation = body.operation === "start" ? "start" : "sync";
+    let heatLoss = 0;
+    let influenceLoss = 0;
+    if (operation === "start") {
+      const stat = body.stat === "energy" ? "energy" : "health";
+      const otherStat = stat === "health" ? "energy" : "health";
+      const usage = state.recoveryUsage[stat];
+      if (usage.uses >= SERVER_RECOVERY_USAGE_LIMIT) {
+        return {
+          statusCode: 409,
+          error: `${stat === "health" ? "A Lapulas" : "A Talalkozo"} haromoras kerete meg nem allt vissza.`,
+          resetAt: usage.resetAt,
+        };
+      }
+      if (state.recoveryEffects[otherStat]) return { statusCode: 409, error: "A masik toltes mar folyamatban van." };
+      if (state.recoveryEffects[stat]) return { statusCode: 409, error: "Ez a toltes mar folyamatban van." };
+      if (state[stat] >= 100) return { statusCode: 409, error: stat === "health" ? "Az eleterod mar maximumon van." : "Az energiad mar maximumon van." };
+      if (body.layLow) {
+        heatLoss = Math.min(clampServer(state.heat, 0, 100), 10);
+        state.heat = clampServer(state.heat - heatLoss, 0, 100);
+        state.districts = state.districts.map((district) => ({ ...district, loyalty: clampServer(Number(district.loyalty) - 3, 0, 100) }));
+        influenceLoss = Math.max(0, -changeServerInfluence(state, -2));
+      }
+      if (usage.uses === 0 || usage.resetAt <= now) usage.resetAt = now + SERVER_RECOVERY_USAGE_RESET_MS;
+      usage.uses += 1;
+      state.recoveryEffects[stat] = { startedAt: now, endsAt: now + SERVER_RECOVERY_DURATION_MS, appliedAmount: 0 };
+      await logEvent(profileName, `recovery_${stat}_started`, stat === "health" ? "Lapulas elinditva" : "Talalkozo elinditva", {
+        layLow: Boolean(body.layLow),
+        heatLoss,
+        influenceLoss,
+        uses: usage.uses,
+        resetAt: usage.resetAt,
+      }, now);
+    }
+    await persistPvpState(profileName, state, now);
+    return {
+      statusCode: 200,
+      payload: {
+        ok: true,
+        operation,
+        heatLoss,
+        influenceLoss,
+        recoveryUsage: normalizeServerRecoveryUsage(state.recoveryUsage, now),
+        state: buildProgressionClientState(state),
+      },
+    };
+  });
+}
+
+async function runProtectionProgressionCommand(profileName, body = {}) {
+  return db.transaction(async () => {
+    await lockPlayerStmt.get(profileName);
+    const profile = await buildProfileState(profileName);
+    if (!profile) return { statusCode: 404, error: "A jatekosprofil nem talalhato." };
+    const now = Date.now();
+    const state = {
+      ...profile.state,
+      crewMembers: normalizeServerCrewMembers(profile.state),
+      equipment: normalizeServerEquipment(profile.state.equipment),
+      itemInventory: normalizeServerInventory(profile.state.itemInventory),
+      districts: Array.isArray(profile.state.districts) ? profile.state.districts.map((district) => ({ ...district })) : [],
+      protectionCooldowns: profile.state.protectionCooldowns && typeof profile.state.protectionCooldowns === "object"
+        ? { ...profile.state.protectionCooldowns }
+        : {},
+    };
+    applyServerRecoveryProgress(state, now);
+    const target = normalizeRobberyTarget(body, state);
+    if (!target) return { statusCode: 400, error: "Ervenytelen vedelmi penzes celpont." };
+    const cooldownAt = Number(state.protectionCooldowns[target.spotId]) || 0;
+    if (cooldownAt > now) return { statusCode: 409, error: "Innen meg nem szedhetsz vedelmi penzt.", cooldownAt };
+    if (state.health <= 0 || state.energy < 8) return { statusCode: 409, error: "A beszedeshez legalabb 1 HP es 8 energia kell." };
+    state.energy = clampServer(state.energy - 8, 0, 100);
+    state.naturalRecoveryAt.energy = now;
+    state.protectionCooldowns[target.spotId] = now + SERVER_PROTECTION_COOLDOWN_MS;
+    const difficultyInfo = getServerRobberyDifficultyInfo(state, target.difficulty);
+    const combat = getPvpCombatStats(state);
+    const protectionBaseChance = difficultyInfo.label === "Konnyu"
+      ? clampServer(difficultyInfo.successChance + 0.04, 0.9, 0.96)
+      : difficultyInfo.label === "Kockazatos"
+        ? clampServer(difficultyInfo.successChance + 0.22, 0.6, 0.76)
+        : clampServer(difficultyInfo.successChance + 0.3, 0.38, 0.55);
+    const readinessPenalty = Math.max(0, 1 - combat.readiness) * 0.18;
+    const influenceBenefits = getServerInfluenceBenefits(state);
+    const adjustedChance = clampServer(
+      protectionBaseChance - readinessPenalty + influenceBenefits.protectionChanceBonus,
+      0.2,
+      0.98,
+    );
+    const gainBase = 14 + Math.round(target.difficulty * 0.16) + Math.max(1, toSafeInt(state.cityLevel, 1, 1)) * 4 + randomServerInt(0, 14);
+    const readinessGainPenalty = combat.readiness < 0.6 ? Math.round((0.6 - combat.readiness) * 16) : 0;
+    const gain = Math.max(10, Math.round(gainBase * (0.84 + difficultyInfo.successChance * 0.42) - readinessGainPenalty));
+    const fameGain = difficultyInfo.label === "Veszelyes" ? 5 : difficultyInfo.label === "Kockazatos" ? 4 : 3;
+    const rawHeatGain = difficultyInfo.label === "Veszelyes" ? 8 : difficultyInfo.label === "Kockazatos" ? 6 : 4;
+    const success = Math.random() <= adjustedChance;
+    let moneyGain = 0;
+    let healthLoss = 0;
+    let heatGain = 0;
+    let influenceGain = 0;
+    if (success) {
+      moneyGain = gain;
+      state.money = Math.max(0, toSafeInt(state.money, 0, 0) + moneyGain);
+      state.fame = Math.max(0, toSafeInt(state.fame, 0, 0) + fameGain);
+      heatGain = Math.max(1, Math.round(rawHeatGain * 0.46));
+      state.heat = clampServer(state.heat + heatGain, 0, 100);
+      const district = state.districts[target.districtIndex];
+      if (district) {
+        district.loyalty = clampServer(Number(district.loyalty) + 6, 0, 100);
+        if (!district.controlled && district.loyalty >= 65) district.controlled = true;
+      }
+      advanceServerActionQuests(state, "protection", target.mode);
+      influenceGain = Math.max(0, changeServerInfluence(state, 1));
+    } else {
+      const minLoss = difficultyInfo.label === "Veszelyes" ? 8 : 4;
+      const maxLoss = difficultyInfo.label === "Veszelyes" ? 18 : 11;
+      healthLoss = randomServerInt(minLoss, maxLoss);
+      state.health = clampServer(state.health - healthLoss, 0, 100);
+      state.naturalRecoveryAt.health = now;
+      const rawFailureHeat = difficultyInfo.label === "Veszelyes" ? 10 : difficultyInfo.label === "Kockazatos" ? 7 : 5;
+      heatGain = Math.max(1, Math.round(rawFailureHeat * 0.46));
+      state.heat = clampServer(state.heat + heatGain, 0, 100);
+    }
+    await persistPvpState(profileName, state, now);
+    await logEvent(profileName, success ? "protection_success" : "protection_failed", success ? "Vedelmi penz befolyt" : "Vedelmi penz beszedese sikertelen", {
+      spotId: target.spotId, success, moneyGain, fameGain: success ? fameGain : 0, healthLoss, heatGain, influenceGain, successChance: adjustedChance,
+    }, now);
+    return {
+      statusCode: 200,
+      payload: {
+        ok: true,
+        result: {
+          success,
+          buildingName: target.name,
+          difficultyLabel: difficultyInfo.label,
+          moneyGain,
+          fameGain: success ? fameGain : 0,
+          healthLoss,
+          heatGain,
+          influenceGain,
+          successChance: adjustedChance,
+        },
+        state: buildProgressionClientState(state),
+      },
+    };
+  });
+}
+
 async function buildPublicProfile(profileName) {
   const [player, profile] = await Promise.all([
     selectPlayerStmt.get(profileName),
@@ -2503,7 +4515,7 @@ async function buildPublicProfile(profileName) {
     rankTitle: player.rank_title,
     level: player.level,
     fame: player.fame,
-    influence: player.influence,
+    influence: normalizeServerInfluence(player.influence, SERVER_STARTING_INFLUENCE),
     cityLevel: player.city_level,
     npcVillageVictories: Math.max(
       0,
@@ -2598,6 +4610,18 @@ async function ensureDefaultGameConfigEntries() {
       now,
     );
   }
+  const questConfigVersion = "mixed-main-harbor-quests-v2";
+  const questConfigMeta = await selectMetaStmt.get("quest_config_version");
+  if (questConfigMeta?.meta_value !== questConfigVersion) {
+    const questEntry = defaultGameConfigEntries.main_quest_templates;
+    await updateGameConfigEntryStmt.run(
+      questEntry.group,
+      JSON.stringify(questEntry.payload),
+      now,
+      "main_quest_templates",
+    );
+    await upsertMetaStmt.run("quest_config_version", questConfigVersion, now);
+  }
 }
 
 await importBootstrapSavesIfNeeded();
@@ -2630,6 +4654,408 @@ function readRequestBody(request) {
     });
     request.on("end", () => resolve(body));
     request.on("error", reject);
+  });
+}
+
+async function startServerRobbery(profileName, body) {
+  return db.transaction(async () => {
+    await lockPlayerStmt.get(profileName);
+    const profile = await buildProfileState(profileName);
+    if (!profile) return { statusCode: 404, error: "A jatekosprofil nem talalhato." };
+    const now = Date.now();
+    const activeRow = await selectActiveActionSessionStmt.get(profileName, "robbery");
+    const activeAction = parseActionSession(activeRow);
+    const activeLoneBattle = Boolean(
+      activeAction?.battleStarted
+      && (!Array.isArray(activeAction.selectedMemberIds) || activeAction.selectedMemberIds.length === 0),
+    );
+    if (activeAction && Number(activeRow.expires_at) > now && !activeLoneBattle) {
+      return {
+        statusCode: 200,
+        payload: {
+          ok: true,
+          resumed: true,
+          action: mapRobberyActionForClient(activeAction),
+          state: buildRobberyClientState(profile.state),
+        },
+      };
+    }
+    if (activeAction) {
+      activeAction.status = activeLoneBattle ? "cancelled" : "expired";
+      activeAction.result = {
+        success: false,
+        reason: activeLoneBattle
+          ? "Az egyeduli kirablas mar nem engedelyezett."
+          : "Az akcio ideje lejart.",
+      };
+      await writeRobberyActionSession(profileName, activeAction, now);
+    }
+
+    const state = {
+      ...profile.state,
+      crewMembers: normalizeServerCrewMembers(profile.state),
+      equipment: normalizeServerEquipment(profile.state.equipment),
+    };
+    const target = normalizeRobberyTarget(body, state);
+    if (!target) return { statusCode: 400, error: "Ervenytelen kirablasi celpont." };
+    const energyCost = target.mode === "shop" ? 18 : 12;
+    if (Number(state.health) <= 0 || Number(state.energy) < energyCost) {
+      return { statusCode: 409, error: `A rajtauteshez legalabb 1 HP es ${energyCost} energia kell.` };
+    }
+    const readyCrewMembers = state.crewMembers.filter(
+      (member) => member.hired && Number(member.health) > 0,
+    );
+    if (!readyCrewMembers.length) {
+      return {
+        statusCode: 409,
+        error: "Kirablashoz legalabb egy felberelt, harckepes bandatag kell.",
+      };
+    }
+
+    state.energy = clampServer(Number(state.energy) - energyCost, 0, 100);
+    state.naturalRecoveryAt = state.naturalRecoveryAt && typeof state.naturalRecoveryAt === "object"
+      ? state.naturalRecoveryAt
+      : { health: now, energy: now };
+    state.naturalRecoveryAt.energy = now;
+    const actionId = `robbery-${randomUUID()}`;
+    const difficultyInfo = getServerRobberyDifficultyInfo(state, target.difficulty);
+    const difficultyReward = getRobberyDifficultyRewardProfile(difficultyInfo.label);
+    const action = {
+      actionId,
+      status: "selection",
+      target,
+      difficultyInfo,
+      energyCost,
+      battleStarted: false,
+      battleMode: "full",
+      playerHealthAtStart: clampServer(state.health, 0, 100),
+      rewardMultiplier: 1,
+      difficultyRewardMultiplier: difficultyReward.money,
+      difficultyFameMultiplier: difficultyReward.fame,
+      selectedMemberIds: [],
+      allies: [],
+      defenders: [],
+      allyTurnIndex: 0,
+      round: 1,
+      loot: 0,
+      alert: 0,
+      message: "Valassz egy vagy ket harckepes bandatagot a rajtauteshez.",
+      combatVersion: 2,
+      createdAt: now,
+      expiresAt: now + ROBBERY_ACTION_TTL_MS,
+    };
+    const referenceAllies = createServerRobberyReferenceAllies(profileName, state);
+    action.referenceTeamPower = getRobberyTeamPower(referenceAllies, false);
+    action.referenceCombatProfile = getRobberyCombatProfile(referenceAllies);
+    action.enemyCount = getServerRobberyEnemyCount(
+      action.difficultyInfo.label,
+      `${action.actionId}:${action.target.spotId}`,
+    );
+    await persistPvpState(profileName, state, now);
+    await writeRobberyActionSession(profileName, action, now);
+    await logEvent(profileName, "robbery_started", "Kirablasi akcio elinditva", {
+      actionId,
+      spotId: target.spotId,
+      mode: target.mode,
+      energyCost,
+    }, now);
+    return {
+      statusCode: 200,
+      payload: { ok: true, resumed: false, action: mapRobberyActionForClient(action), state: buildRobberyClientState(state) },
+    };
+  });
+}
+
+async function engageServerRobbery(profileName, actionId, body) {
+  return db.transaction(async () => {
+    await lockPlayerStmt.get(profileName);
+    const row = await selectActionSessionStmt.get(actionId, profileName);
+    const profile = await buildProfileState(profileName);
+    const action = parseActionSession(row);
+    const now = Date.now();
+    if (!profile || !action || row.action_status !== "active") return { statusCode: 404, error: "Nincs aktiv kirablasi akcio." };
+    if (Number(row.expires_at) <= now) return { statusCode: 409, error: "A kirablasi akcio ideje lejart." };
+    if (action.status !== "selection") {
+      return { statusCode: 200, payload: { ok: true, action: mapRobberyActionForClient(action), state: buildRobberyClientState(profile.state) } };
+    }
+    const normalizedCrew = normalizeServerCrewMembers(profile.state);
+    const readyMemberIds = new Set(normalizedCrew
+      .filter((member) => member.hired)
+      .filter((member) => Number(member.health) > 0)
+      .map((member) => String(member.id || "")));
+    const selectedMemberIds = Array.from(new Set(
+      (Array.isArray(body.selectedMemberIds) ? body.selectedMemberIds : [])
+        .map((id) => String(id || "").slice(0, 64))
+        .filter((id) => id && readyMemberIds.has(id)),
+    )).slice(0, 2);
+    if (!selectedMemberIds.length) {
+      return {
+        statusCode: 409,
+        error: "Valassz legalabb egy harckepes bandatagot a kirablashoz.",
+        action: mapRobberyActionForClient(action),
+      };
+    }
+    action.difficultyInfo = getServerRobberyDifficultyInfo(profile.state, action.target.difficulty);
+    if (!Number.isFinite(Number(action.playerHealthAtStart))) {
+      action.playerHealthAtStart = clampServer(profile.state.health, 0, 100);
+    }
+    action.selectedMemberIds = selectedMemberIds;
+    action.allies = createServerRobberyAllies(profileName, profile.state, selectedMemberIds);
+    action.battleMode = getRobberyBattleMode(action.allies.length);
+    action.rewardMultiplier = getRobberyRewardMultiplier(action.battleMode);
+    const difficultyReward = getRobberyDifficultyRewardProfile(action.difficultyInfo.label);
+    action.difficultyRewardMultiplier = difficultyReward.money;
+    action.difficultyFameMultiplier = difficultyReward.fame;
+    action.defenders = createServerRobberyDefenders(action, action.allies);
+    action.combatVersion = 2;
+    action.battleStarted = true;
+    action.status = "battle";
+    action.message = action.battleMode === "solo"
+      ? "Kis csapattal indultal. A jutalom kisebb."
+      : "A csapat keszen all. Valassz celpontot es taktikat.";
+    await writeRobberyActionSession(profileName, action, now);
+    return { statusCode: 200, payload: { ok: true, action: mapRobberyActionForClient(action), state: buildRobberyClientState(profile.state) } };
+  });
+}
+
+function finishServerRobberyState(profileName, state, action, outcome, reason, now) {
+  syncRobberyHealthToState(state, action);
+  const won = outcome === "won";
+  const playerHealthAtStart = clampServer(
+    Number.isFinite(Number(action.playerHealthAtStart)) ? Number(action.playerHealthAtStart) : 100,
+    1,
+    100,
+  );
+  const requestedHealthLoss = getRobberyPlayerHealthPenalty(action, outcome);
+  const healthAfter = won
+    ? playerHealthAtStart
+    : Math.max(1, playerHealthAtStart - requestedHealthLoss);
+  const healthLoss = Math.max(0, playerHealthAtStart - healthAfter);
+  const healthRestored = Math.max(0, healthAfter - clampServer(state.health, 0, 100));
+  state.health = healthAfter;
+  if (healthLoss > 0) {
+    state.naturalRecoveryAt = state.naturalRecoveryAt && typeof state.naturalRecoveryAt === "object"
+      ? state.naturalRecoveryAt
+      : { health: now, energy: now };
+    state.naturalRecoveryAt.health = now;
+  }
+  const rawHeat = won ? Math.round(7 + action.alert * 0.15) : (action.alert >= 100 ? 18 : 8);
+  const heatGain = Math.max(1, Math.round(rawHeat * 0.46));
+  state.heat = clampServer(Number(state.heat) + heatGain, 0, 100);
+  const requestedInfluenceLoss = getRobberyInfluencePenalty(action, outcome);
+  ensureServerInfluenceState(state);
+  const influenceBefore = state.influence;
+  const influenceLoss = Math.min(influenceBefore, requestedInfluenceLoss);
+  state.influence = normalizeServerInfluence(influenceBefore - influenceLoss, influenceBefore);
+  let moneyGain = 0;
+  let fameGain = 0;
+  let influenceGain = 0;
+  if (won) {
+    const baseGain = action.target.mode === "shop" ? 30 : 18;
+    const difficultyReward = getRobberyDifficultyRewardProfile(action.difficultyInfo?.label);
+    const difficultyRewardMultiplier = Number(action.difficultyRewardMultiplier) || difficultyReward.money;
+    const difficultyFameMultiplier = Number(action.difficultyFameMultiplier) || difficultyReward.fame;
+    moneyGain = Math.max(5, Math.round(
+      (baseGain + action.loot + Math.max(1, Number(state.cityLevel) || 1) * 4 + action.target.difficulty * 0.16)
+      * action.rewardMultiplier
+      * difficultyRewardMultiplier,
+    ));
+    fameGain = Math.max(1, Math.round((action.target.mode === "shop" ? 8 : 5) * difficultyFameMultiplier));
+    state.money = Math.max(0, toSafeInt(state.money, 0, 0) + moneyGain);
+    state.fame = Math.max(0, toSafeInt(state.fame, 0, 0) + fameGain);
+    const district = Array.isArray(state.districts) ? state.districts[action.target.districtIndex] : null;
+    if (district) {
+      district.loyalty = clampServer(Number(district.loyalty) + (action.target.mode === "shop" ? 9 : 5), 0, 100);
+      if (!district.controlled && district.loyalty >= 65) district.controlled = true;
+    }
+    advanceServerRobberyQuests(state, action.target.mode);
+    const difficultyInfluence = action.difficultyInfo?.label === "Veszelyes"
+      ? 3
+      : action.difficultyInfo?.label === "Kockazatos"
+        ? 2
+        : 1;
+    influenceGain = Math.max(0, changeServerInfluence(state, difficultyInfluence));
+  }
+  action.status = outcome;
+  action.battleStarted = true;
+  action.result = {
+    success: won,
+    reason,
+    moneyGain,
+    fameGain,
+    heatGain,
+    influenceGain,
+    influenceLoss,
+    healthLoss,
+    healthRestored,
+    healthAtStart: playerHealthAtStart,
+    healthAfter,
+    teamRewardMultiplier: action.rewardMultiplier || 1,
+    difficultyRewardMultiplier: action.difficultyRewardMultiplier || 1,
+  };
+  action.message = reason;
+  action.completedAt = now;
+  return action.result;
+}
+
+async function playServerRobberyTurn(profileName, actionId, body) {
+  return db.transaction(async () => {
+    await lockPlayerStmt.get(profileName);
+    const row = await selectActionSessionStmt.get(actionId, profileName);
+    const profile = await buildProfileState(profileName);
+    const action = parseActionSession(row);
+    const now = Date.now();
+    if (!profile || !action || row.action_status !== "active" || action.status !== "battle") {
+      return { statusCode: 404, error: "Nincs folytathato kirablasi harc." };
+    }
+    if (Number(row.expires_at) <= now) return { statusCode: 409, error: "A kirablasi akcio ideje lejart." };
+    if (!Array.isArray(action.selectedMemberIds) || action.selectedMemberIds.length === 0) {
+      action.status = "cancelled";
+      action.result = { success: false, reason: "Az egyeduli kirablas mar nem engedelyezett." };
+      await writeRobberyActionSession(profileName, action, now);
+      return {
+        statusCode: 409,
+        error: "Kirablashoz legalabb egy harckepes bandatag kell.",
+        action: mapRobberyActionForClient(action),
+      };
+    }
+    const correctedDifficultyInfo = getServerRobberyDifficultyInfo(profile.state, action.target.difficulty);
+    if (action.combatVersion !== 2 && correctedDifficultyInfo.label !== action.difficultyInfo.label) {
+      const oldTier = getServerRobberyTier(action.difficultyInfo.label);
+      const newTier = getServerRobberyTier(correctedDifficultyInfo.label);
+      action.defenders = action.defenders.map((enemy) => ({
+        ...enemy,
+        attack: Math.max(4, Math.round(enemy.attack * (newTier.attack / oldTier.attack))),
+        defense: Math.max(3, Math.round(enemy.defense * (newTier.defense / oldTier.defense))),
+        damageScale: newTier.damage,
+      }));
+      action.difficultyInfo = correctedDifficultyInfo;
+      action.message = `A celpont valodi veszelyszintje: ${correctedDifficultyInfo.label}.`;
+    }
+    const expectedRound = Math.max(1, toSafeInt(body.expectedRound, 0, 0));
+    if (expectedRound !== action.round) {
+      return { statusCode: 409, error: "Ez a harci kor mar feldolgozasra kerult.", action: mapRobberyActionForClient(action) };
+    }
+    const tactic = ROBBERY_TACTICS[body.tactic] || ROBBERY_TACTICS.stealth;
+    const livingAllies = action.allies.filter((ally) => ally.health > 0);
+    const livingEnemies = action.defenders.filter((enemy) => enemy.health > 0);
+    if (!livingAllies.length || !livingEnemies.length) return { statusCode: 409, error: "A harc mar nem folytathato." };
+    const attacker = livingAllies[action.allyTurnIndex % livingAllies.length];
+    const target = action.defenders.find((enemy) => enemy.id === String(body.targetId || "") && enemy.health > 0) || livingEnemies[0];
+    const attack = getEffectiveUnitStat(attacker, "attack", 0.65);
+    const defense = getEffectiveUnitStat(target, "defense", 0.6);
+    const underdogBonus = getServerRobberyUnderdogBonus(action.battleMode);
+    const effectiveTargetDefense = defense * (1 - underdogBonus.defenseIgnore);
+    const strongBonus = tactic.strongAgainst === target.type ? 1.18 : 1;
+    const bossHunterBonus = attacker.passiveId === "boss_hunter" && target.type === "boss" ? 1.28 : 1;
+    const criticalHit = attacker.passiveId === "marksman" && Math.random() < 0.22;
+    const criticalBonus = criticalHit ? 1.65 : 1;
+    const rawDamage = Math.round(
+      (4 + attack * 0.55 + attacker.level * 0.3 + randomServerInt(-3, 3) - effectiveTargetDefense * 0.28)
+      * tactic.damage
+      * strongBonus
+      * bossHunterBonus
+      * criticalBonus
+      * underdogBonus.allyDamageBoost,
+    );
+    const damage = clampServer(
+      rawDamage,
+      Math.max(2, Math.round(target.maxHealth * 0.025)),
+      Math.max(8, Math.round(target.maxHealth * 0.34)),
+    );
+    target.health = clampServer(target.health - damage, 0, target.maxHealth);
+    action.loot += randomServerInt(3, 7) + (target.health <= 0 ? randomServerInt(6, 12) : 0);
+    action.alert = clampServer(action.alert + tactic.alert + randomServerInt(0, 2), 0, 100);
+    const attackNotes = [
+      criticalHit ? "KRITIKUS LOVES!" : "",
+      bossHunterBonus > 1 ? "A Fonokvadasz kepesseg aktiv." : "",
+    ].filter(Boolean).join(" ");
+    action.message = `${attacker.name} ${damage} sebzest okozott ${target.name} ellen.${attackNotes ? ` ${attackNotes}` : ""}`;
+
+    const enemiesAfterAttack = action.defenders.filter((enemy) => enemy.health > 0);
+    if (enemiesAfterAttack.length) {
+      const enemy = enemiesAfterAttack[(action.round - 1) % enemiesAfterAttack.length];
+      const targets = action.allies.filter((ally) => ally.health > 0);
+      const difficultyLabel = action.difficultyInfo.label;
+      const focusChance = difficultyLabel === "Veszelyes" ? 0.68 : difficultyLabel === "Kockazatos" ? 0.42 : 0.18;
+      const weakestTarget = [...targets].sort((left, right) => (
+        (left.health / Math.max(1, left.maxHealth)) - (right.health / Math.max(1, right.maxHealth))
+      ))[0];
+      const guardian = targets.find((ally) => ally.passiveId === "guardian");
+      const guardianTaunt = guardian && Math.random() < 0.45;
+      const allyTarget = guardianTaunt
+        ? guardian
+        : Math.random() < focusChance
+          ? weakestTarget
+          : targets[randomServerInt(0, targets.length - 1)];
+      const enemyAttack = getEffectiveUnitStat(enemy, "attack", 0.65);
+      const allyDefense = getEffectiveUnitStat(allyTarget, "defense", 0.6);
+      const guardianReduction = allyTarget.passiveId === "guardian" ? 0.78 : 1;
+      const rawRetaliation = Math.round(
+        (4 + enemyAttack * 0.52 + enemy.level * 0.28 + randomServerInt(-3, 3) - allyDefense * 0.3)
+        * (enemy.damageScale || 1)
+        * guardianReduction
+        * underdogBonus.enemyDamageReduction,
+      );
+      const retaliation = clampServer(
+        rawRetaliation,
+        Math.max(2, Math.round(allyTarget.maxHealth * 0.02)),
+        Math.max(8, Math.round(allyTarget.maxHealth * 0.32)),
+      );
+      allyTarget.health = clampServer(allyTarget.health - retaliation, 0, allyTarget.maxHealth);
+      action.message += ` ${enemy.name} visszavagott ${allyTarget.name} ellen: -${retaliation} HP.${guardianTaunt ? " Enzo magara vonta a tamadast." : ""}`;
+    }
+    action.allyTurnIndex += 1;
+    action.round += 1;
+    action.teamPower = getRobberyTeamPower(action.allies, true);
+    action.enemyPower = getRobberyTeamPower(action.defenders, true);
+    action.estimatedWinChance = estimateServerRobberyWinChance(action.allies, action.enemyPower, action.battleMode);
+
+    const state = { ...profile.state, crewMembers: Array.isArray(profile.state.crewMembers) ? [...profile.state.crewMembers] : [] };
+    const remainingAllies = action.allies.filter((ally) => ally.health > 0);
+    const remainingEnemies = action.defenders.filter((enemy) => enemy.health > 0);
+    let result = null;
+    if (!remainingEnemies.length) {
+      result = finishServerRobberyState(profileName, state, action, "won", `${action.target.name} kirablasa sikerult.`, now);
+    } else if (!remainingAllies.length) {
+      result = finishServerRobberyState(profileName, state, action, "lost", "A teljes csapatod elesett.", now);
+    } else if (action.alert >= 100 && action.round >= 40) {
+      result = finishServerRobberyState(profileName, state, action, "lost", "Megerkezett a rendorseg.", now);
+    } else {
+      syncRobberyHealthToState(state, action);
+    }
+    await persistPvpState(profileName, state, now);
+    await writeRobberyActionSession(profileName, action, now);
+    if (result) {
+      await logEvent(profileName, result.success ? "robbery_won" : "robbery_lost", result.reason, {
+        actionId,
+        spotId: action.target.spotId,
+        ...result,
+      }, now);
+    }
+    return {
+      statusCode: 200,
+      payload: { ok: true, action: mapRobberyActionForClient(action), state: buildRobberyClientState(state) },
+    };
+  });
+}
+
+async function retreatServerRobbery(profileName, actionId) {
+  return db.transaction(async () => {
+    await lockPlayerStmt.get(profileName);
+    const row = await selectActionSessionStmt.get(actionId, profileName);
+    const profile = await buildProfileState(profileName);
+    const action = parseActionSession(row);
+    if (!profile || !action || row.action_status !== "active") return { statusCode: 404, error: "Nincs aktiv kirablasi akcio." };
+    const now = Date.now();
+    const state = { ...profile.state, crewMembers: Array.isArray(profile.state.crewMembers) ? [...profile.state.crewMembers] : [] };
+    if (action.allies?.length) syncRobberyHealthToState(state, action);
+    action.alert = clampServer(Number(action.alert) + 10, 0, 100);
+    finishServerRobberyState(profileName, state, action, "retreated", "A banda zsakmany nelkul visszavonult.", now);
+    await persistPvpState(profileName, state, now);
+    await writeRobberyActionSession(profileName, action, now);
+    await logEvent(profileName, "robbery_retreated", "Kirablasi akcio megszakitva", { actionId }, now);
+    return { statusCode: 200, payload: { ok: true, action: mapRobberyActionForClient(action), state: buildRobberyClientState(state) } };
   });
 }
 
@@ -2672,7 +5098,7 @@ async function handleApiRequest(request, response, pathname) {
     sendJson(response, 200, {
       ok: true,
       databaseType: "mysql",
-      database: db.info,
+      database: "connected",
       profiles: Number(counts?.profile_count || 0),
     });
     return true;
@@ -2702,11 +5128,16 @@ async function handleApiRequest(request, response, pathname) {
 
   if (pathname.startsWith("/api/profile/") && request.method === "GET") {
     const encodedName = pathname.slice("/api/profile/".length);
+    const activeProfileName = getActiveProfileFromRequest(request);
     const profileName = encodedName === "current"
-      ? getActiveProfileFromRequest(request)
+      ? activeProfileName
       : normalizeProfileName(decodeURIComponent(encodedName));
-    if (!profileName) {
-      sendJson(response, 400, { error: "Missing profile name" });
+    if (!activeProfileName || !profileName) {
+      sendJson(response, 401, { error: "Missing active profile" });
+      return true;
+    }
+    if (profileName !== activeProfileName) {
+      sendJson(response, 403, { error: "Profile access denied" });
       return true;
     }
     const profile = await buildProfileState(profileName);
@@ -2714,7 +5145,6 @@ async function handleApiRequest(request, response, pathname) {
       sendJson(response, 200, { found: false });
       return true;
     }
-    setActiveProfileCookie(response, profileName);
     sendJson(response, 200, { found: true, ...profile });
     return true;
   }
@@ -2732,6 +5162,11 @@ async function handleApiRequest(request, response, pathname) {
   }
 
   if (pathname === "/api/player-state" && request.method === "GET") {
+    const activeProfileName = getActiveProfileFromRequest(request);
+    if (!activeProfileName) {
+      sendJson(response, 401, { error: "Missing active profile" });
+      return true;
+    }
     const players = await listPlayersStmt.all();
     const rows = await Promise.all(players.map(async (player) => {
       const profile = await buildProfileState(player.profile_name);
@@ -2742,7 +5177,7 @@ async function handleApiRequest(request, response, pathname) {
           money: state.money ?? 0,
           fame: state.fame ?? 0,
           heat: state.heat ?? 0,
-          influence: state.influence ?? 0,
+          influence: normalizeServerInfluence(state.influence, SERVER_STARTING_INFLUENCE),
           cityLevel: state.cityLevel ?? 1,
           npcVillageVictories: state.npcVillageVictories ?? 0,
           worldBaseLotId: state.worldBaseLotId ?? null,
@@ -3231,7 +5666,9 @@ async function handleApiRequest(request, response, pathname) {
       sendJson(response, 400, { error: "Missing profile name" });
       return true;
     }
-    const messages = (await listMessagesByRecipientStmt.all(profileName, limit)).map(mapMessageRow);
+    const messages = (await listMessagesByRecipientStmt.all(profileName, limit))
+      .map(mapMessageRow)
+      .filter((message) => message.recipientProfileName === profileName);
     const notifications = buildNotificationsFromRows(await listPlayerNotificationsStmt.all(profileName));
     const events = (await listEventsByProfileStmt.all(profileName, limit))
       .map(mapEventRow)
@@ -3256,6 +5693,63 @@ async function handleApiRequest(request, response, pathname) {
       unreadCount,
     });
     return true;
+  }
+
+  if (pathname === "/api/world-chat" && request.method === "GET") {
+    const url = new URL(request.url || "/", `http://${request.headers.host || `${HOST}:${PORT}`}`);
+    const profileName = getActiveProfileFromRequest(request);
+    if (!profileName || !await selectPlayerStmt.get(profileName)) {
+      sendJson(response, 401, { error: "A világchat használatához be kell jelentkezni." });
+      return true;
+    }
+    const limit = Math.min(80, Math.max(1, toSafeInt(url.searchParams.get("limit"), 40, 1)));
+    const rows = await listWorldChatMessagesStmt.all(limit);
+    sendJson(response, 200, {
+      messages: rows.reverse().map((row) => ({
+        id: Number(row.id) || 0,
+        senderProfileName: String(row.sender_profile_name || ""),
+        body: String(row.body || ""),
+        createdAt: Number(row.created_at) || 0,
+      })),
+    });
+    return true;
+  }
+
+  if (pathname === "/api/world-chat" && request.method === "POST") {
+    try {
+      const profileName = getActiveProfileFromRequest(request);
+      if (!profileName || !await selectPlayerStmt.get(profileName)) {
+        sendJson(response, 401, { error: "A világchat használatához be kell jelentkezni." });
+        return true;
+      }
+      const now = Date.now();
+      const lastSentAt = Number(worldChatLastSentAt.get(profileName)) || 0;
+      if (now - lastSentAt < 1500) {
+        sendJson(response, 429, { error: "Várj egy pillanatot a következő üzenet előtt." });
+        return true;
+      }
+      const rawBody = await readRequestBody(request);
+      const payload = rawBody ? JSON.parse(rawBody) : {};
+      const messageBody = String(payload.body || "").replace(/\s+/g, " ").trim().slice(0, 120);
+      if (!messageBody) {
+        sendJson(response, 400, { error: "Az üzenet nem lehet üres." });
+        return true;
+      }
+      const result = await insertWorldChatMessageStmt.run(profileName, messageBody, now);
+      worldChatLastSentAt.set(profileName, now);
+      sendJson(response, 201, {
+        message: {
+          id: Number(result.insertId) || 0,
+          senderProfileName: profileName,
+          body: messageBody,
+          createdAt: now,
+        },
+      });
+      return true;
+    } catch (error) {
+      sendJson(response, 400, { error: error.message || "A világchat-üzenet nem küldhető el." });
+      return true;
+    }
   }
 
   if (pathname === "/api/messages" && request.method === "POST") {
@@ -3326,6 +5820,174 @@ async function handleApiRequest(request, response, pathname) {
     }
   }
 
+  const progressionActionMatch = pathname.match(/^\/api\/actions\/progression\/(recovery|protection)$/);
+  if (progressionActionMatch && request.method === "POST") {
+    try {
+      const profileName = getActiveProfileFromRequest(request);
+      if (!profileName) {
+        sendJson(response, 401, { error: "Ehhez a muvelethez be kell jelentkezni." });
+        return true;
+      }
+      const rawBody = await readRequestBody(request);
+      const body = rawBody ? JSON.parse(rawBody) : {};
+      const result = progressionActionMatch[1] === "recovery"
+        ? await runRecoveryProgressionCommand(profileName, body)
+        : await runProtectionProgressionCommand(profileName, body);
+      sendJson(response, result.statusCode, result.payload || {
+        error: result.error,
+        cooldownAt: result.cooldownAt,
+        resetAt: result.resetAt,
+      });
+      return true;
+    } catch (error) {
+      sendJson(response, 400, { error: error.message || "A fejlodesi muvelet nem hajthato vegre." });
+      return true;
+    }
+  }
+
+  if (pathname === "/api/actions/progression/quest" && request.method === "POST") {
+    try {
+      const profileName = getActiveProfileFromRequest(request);
+      if (!profileName) {
+        sendJson(response, 401, { error: "Ehhez a muvelethez be kell jelentkezni." });
+        return true;
+      }
+      const rawBody = await readRequestBody(request);
+      const body = rawBody ? JSON.parse(rawBody) : {};
+      const result = await runQuestProgressionCommand(profileName, body);
+      sendJson(response, result.statusCode, result.payload || { error: result.error });
+      return true;
+    } catch (error) {
+      sendJson(response, 400, { error: error.message || "A kuldetesmuvelet nem hajthato vegre." });
+      return true;
+    }
+  }
+
+  if (pathname === "/api/actions/progression/empire" && request.method === "POST") {
+    try {
+      const profileName = getActiveProfileFromRequest(request);
+      if (!profileName) {
+        sendJson(response, 401, { error: "Ehhez a muvelethez be kell jelentkezni." });
+        return true;
+      }
+      const rawBody = await readRequestBody(request);
+      const body = rawBody ? JSON.parse(rawBody) : {};
+      const result = await runEmpireProgressionCommand(profileName, body);
+      sendJson(response, result.statusCode, result.payload || { error: result.error });
+      return true;
+    } catch (error) {
+      sendJson(response, 400, { error: error.message || "A birodalommuvelet nem hajthato vegre." });
+      return true;
+    }
+  }
+
+  if (pathname === "/api/actions/harbor" && request.method === "POST") {
+    try {
+      const profileName = getActiveProfileFromRequest(request);
+      if (!profileName) {
+        sendJson(response, 401, { error: "Ehhez a muvelethez be kell jelentkezni." });
+        return true;
+      }
+      const rawBody = await readRequestBody(request);
+      const body = rawBody ? JSON.parse(rawBody) : {};
+      const result = await runHarborCommand(profileName, body);
+      sendJson(response, result.statusCode, result.payload || { error: result.error });
+      return true;
+    } catch (error) {
+      sendJson(response, 400, { error: error.message || "A kikotoi muvelet nem hajthato vegre." });
+      return true;
+    }
+  }
+
+  if (pathname === "/api/actions/garage" && request.method === "POST") {
+    try {
+      const profileName = getActiveProfileFromRequest(request);
+      if (!profileName) {
+        sendJson(response, 401, { error: "Ehhez a muvelethez be kell jelentkezni." });
+        return true;
+      }
+      const rawBody = await readRequestBody(request);
+      const body = rawBody ? JSON.parse(rawBody) : {};
+      const result = await runGarageCommand(profileName, body);
+      sendJson(response, result.statusCode, result.payload || { error: result.error, resetAt: result.resetAt });
+      return true;
+    } catch (error) {
+      sendJson(response, 400, { error: error.message || "A garazsmuvelet nem hajthato vegre." });
+      return true;
+    }
+  }
+
+  const economyActionMatch = pathname.match(/^\/api\/actions\/economy\/(crew|equip|market-buy|market-sell|craft)$/);
+  if (economyActionMatch && request.method === "POST") {
+    try {
+      const profileName = getActiveProfileFromRequest(request);
+      if (!profileName) {
+        sendJson(response, 401, { error: "Ehhez a muvelethez be kell jelentkezni." });
+        return true;
+      }
+      const rawBody = await readRequestBody(request);
+      const body = rawBody ? JSON.parse(rawBody) : {};
+      const command = economyActionMatch[1];
+      const result = command === "crew"
+        ? await runCrewEconomyCommand(profileName, body)
+        : command === "equip"
+          ? await runEquipEconomyCommand(profileName, body)
+          : command === "market-buy"
+            ? await runMarketBuyCommand(profileName, body)
+            : command === "market-sell"
+              ? await runMarketSellCommand(profileName, body)
+              : await runCraftEconomyCommand(profileName, body);
+      sendJson(response, result.statusCode, result.payload || { error: result.error });
+      return true;
+    } catch (error) {
+      sendJson(response, 400, { error: error.message || "A gazdasagi muvelet nem hajthato vegre." });
+      return true;
+    }
+  }
+
+  if (pathname === "/api/actions/robbery/start" && request.method === "POST") {
+    try {
+      const profileName = getActiveProfileFromRequest(request);
+      if (!profileName) {
+        sendJson(response, 401, { error: "A kirablashoz be kell jelentkezni." });
+        return true;
+      }
+      const rawBody = await readRequestBody(request);
+      const body = rawBody ? JSON.parse(rawBody) : {};
+      const result = await startServerRobbery(profileName, body);
+      sendJson(response, result.statusCode, result.payload || { error: result.error });
+      return true;
+    } catch (error) {
+      sendJson(response, 400, { error: error.message || "A kirablasi akcio nem indithato." });
+      return true;
+    }
+  }
+
+  const robberyActionMatch = pathname.match(/^\/api\/actions\/robbery\/([^/]+)\/(engage|turn|retreat)$/);
+  if (robberyActionMatch && request.method === "POST") {
+    try {
+      const profileName = getActiveProfileFromRequest(request);
+      if (!profileName) {
+        sendJson(response, 401, { error: "A kirablashoz be kell jelentkezni." });
+        return true;
+      }
+      const actionId = String(decodeURIComponent(robberyActionMatch[1] || "")).slice(0, 64);
+      const operation = robberyActionMatch[2];
+      const rawBody = await readRequestBody(request);
+      const body = rawBody ? JSON.parse(rawBody) : {};
+      const result = operation === "engage"
+        ? await engageServerRobbery(profileName, actionId, body)
+        : operation === "turn"
+          ? await playServerRobberyTurn(profileName, actionId, body)
+          : await retreatServerRobbery(profileName, actionId);
+      sendJson(response, result.statusCode, result.payload || { error: result.error, action: result.action });
+      return true;
+    } catch (error) {
+      sendJson(response, 400, { error: error.message || "A kirablasi akcio nem folytathato." });
+      return true;
+    }
+  }
+
   if (pathname === "/api/pvp/attack" && request.method === "POST") {
     try {
       const rawBody = await readRequestBody(request);
@@ -3358,6 +6020,9 @@ async function handleApiRequest(request, response, pathname) {
       const attackScore = attackerCombat.attack * roll;
       const defenseScore = defenderCombat.defense * (0.92 + Math.abs(Math.cos(now * 0.000017 + defenderCombat.defense)) * 0.22);
       const attackerWon = attackScore >= defenseScore;
+      const influenceLoss = attackerWon
+        ? 0
+        : Math.min(3, normalizeServerInfluence(attackerState.influence, SERVER_STARTING_INFLUENCE));
       const stolenMoney = attackerWon ? Math.max(1, Math.floor(Math.max(0, Number(defenderState.money) || 0) * 0.03)) : 0;
       const healthLoss = attackerWon
         ? Math.max(4, Math.min(12, Math.round(defenderCombat.defense / Math.max(8, attackerCombat.attack) * 8)))
@@ -3366,6 +6031,8 @@ async function handleApiRequest(request, response, pathname) {
       attackerState.energy = Math.max(0, toSafeInt(attackerState.energy, 0, 0) - 12);
       attackerState.health = Math.max(1, toSafeInt(attackerState.health, 1, 0) - healthLoss);
       attackerState.fame = Math.max(0, toSafeInt(attackerState.fame, 0, 0) + (attackerWon ? 12 : 2));
+      attackerState.influence = normalizeServerInfluence(attackerState.influence - influenceLoss, SERVER_STARTING_INFLUENCE);
+      const influenceGain = attackerWon ? Math.max(0, changeServerInfluence(attackerState, 2)) : 0;
       if (attackerWon) {
         attackerState.money = Math.max(0, toSafeInt(attackerState.money, 0, 0) + stolenMoney);
         defenderState.money = Math.max(0, toSafeInt(defenderState.money, 0, 0) - stolenMoney);
@@ -3393,6 +6060,8 @@ async function handleApiRequest(request, response, pathname) {
           defenderProfileName,
           attackerWon,
           stolenMoney,
+          influenceGain,
+          influenceLoss,
         }, now);
       });
 
@@ -3400,6 +6069,8 @@ async function handleApiRequest(request, response, pathname) {
         ok: true,
         attackerWon,
         stolenMoney,
+        influenceGain,
+        influenceLoss,
         healthLoss,
         attackerAttack: attackerCombat.attack,
         defenderDefense: defenderCombat.defense,
@@ -3461,11 +6132,16 @@ async function handleApiRequest(request, response, pathname) {
   if (!pathname.startsWith("/api/saves/")) return false;
 
   const encodedName = pathname.slice("/api/saves/".length);
+  const activeProfileName = getActiveProfileFromRequest(request);
   const profileName = encodedName === "current"
-    ? getActiveProfileFromRequest(request)
+    ? activeProfileName
     : normalizeProfileName(decodeURIComponent(encodedName));
-  if (!profileName) {
-    sendJson(response, 400, { error: "Missing profile name" });
+  if (!activeProfileName || !profileName) {
+    sendJson(response, 401, { error: "Missing active profile" });
+    return true;
+  }
+  if (profileName !== activeProfileName) {
+    sendJson(response, 403, { error: "Profile access denied" });
     return true;
   }
 
@@ -3475,7 +6151,6 @@ async function handleApiRequest(request, response, pathname) {
       sendJson(response, 200, { found: false });
       return true;
     }
-    setActiveProfileCookie(response, profileName);
     sendJson(response, 200, {
       found: true,
       profileName,
@@ -3497,7 +6172,6 @@ async function handleApiRequest(request, response, pathname) {
       const now = Date.now();
       const state = { ...body.state, profileName };
       await persistGameState(profileName, state, now);
-      setActiveProfileCookie(response, profileName);
       sendJson(response, 200, { ok: true, profileName, updatedAt: now });
       return true;
     } catch (error) {
@@ -3534,15 +6208,41 @@ function resolveStaticPath(pathname) {
   const requestedPath = decodedPath === "/" ? "/index.html" : decodedPath;
   const normalizedPath = path.normalize(requestedPath).replace(/^(\.\.[\\/])+/, "");
   const filePath = path.join(ROOT_DIR, normalizedPath);
-  if (!filePath.startsWith(ROOT_DIR)) return null;
+  const relativePath = path.relative(ROOT_DIR, filePath);
+  if (!relativePath || relativePath.startsWith("..") || path.isAbsolute(relativePath)) return null;
   return filePath;
 }
 
-async function handleStaticRequest(response, pathname) {
+const PUBLIC_STATIC_EXTENSIONS = new Set([
+  ".css", ".gif", ".html", ".ico", ".jpeg", ".jpg", ".js", ".mjs",
+  ".mp3", ".mtl", ".obj", ".ogg", ".png", ".svg", ".wav", ".webm",
+  ".webp", ".woff", ".woff2",
+]);
+const PRIVATE_STATIC_DIRECTORIES = new Set([
+  ".agents", ".chrome-check", ".codex", ".git", "backups", "data",
+  "node_modules", "performance", "scripts", "tmp", "tools",
+]);
+const PRIVATE_STATIC_FILES = new Set([
+  "mysql-database.js", "package-lock.json", "package.json", "pnpm-lock.yaml",
+  "server.js", "service-worker.js.map",
+]);
+
+function isPublicStaticPath(filePath) {
+  const relativePath = path.relative(ROOT_DIR, filePath);
+  if (!relativePath || relativePath.startsWith("..") || path.isAbsolute(relativePath)) return false;
+  const segments = relativePath.split(path.sep);
+  if (segments.some((segment) => !segment || segment.startsWith("."))) return false;
+  if (PRIVATE_STATIC_DIRECTORIES.has(segments[0].toLowerCase())) return false;
+  const fileName = path.basename(relativePath).toLowerCase();
+  if (PRIVATE_STATIC_FILES.has(fileName) || fileName.endsWith(".log")) return false;
+  return PUBLIC_STATIC_EXTENSIONS.has(path.extname(fileName));
+}
+
+async function handleStaticRequest(request, response, pathname, searchParams) {
   const filePath = resolveStaticPath(pathname);
-  if (!filePath) {
-    response.writeHead(403);
-    response.end("Forbidden");
+  if (!filePath || !isPublicStaticPath(filePath)) {
+    response.writeHead(404);
+    response.end("Not found");
     return;
   }
 
@@ -3554,10 +6254,40 @@ async function handleStaticRequest(response, pathname) {
       return;
     }
     const ext = path.extname(filePath).toLowerCase();
-    response.writeHead(200, {
+    const etag = `W/\"${stats.size.toString(16)}-${Math.floor(stats.mtimeMs).toString(16)}\"`;
+    const isVersioned = searchParams?.has("v");
+    const isHtml = ext === ".html";
+    const isServiceWorker = path.basename(filePath).toLowerCase() === "service-worker.js";
+    const isText = [".css", ".html", ".js", ".json", ".svg", ".txt", ".obj", ".mtl"].includes(ext);
+    const cacheControl = isHtml || isServiceWorker
+      ? "no-cache, max-age=0, must-revalidate"
+      : (isVersioned
+        ? "public, max-age=31536000, immutable"
+        : "public, max-age=604800, stale-while-revalidate=86400");
+    const headers = {
       "Content-Type": contentTypes[ext] || "application/octet-stream",
-      "Cache-Control": ext === ".html" || ext === ".js" || ext === ".css" ? "no-store, max-age=0" : "public, max-age=86400",
-    });
+      "Cache-Control": cacheControl,
+      ETag: etag,
+      "Last-Modified": stats.mtime.toUTCString(),
+      "X-Content-Type-Options": "nosniff",
+    };
+    if (request.headers["if-none-match"] === etag) {
+      response.writeHead(304, headers);
+      response.end();
+      return;
+    }
+    if (request.method === "HEAD") {
+      response.writeHead(200, { ...headers, "Content-Length": stats.size });
+      response.end();
+      return;
+    }
+    const acceptsBrotli = isText && /(?:^|,)\s*br\s*(?:;|,|$)/i.test(request.headers["accept-encoding"] || "");
+    if (acceptsBrotli) {
+      response.writeHead(200, { ...headers, "Content-Encoding": "br", Vary: "Accept-Encoding" });
+      fs.createReadStream(filePath).pipe(zlib.createBrotliCompress()).pipe(response);
+      return;
+    }
+    response.writeHead(200, { ...headers, "Content-Length": stats.size });
     fs.createReadStream(filePath).pipe(response);
   } catch {
     response.writeHead(404);
@@ -3570,7 +6300,7 @@ const server = http.createServer(async (request, response) => {
     const url = new URL(request.url || "/", `http://${request.headers.host || `${HOST}:${PORT}`}`);
     const handledByApi = await handleApiRequest(request, response, url.pathname);
     if (handledByApi) return;
-    await handleStaticRequest(response, url.pathname);
+    await handleStaticRequest(request, response, url.pathname, url.searchParams);
   } catch (error) {
     sendJson(response, 500, { error: error.message || "Internal server error" });
   }
