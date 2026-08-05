@@ -272,16 +272,55 @@
 .clan-war-declare strong { color: #e0c493; font: 700 .76rem Georgia, serif; }
 .clan-war-declare select { min-height: 36px; padding: 7px 9px; }
 .clan-action-button--war { border-color: #873d2c; background: linear-gradient(180deg, #713321, #35150f); color: #f0bea0; }
-.clan-war-card { min-height: 84px; padding: 11px 14px; display: grid; grid-template-columns: 78px minmax(220px, 1fr) 80px 100px; align-items: center; gap: 12px; border: 1px solid rgba(194,148,76,0.19); background: rgba(16,11,8,0.64); }
+.clan-war-card { min-height: 84px; padding: 11px 14px; display: grid; grid-template-columns: 78px minmax(220px, 1fr) 100px 110px; grid-template-areas: "ribbon families score time" ". teams teams teams" ". join join join"; align-items: center; gap: 10px 12px; border: 1px solid rgba(194,148,76,0.19); background: rgba(16,11,8,0.64); }
 .clan-war-card.is-active { border-color: rgba(150,62,43,0.62); box-shadow: inset 3px 0 #843a29; }
-.clan-war-card__ribbon { color: #a48155; font-size: .6rem; letter-spacing: .09em; text-transform: uppercase; }
+.clan-war-card__ribbon { grid-area: ribbon; color: #a48155; font-size: .6rem; letter-spacing: .09em; text-transform: uppercase; }
 .clan-war-card.is-active .clan-war-card__ribbon { color: #d67e62; }
-.clan-war-card__families { display: flex; align-items: center; justify-content: center; gap: 13px; font-family: Georgia, serif; text-align: center; }
+.clan-war-card__families { grid-area: families; display: flex; align-items: center; justify-content: center; gap: 13px; font-family: Georgia, serif; text-align: center; }
 .clan-war-card__families strong { flex: 1; color: #e5cca0; }
 .clan-war-card__families span { color: #9b4934; font-size: .66rem; }
-.clan-war-card__score { color: #f0d7a5; font: 700 1.25rem Georgia, serif; text-align: center; }
+.clan-war-card__score { grid-area: score; color: #f0d7a5; font: 700 1.25rem Georgia, serif; text-align: center; }
+.clan-war-card__score small { display: block; color: #8f7656; font: 600 .5rem sans-serif; letter-spacing: .1em; text-transform: uppercase; }
 .clan-war-card__score span { padding: 0 4px; color: #7c5b36; }
-.clan-war-card__time { color: #9e8767; font-size: .66rem; text-align: right; }
+.clan-war-card__time { grid-area: time; color: #9e8767; font-size: .66rem; text-align: right; }
+.clan-war-card__teams { grid-area: teams; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; padding-top: 9px; border-top: 1px solid rgba(194,148,76,.13); color: #9e8767; font-size: .64rem; }
+.clan-war-card__teams span:last-child { text-align: right; }
+.clan-war-card__teams strong { color: #d3b47f; }
+.clan-war-card__join { grid-area: join; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 4px; }
+.clan-war-card__join > div { display: grid; gap: 4px; }
+.clan-war-card__join small { color: #8f795d; font-size: .61rem; text-align: right; }
+.clan-war-card__join .is-accepted { color: #a9bf78; font: 700 .7rem Georgia, serif; }
+.clan-war-card__report-button { flex: 0 0 auto; border-color: rgba(181,139,71,.55); background: linear-gradient(#5b431f,#28190d); color: #ead09d; }
+
+.clan-war-report { display: grid; gap: 14px; }
+.clan-war-report__hero { padding: 25px 22px; display: grid; place-items: center; gap: 9px; border: 1px solid rgba(190,143,69,.35); background: radial-gradient(circle at 50% 0, rgba(155,95,42,.25), transparent 52%), linear-gradient(180deg, rgba(48,28,17,.96), rgba(15,10,8,.98)); text-align: center; }
+.clan-war-report__hero.is-finished { border-color: rgba(172,133,72,.48); box-shadow: inset 0 0 34px rgba(194,139,52,.08); }
+.clan-war-report__hero > span { color: #ae7941; font-size: .61rem; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; }
+.clan-war-report__hero h2 { margin: 0; color: #f0d8aa; font: 700 clamp(1.15rem, 2.5vw, 1.75rem) Georgia, serif; }
+.clan-war-report__hero time { color: #a98c63; font-size: .7rem; }
+.clan-war-report__versus { width: min(700px, 100%); display: grid; grid-template-columns: 1fr 46px 1fr; align-items: center; gap: 12px; }
+.clan-war-report__versus div { min-width: 0; display: grid; gap: 3px; padding: 12px; border: 1px solid rgba(194,148,76,.2); background: rgba(14,9,7,.62); }
+.clan-war-report__versus small { color: #91734f; font-size: .56rem; text-transform: uppercase; }
+.clan-war-report__versus strong { color: #e8c994; font: 700 .9rem Georgia, serif; overflow-wrap: anywhere; }
+.clan-war-report__versus b { color: #f1d39d; font: 700 1.5rem Georgia, serif; }
+.clan-war-report__versus i { color: #9d4934; font: 700 .75rem Georgia, serif; }
+.clan-war-report__summary { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 9px; }
+.clan-war-report__summary > div { padding: 12px 14px; display: grid; gap: 3px; border: 1px solid rgba(192,145,73,.2); background: rgba(21,14,10,.74); }
+.clan-war-report__summary small { color: #917753; font-size: .56rem; text-transform: uppercase; }
+.clan-war-report__summary strong { color: #e5c68e; font: 700 .86rem Georgia, serif; }
+.clan-war-report__summary span { color: #9c8769; font-size: .63rem; }
+.clan-war-report__side { padding: 14px; border: 1px solid rgba(194,148,76,.18); background: rgba(14,10,8,.64); }
+.clan-war-fighter-list { display: grid; gap: 7px; }
+.clan-war-fighter { min-height: 58px; padding: 9px 11px; display: grid; grid-template-columns: 34px minmax(130px,1fr) minmax(110px,.8fr) minmax(110px,.8fr) 72px; align-items: center; gap: 10px; border: 1px solid rgba(194,148,76,.16); background: linear-gradient(90deg, rgba(52,34,20,.55), rgba(15,10,8,.7)); }
+.clan-war-fighter__rank { color: #855e36; font: 700 .68rem Georgia, serif; }
+.clan-war-fighter__identity { min-width: 0; display: grid; }
+.clan-war-fighter__identity strong { color: #ead0a0; font-family: Georgia, serif; overflow-wrap: anywhere; }
+.clan-war-fighter__identity span, .clan-war-fighter small { color: #90795c; font-size: .57rem; }
+.clan-war-fighter > div:not(.clan-war-fighter__identity):not(.clan-war-fighter__rank) { display: grid; gap: 2px; }
+.clan-war-fighter > div strong { color: #c8aa78; font-size: .68rem; }
+.clan-war-fighter__power { text-align: right; }
+.clan-war-fighter__power strong { color: #f0ce91 !important; font: 700 1rem Georgia, serif; }
+.clan-war-report__back { justify-self: center; min-width: 220px; }
 .clan-empty-note { padding: 32px; border: 1px dashed rgba(201,152,76,0.23); color: #a89271; font-family: Georgia, serif; text-align: center; }
 
 .clan-roles-panel__intro {
@@ -348,8 +387,17 @@
   .clan-candidate { grid-template-columns: 34px minmax(100px, 1fr) 92px; }
   .clan-candidate__seen { display: none; }
   .clan-war-declare { grid-template-columns: 1fr; }
-  .clan-war-card { grid-template-columns: 1fr 64px; }
+  .clan-war-card { grid-template-columns: 1fr 74px; grid-template-areas: "families score" "teams teams" "join join"; }
   .clan-war-card__ribbon, .clan-war-card__time { display: none; }
+  .clan-war-card__teams { grid-template-columns: 1fr; }
+  .clan-war-card__teams span:last-child { text-align: left; }
+  .clan-war-card__join { align-items: stretch; flex-direction: column; }
+  .clan-war-card__join small { text-align: left; }
+  .clan-war-report__summary { grid-template-columns: 1fr; }
+  .clan-war-report__versus { grid-template-columns: 1fr; }
+  .clan-war-report__versus i { transform: rotate(90deg); }
+  .clan-war-fighter { grid-template-columns: 28px 1fr 66px; }
+  .clan-war-fighter > div:nth-child(3), .clan-war-fighter > div:nth-child(4) { grid-column: 2 / -1; }
   .clan-role-card { grid-template-columns: 38px 1fr; }
   .clan-role-permission, .clan-role-card > button, .clan-role-card__locked { grid-column: 2; }
   .clan-role-card__status { grid-column: 2; }
@@ -549,6 +597,47 @@
   gap: 14px;
 }
 
+.messages-panel__tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 5px;
+  border: 1px solid rgba(214, 173, 102, 0.2);
+  border-radius: 14px;
+  background: rgba(12, 8, 6, 0.78);
+}
+
+.messages-panel__tabs button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 42px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: rgba(235, 218, 185, 0.68);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.messages-panel__tabs button:hover,
+.messages-panel__tabs button.is-active {
+  border-color: rgba(218, 176, 94, 0.42);
+  background: linear-gradient(180deg, rgba(106, 70, 32, 0.7), rgba(48, 30, 17, 0.84));
+  color: #fff0cf;
+}
+
+.messages-panel__tabs span {
+  min-width: 24px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: rgba(8, 5, 4, 0.56);
+  color: #e7bd72;
+  font-size: 0.7rem;
+  text-align: center;
+}
+
 .messages-panel__intro,
 .messages-panel__empty {
   display: grid;
@@ -618,6 +707,12 @@
     linear-gradient(180deg, rgba(52, 22, 18, 0.96), rgba(18, 10, 9, 0.98));
 }
 
+.message-card--event,
+.message-card--system {
+  background:
+    linear-gradient(180deg, rgba(43, 34, 20, 0.97), rgba(17, 12, 8, 0.98));
+}
+
 .message-card__stamp {
   align-self: start;
   padding: 7px 8px;
@@ -635,6 +730,28 @@
 .message-card--clan-invitation {
   border-color: rgba(207, 158, 78, 0.46);
   background: linear-gradient(135deg, rgba(69, 45, 25, 0.96), rgba(17, 11, 8, 0.99));
+}
+
+.message-card.is-read {
+  border-color: rgba(132, 132, 132, 0.24);
+  background: linear-gradient(180deg, rgba(35, 35, 35, 0.95), rgba(17, 17, 17, 0.98));
+  box-shadow: inset 3px 0 0 rgba(119, 119, 119, 0.42);
+}
+
+.message-card.is-read .message-card__stamp {
+  border-color: rgba(145, 145, 145, 0.3);
+  color: #aaa;
+  background: rgba(68, 68, 68, 0.28);
+}
+
+.message-card.is-read .message-card__heading strong,
+.message-card.is-read p {
+  color: #b5b5b5;
+}
+
+.message-card.is-read .message-card__heading time,
+.message-card.is-read .message-card__sender {
+  color: rgba(170, 170, 170, 0.62);
 }
 
 .message-card__copy {
@@ -1003,6 +1120,52 @@
   font-style: normal;
 }
 
+.market-panel__tools {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(120px, 1fr));
+  gap: 10px;
+  align-items: end;
+  padding: 10px;
+  border: 1px solid rgba(214, 173, 102, 0.2);
+  border-radius: 14px;
+  background:
+    linear-gradient(180deg, rgba(25, 18, 12, 0.9), rgba(11, 8, 6, 0.96)),
+    radial-gradient(circle at top left, rgba(214, 173, 102, 0.08), transparent 42%);
+}
+
+.market-panel__tools label {
+  display: grid;
+  gap: 5px;
+  color: #c9a45d;
+  font-size: 0.64rem;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.market-panel__tools select {
+  min-height: 34px;
+  border: 1px solid rgba(214, 173, 102, 0.3);
+  border-radius: 8px;
+  background: #130d09;
+  color: #ead4a4;
+  font: 700 0.76rem Georgia, "Times New Roman", serif;
+}
+
+.market-panel__upgrade-toggle {
+  grid-template-columns: 18px 1fr;
+  align-items: center;
+  align-self: center;
+  padding: 8px 10px;
+  border: 1px solid rgba(214, 173, 102, 0.18);
+  border-radius: 10px;
+  background: rgba(255, 224, 156, 0.05);
+}
+
+.market-panel__upgrade-toggle input {
+  accent-color: #d6a94a;
+}
+
 .market-panel__grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -1010,6 +1173,7 @@
 }
 
 .market-item {
+  position: relative;
   display: grid;
   grid-template-rows: 146px auto auto auto;
   gap: 10px;
@@ -1096,6 +1260,126 @@
   opacity: 0.52;
 }
 
+.market-item__upgrade {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 24px;
+  padding: 3px 8px;
+  border: 1px solid rgba(132, 205, 91, 0.36);
+  border-radius: 999px;
+  background: rgba(83, 132, 52, 0.16);
+  color: #bdf19b;
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.market-panel__empty-filter {
+  grid-column: 1 / -1;
+  padding: 18px;
+  border: 1px dashed rgba(214, 173, 102, 0.28);
+  border-radius: 14px;
+  color: #c9ad78;
+  font-family: Georgia, "Times New Roman", serif;
+  text-align: center;
+}
+
+.market-item__compare {
+  position: absolute;
+  z-index: 9;
+  top: 10px;
+  left: calc(100% + 10px);
+  width: 224px;
+  display: grid;
+  gap: 9px;
+  padding: 11px;
+  border: 1px solid rgba(214, 173, 102, 0.48);
+  border-radius: 13px;
+  background:
+    linear-gradient(180deg, rgba(32, 23, 15, 0.98), rgba(8, 6, 5, 0.99)),
+    radial-gradient(circle at top left, rgba(255, 215, 132, 0.12), transparent 46%);
+  color: #edd7aa;
+  box-shadow:
+    0 18px 34px rgba(0, 0, 0, 0.62),
+    inset 0 1px 0 rgba(255, 240, 205, 0.08);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateX(-6px);
+  transition: opacity 0.14s ease, transform 0.14s ease, visibility 0.14s ease;
+}
+
+.market-item:hover .market-item__compare,
+.market-item:focus-within .market-item__compare {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(0);
+}
+
+.market-item:nth-child(4n) .market-item__compare,
+.market-item:nth-child(4n - 1) .market-item__compare {
+  right: calc(100% + 10px);
+  left: auto;
+  transform: translateX(6px);
+}
+
+.market-item:nth-child(4n):hover .market-item__compare,
+.market-item:nth-child(4n):focus-within .market-item__compare,
+.market-item:nth-child(4n - 1):hover .market-item__compare,
+.market-item:nth-child(4n - 1):focus-within .market-item__compare {
+  transform: translateX(0);
+}
+
+.market-item__compare-title {
+  color: #c9a45d;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.market-item__compare-card {
+  display: grid;
+  grid-template-columns: 54px minmax(0, 1fr);
+  gap: 9px;
+  align-items: center;
+}
+
+.market-item__compare-card img {
+  width: 54px;
+  height: 54px;
+  border: 1px solid rgba(214, 173, 102, 0.3);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.24);
+  object-fit: cover;
+}
+
+.market-item__compare strong {
+  color: #fff0cc;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 0.9rem;
+}
+
+.market-item__compare span {
+  color: #dec38b;
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.market-item__compare em {
+  color: #b8f0a1;
+  font-size: 0.74rem;
+  font-style: normal;
+  line-height: 1.35;
+}
+
+.market-item__compare--empty em {
+  color: #d2b77d;
+}
+
 .market-item.is-owned {
   border-color: rgba(166, 166, 166, 0.24);
   background:
@@ -1130,6 +1414,28 @@
 .harbor-black-market .market-panel__grid {
   grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
   gap: 8px;
+}
+
+.harbor-black-market .market-panel__tools {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+  padding: 7px;
+  border-radius: 8px;
+}
+
+.harbor-black-market .market-panel__tools label {
+  font-size: 0.54rem;
+}
+
+.harbor-black-market .market-panel__tools select {
+  min-height: 28px;
+  border-radius: 6px;
+  font-size: 0.62rem;
+}
+
+.harbor-black-market .market-panel__upgrade-toggle {
+  grid-column: 1 / -1;
+  min-height: 28px;
 }
 
 .harbor-black-market .market-item {
@@ -1176,6 +1482,34 @@
 .harbor-black-market .market-item__buy {
   min-height: 30px;
   border-radius: 7px;
+  font-size: 0.64rem;
+}
+
+.harbor-black-market .market-item__compare {
+  top: 4px;
+  width: 186px;
+  gap: 6px;
+  padding: 8px;
+  border-radius: 9px;
+}
+
+.harbor-black-market .market-item__compare-card {
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 7px;
+}
+
+.harbor-black-market .market-item__compare-card img {
+  width: 42px;
+  height: 42px;
+  border-radius: 7px;
+}
+
+.harbor-black-market .market-item__compare strong {
+  font-size: 0.74rem;
+}
+
+.harbor-black-market .market-item__compare span,
+.harbor-black-market .market-item__compare em {
   font-size: 0.64rem;
 }
 
@@ -1642,6 +1976,14 @@
   background: rgba(255, 255, 255, 0.03);
 }
 
+.police-raid__metric.hidden {
+  display: none;
+}
+
+.police-raid__metric--cargo {
+  grid-column: 1 / -1;
+}
+
 .police-raid__metric span {
   display: block;
   color: #cba889;
@@ -1936,6 +2278,15 @@
   color: #fff0cf;
   font-family: Georgia, "Times New Roman", serif;
   font-size: 0.98rem;
+}
+
+.leaderboard__clan {
+  display: block;
+  margin-top: 3px;
+  color: #d7b15f;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
 }
 
 .leaderboard__name em {

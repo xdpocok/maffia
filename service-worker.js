@@ -1,12 +1,13 @@
-const CACHE_VERSION = "maffia-assets-2026-07-30-17";
+const CACHE_VERSION = "maffia-assets-2026-08-05-56-dock-mission-min-five";
 const CORE_ASSETS = [
-  "./style.css?v=perf-2026-07-19-3",
-  "./styles/hud-redesign.css?v=influence-system-2026-07-30-07",
+  "./style.css?v=harbor-bar-limit-2026-08-05-1",
+  "./styles/hud-redesign.css?v=help-interface-guide-2026-08-04-1",
   "./assets-inline.js",
-  "./js/asset-runtime.js?v=settings-popover-2026-07-27-1",
+  "./js/asset-runtime.js?v=cache-refresh-2026-08-01-1",
   "./js/world-map.js?v=influence-system-2026-07-30-1",
-  "./js/app-shell.js?v=settings-popover-2026-07-27-1",
-  "./game.js?v=influence-system-2026-07-30-16"
+  "./js/equipment-catalog-data.js?v=item-catalog-2026-08-01-1",
+  "./js/app-shell.js?v=cache-refresh-2026-08-01-1",
+  "./game.js?v=dock-mission-min-five-2026-08-05-1"
 ];
 
 self.addEventListener("install", (event) => {

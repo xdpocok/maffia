@@ -1,0 +1,34 @@
+{
+  "createdAt": "2026-08-03T13:32:29.697Z",
+  "profileName": "indian",
+  "player_crew_members": [
+    {
+      "profile_name": "indian",
+      "member_id": "enzo",
+      "payload_json": "{\"id\":\"enzo\",\"name\":\"Enzo Romano\",\"role\":\"Megfigyelo\",\"baseAttack\":10,\"baseDefense\":12,\"baseHealth\":150,\"hireCost\":1500,\"hired\":true,\"level\":13,\"defenseLevel\":15,\"attackBonus\":24,\"defenseBonus\":22,\"health\":150,\"equipment\":{\"hat\":{\"id\":\"owned-quest-hat-quest-1782028358598-3325-ms7o1wk2-qka1q9\",\"templateId\":\"quest-hat-1782028358598-1214\",\"name\":\"Don fedora\",\"power\":5,\"stat\":\"defense\",\"rarity\":\"red\",\"purchasePrice\":0,\"image\":\"./assets/items/item-hat-red.png\",\"slot\":\"hat\"},\"shirt\":null,\"pants\":{\"id\":\"pants-black\",\"templateId\":\"pants-black\",\"name\":\"Fekete szovet\",\"power\":2,\"stat\":\"defense\",\"rarity\":\"gray\",\"purchasePrice\":0,\"image\":\"./assets/items/item-pants-gray.png\",\"slot\":\"pants\"},\"weapon\":{\"id\":\"weapon-thompson\",\"templateId\":\"weapon-thompson\",\"name\":\"Tommy gepisztoly\",\"power\":7,\"stat\":\"attack\",\"rarity\":\"yellow\",\"purchasePrice\":0,\"image\":\"./assets/items/item-weapon-yellow.png\",\"slot\":\"weapon\"},\"shoes\":null,\"watch\":null}}",
+      "updated_at": 1785763902570
+    },
+    {
+      "profile_name": "indian",
+      "member_id": "luca",
+      "payload_json": "{\"id\":\"luca\",\"name\":\"Luca Moretti\",\"role\":\"Vegrehajto\",\"baseAttack\":12,\"baseDefense\":9,\"baseHealth\":100,\"hireCost\":155,\"hired\":true,\"level\":1,\"defenseLevel\":1,\"attackBonus\":0,\"defenseBonus\":0,\"health\":100,\"equipment\":{\"hat\":null,\"shirt\":null,\"pants\":null,\"weapon\":null,\"shoes\":null,\"watch\":null}}",
+      "updated_at": 1785763902570
+    },
+    {
+      "profile_name": "indian",
+      "member_id": "marco",
+      "payload_json": "{\"id\":\"marco\",\"name\":\"Marco Bellini\",\"role\":\"Fegyveres\",\"baseAttack\":15,\"baseDefense\":8,\"baseHealth\":88,\"hireCost\":700,\"hired\":true,\"level\":1,\"defenseLevel\":1,\"attackBonus\":0,\"defenseBonus\":0,\"health\":88,\"equipment\":{\"hat\":null,\"shirt\":null,\"pants\":null,\"weapon\":null,\"shoes\":null,\"watch\":null}}",
+      "updated_at": 1785763902570
+    }
+  ],
+  "player_territories": [
+    {
+      "profile_name": "indian",
+      "territory_id": "central-bank",
+      "owner_type": "private",
+      "territory_level": 1,
+      "payload_json": "{\"level\":1,\"ownerType\":\"private\"}",
+      "updated_at": 1785763902570
+    }
+  ]
+}

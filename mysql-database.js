@@ -399,6 +399,25 @@ const schema = `
     CONSTRAINT fk_clan_wars_defender FOREIGN KEY (defender_clan_id) REFERENCES clans(clan_id) ON DELETE CASCADE
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_hungarian_ci;
 
+  CREATE TABLE IF NOT EXISTS clan_war_participants (
+    war_id BIGINT NOT NULL,
+    clan_id VARCHAR(128) NOT NULL,
+    profile_name VARCHAR(18) NOT NULL,
+    war_side VARCHAR(12) NOT NULL,
+    attack_power INT NOT NULL DEFAULT 0,
+    defense_power INT NOT NULL DEFAULT 0,
+    total_power INT NOT NULL DEFAULT 0,
+    crew_count INT NOT NULL DEFAULT 0,
+    combat_json LONGTEXT NOT NULL,
+    accepted_at BIGINT NOT NULL,
+    PRIMARY KEY (war_id, profile_name),
+    INDEX idx_clan_war_participants_side (war_id, war_side, accepted_at ASC),
+    INDEX idx_clan_war_participants_clan (clan_id, accepted_at DESC),
+    CONSTRAINT fk_clan_war_participants_war FOREIGN KEY (war_id) REFERENCES clan_wars(war_id) ON DELETE CASCADE,
+    CONSTRAINT fk_clan_war_participants_clan FOREIGN KEY (clan_id) REFERENCES clans(clan_id) ON DELETE CASCADE,
+    CONSTRAINT fk_clan_war_participants_player FOREIGN KEY (profile_name) REFERENCES players(profile_name) ON DELETE CASCADE
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_hungarian_ci;
+
   CREATE TABLE IF NOT EXISTS app_meta (
     meta_key VARCHAR(80) PRIMARY KEY,
     meta_value VARCHAR(255) NOT NULL,

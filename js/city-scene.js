@@ -256,15 +256,6 @@ class CityScene extends Phaser.Scene {
       return { zone, container };
     });
 
-    this.endDayBg = this.add.rectangle(0, 0, 100, 34, 0xd86254, 1).setScrollFactor(0);
-    this.endDayText = this.add.text(0, 0, "Nap", { ...whiteText, fontSize: "16px", fontStyle: "bold" }).setOrigin(0.5);
-    this.endDayZone = this.add.zone(0, 0, 100, 34).setInteractive({ useHandCursor: true });
-    this.endDayZone.on("pointerdown", async () => {
-      if (!state.registered) return;
-      await endDay();
-    });
-    this.endDayContainer = this.add.container(0, 0, [this.endDayBg, this.endDayText]).setScrollFactor(0);
-
     this.resetBg = this.add.rectangle(0, 0, 100, 34, 0xffffff, 0.44).setStrokeStyle(1, 0x8c8377, 0.14).setScrollFactor(0);
     this.resetText = this.add.text(0, 0, "Uj jatek", { ...whiteText, fontSize: "16px", fontStyle: "bold" }).setOrigin(0.5);
     this.resetZone = this.add.zone(0, 0, 100, 34).setInteractive({ useHandCursor: true });
@@ -291,10 +282,6 @@ class CityScene extends Phaser.Scene {
       entry.zone?.destroy();
     });
     this.actionButtons = [];
-    this.endDayBg?.destroy();
-    this.endDayText?.destroy();
-    this.endDayContainer?.destroy();
-    this.endDayZone?.destroy();
     this.resetBg?.destroy();
     this.resetText?.destroy();
     this.resetContainer?.destroy();
@@ -322,16 +309,12 @@ class CityScene extends Phaser.Scene {
     const objects = [
       this.selectedBox,
       this.actionPanel,
-      this.endDayBg,
-      this.endDayText,
-      this.endDayContainer,
       this.resetBg,
       this.resetText,
       this.resetContainer,
       this.logBg,
       ...Object.values(this.uiTexts),
       ...this.actionButtons.flatMap((entry) => [entry.container, entry.zone]),
-      this.endDayZone,
       this.resetZone,
     ];
 

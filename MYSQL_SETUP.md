@@ -11,7 +11,7 @@ $env:MYSQL_PORT="3306"
 $env:MYSQL_USER="root"
 $env:MYSQL_PASSWORD="a-jelszavad"
 $env:MYSQL_DATABASE="maffia"
-npm start
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-server.ps1
 ```
 
 A szerver az elso inditaskor letrehozza a `maffia` adatbazist es a szukseges

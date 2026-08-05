@@ -1,5 +1,5 @@
 (function initializeAssetRuntime(global) {
-  const VERSION = "2026-07-27-1";
+  const VERSION = "2026-08-01-1";
   const optimizedAssets = {
     "./assets/character/gangster-character.png": "./assets/character/gangster-character.webp",
     "./assets/character/player-avatar-boss.png": "./assets/character/player-avatar-boss.webp",

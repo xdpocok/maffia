@@ -7,7 +7,7 @@
     <link rel="preload" as="image" href="./register-960.webp" media="(max-width: 1199px)" fetchpriority="high" />
     <link rel="preload" as="image" href="./register-1440.webp" media="(min-width: 1200px) and (max-width: 1799px)" fetchpriority="high" />
     <link rel="preload" as="image" href="./register.webp" media="(min-width: 1800px)" fetchpriority="high" />
-    <link rel="stylesheet" href="./style.css?v=perf-2026-07-19-3" />
+    <link rel="stylesheet" href="./style.css?v=harbor-bar-limit-2026-08-05-1" />
   </head>
   <body>
     <div id="bootOverlay" class="boot-overlay">
@@ -158,6 +158,10 @@
           <div class="police-raid__metric">
             <span>Korozes</span>
             <strong id="policeRaidHeat">0%</strong>
+          </div>
+          <div id="policeRaidCargoMetric" class="police-raid__metric police-raid__metric--cargo hidden">
+            <span>Elkobzott aru</span>
+            <strong id="policeRaidCargo">Nincs</strong>
           </div>
         </div>
         <button id="policeRaidClose" class="police-raid__close" type="button">Vissza az utcara</button>
@@ -504,6 +508,38 @@
       </article>
     </section>
 
+    <section id="helpDialog" class="help-dialog hidden" aria-hidden="true">
+      <article class="settings-dialog__panel help-dialog__panel" role="dialog" aria-modal="false" aria-labelledby="helpTitle">
+        <span class="settings-dialog__ornament settings-dialog__ornament--left" aria-hidden="true"></span>
+        <span class="settings-dialog__ornament settings-dialog__ornament--right" aria-hidden="true"></span>
+        <header class="settings-dialog__header">
+          <div><span class="settings-dialog__eyebrow">J&aacute;t&eacute;kos k&eacute;zik&ouml;nyv</span><h2 id="helpTitle">Fel&uuml;letek &eacute;s haszn&aacute;latuk</h2></div>
+          <button id="helpClose" class="settings-dialog__close" type="button" aria-label="S&uacute;g&oacute; bez&aacute;r&aacute;sa">&times;</button>
+        </header>
+        <div class="help-dialog__content">
+          <ol class="help-interface-list">
+            <li><strong>Fels&#337; HUD</strong><p>Itt l&aacute;tod a p&eacute;nzedet, befoly&aacute;sodat, k&ouml;r&ouml;z&eacute;sedet &eacute;s a folyamatban l&eacute;v&#337; munk&aacute;kat. A k&ouml;r alak&uacute; folyamatjelz&#337;k m&aacute;sodpercenk&eacute;nt mutatj&aacute;k a h&aacute;tral&eacute;v&#337; id&#337;t.</p></li>
+            <li><strong>Befoly&aacute;s</strong><p>Vidd az egeret a Befoly&aacute;s mez&#337;re az aktu&aacute;lis gazdas&aacute;gi el&#337;nyeid megtekint&eacute;s&eacute;hez. A befoly&aacute;s kedvezm&eacute;nyeket, nagyobb bev&eacute;telt &eacute;s jobb piaci es&eacute;lyeket ad, de k&ouml;zvetlen harci er&#337;t nem.</p></li>
+            <li><strong>Bal oldali profil</strong><p>A karaktered szintj&eacute;t, &eacute;leterej&eacute;t, energi&aacute;j&aacute;t &eacute;s XP-j&eacute;t mutatja. A karakterk&eacute;pre kattintva megnyithatod a felszerel&eacute;st, az inventoryt &eacute;s a craftol&aacute;st.</p></li>
+            <li><strong>Mentor k&uuml;ldet&eacute;sek</strong><p>Az 5. szintig l&eacute;p&eacute;sr&#337;l l&eacute;p&eacute;sre vezetnek. A mentorablak kis i gombja pontos &uacute;tvonalat ad az aktu&aacute;lis feladathoz. A kik&ouml;t&#337;i feladatok csak az 5. szint el&eacute;r&eacute;se ut&aacute;n jelennek meg.</p></li>
+            <li><strong>F&#337;t&eacute;rk&eacute;p &eacute;s &eacute;p&uuml;letek</strong><p>Kattints egy telekre vagy &eacute;p&uuml;letre a hozz&aacute; tartoz&oacute; k&ouml;rmen&uuml; megnyit&aacute;s&aacute;hoz. A z&ouml;ld c&eacute;lpont k&ouml;nnyebb, a s&aacute;rga kock&aacute;zatosabb, a piros vesz&eacute;lyesebb. Az &uuml;res, passz&iacute;v bev&eacute;telt ad&oacute; telkek nem rabolhat&oacute;k ki.</p></li>
+            <li><strong>K&ouml;rmen&uuml;</strong><p>Az adott helyhez el&eacute;rhet&#337; m&#369;veleteket mutatja: utcai t&aacute;mad&aacute;s, &uuml;zletkirabl&aacute;s, v&eacute;delmi p&eacute;nz, v&aacute;s&aacute;rl&aacute;s, fejleszt&eacute;s, pihen&eacute;s vagy helyi feladat. A nem haszn&aacute;lhat&oacute; lehet&#337;s&eacute;gek nem jelennek meg.</p></li>
+            <li><strong>A banda</strong><p>A jobb oldali panelen vehetsz fel &eacute;s fejleszthetsz bandatagokat. Csak a megv&aacute;s&aacute;rolt tagok vesznek r&eacute;szt a harci er&#337; sz&aacute;m&iacute;t&aacute;s&aacute;ban. A karakterlapjukon felszerel&eacute;st is adhatsz nekik.</p></li>
+            <li><strong>Kirabl&aacute;s &eacute;s harc</strong><p>A t&aacute;mad&aacute;s el&#337;tt v&aacute;lassz egy vagy k&eacute;t harck&eacute;pes bandatagot. A Harci f&ouml;l&eacute;ny a csapatod &eacute;s az ellenf&eacute;l becs&uuml;lt erej&eacute;t hasonl&iacute;tja &ouml;ssze. Harc k&ouml;zben jel&ouml;ld ki az ellenfelet, majd t&aacute;madj vagy kapcsold be az automata harcot.</p></li>
+            <li><strong>K&uuml;ldet&eacute;sek</strong><p>A fels&#337; K&uuml;ldet&eacute;sek gomb r&eacute;szletesen mutatja az aktu&aacute;lis feladatokat. A bal oldali I. &eacute;s II. k&aacute;rtya csak a r&ouml;vid &ouml;sszefoglal&oacute;t jelzi. A jutalom a neh&eacute;zs&eacute;gt&#337;l f&uuml;gg, &eacute;s csak minden felt&eacute;tel teljes&uuml;l&eacute;se ut&aacute;n adhat&oacute; le.</p></li>
+            <li><strong>Felszerel&eacute;s, inventory &eacute;s craft</strong><p>Az inventoryban csak a senki &aacute;ltal nem viselt t&aacute;rgyak jelennek meg. Egy karakterre adott felszerel&eacute;s kiker&uuml;l a szabad list&aacute;b&oacute;l. H&aacute;rom szabad alapanyagb&oacute;l &uacute;j t&aacute;rgyat craftolhatsz.</p></li>
+            <li><strong>Vil&aacute;g chat</strong><p>A bal als&oacute; chat minden j&aacute;t&eacute;kos k&ouml;z&ouml;s besz&eacute;lget&eacute;se. Az elk&uuml;ld&ouml;tt &uuml;zeneteket minden akt&iacute;v j&aacute;t&eacute;kos l&aacute;tja.</p></li>
+            <li><strong>&Uuml;zenetek &eacute;s &eacute;rtes&iacute;t&eacute;sek</strong><p>Itt jelennek meg a fontos esem&eacute;nyek: PvP-t&aacute;mad&aacute;s, visszat&aacute;mad&aacute;si lehet&#337;s&eacute;g, riv&aacute;lis banda &eacute;s kl&aacute;nh&aacute;bor&uacute;. Az elolvasott bejegyz&eacute;sek sz&uuml;rk&eacute;re v&aacute;ltanak.</p></li>
+            <li><strong>Ranglista, PvP &eacute;s kl&aacute;n</strong><p>A ranglista a j&aacute;t&eacute;kosok szintj&eacute;t, h&iacute;rnev&eacute;t, v&aacute;rosait &eacute;s kl&aacute;nj&aacute;t mutatja. PvP-ben a saj&aacute;t karakter &eacute;s a megv&aacute;s&aacute;rolt bandatagok t&aacute;mad&aacute;sa, v&eacute;delme sz&aacute;m&iacute;t. K&eacute;t t&aacute;mad&aacute;s k&ouml;z&ouml;tt 15 perces v&aacute;rakoz&aacute;s van.</p></li>
+            <li><strong>Vil&aacute;gt&eacute;rk&eacute;p</strong><p>Itt tal&aacute;lod a saj&aacute;t b&aacute;zisodat, az NPC-v&aacute;rosokat, riv&aacute;lis telep&uuml;l&eacute;seket &eacute;s m&aacute;s j&aacute;t&eacute;kosokat. &Eacute;p&uuml;letek legy&#337;z&eacute;s&eacute;vel, v&aacute;rosfoglal&aacute;ssal &eacute;s ker&uuml;let&aacute;tv&eacute;tellel terjeszkedhetsz.</p></li>
+            <li><strong>Kik&ouml;t&#337; negyed</strong><p>Az 5. szintt&#337;l &eacute;rhet&#337; el. A Dokkok munk&aacute;kat &eacute;s rakom&aacute;nyt adnak, a V&aacute;m &aacute;rucsomagokat ind&iacute;t, a Feketepiac felszerel&eacute;st vesz &eacute;s ad el, a Halpiac gy&oacute;gy&iacute;t, a Gar&aacute;zs fuvarokat, az Iroda pedig lefizet&eacute;si b&oacute;nuszokat kezel.</p></li>
+            <li><strong>Folyamatok &eacute;s id&#337;z&iacute;t&eacute;sek</strong><p>A dokkmunka, v&aacute;m, riv&aacute;lis t&aacute;mad&aacute;s, kl&aacute;nh&aacute;bor&uacute;, tal&aacute;lkoz&oacute; &eacute;s lapul&aacute;s val&oacute;s id&#337;ben fut. Egy id&#337;ben csak a megengedett sz&aacute;m&uacute; folyamat ind&iacute;that&oacute;, a tal&aacute;lkoz&oacute; &eacute;s lapul&aacute;s pedig h&aacute;rom&oacute;r&aacute;nk&eacute;nt haszn&aacute;lhat&oacute; &uacute;jra.</p></li>
+            <li><strong>Be&aacute;ll&iacute;t&aacute;sok</strong><p>Az anim&aacute;ci&oacute;kat &eacute;s a teljes k&eacute;perny&#337;s m&oacute;dot kezelheted. A kijelentkez&eacute;s mindig a Be&aacute;ll&iacute;t&aacute;sok ablak legalj&aacute;n tal&aacute;lhat&oacute;.</p></li>
+          </ol>
+        </div>
+      </article>
+    </section>
+
     <section id="questOverview" class="quest-overview hidden" aria-hidden="true">
       <article class="quest-overview__panel" role="dialog" aria-modal="false" aria-labelledby="questOverviewTitle">
         <span class="settings-dialog__ornament settings-dialog__ornament--left" aria-hidden="true"></span>
@@ -545,6 +581,7 @@
           <nav class="hud-utility-nav" aria-label="Gyorsmen&#252;">
             <button type="button" data-hud-top-action="quests"><i aria-hidden="true"><svg viewBox="0 0 28 28"><path d="M7 3h14v22H7zM10 8h8M10 13h8M10 18h6"/></svg></i><span>K&#252;ldet&#233;sek</span></button>
             <button type="button" data-hud-top-action="settings"><i aria-hidden="true"><svg viewBox="0 0 28 28"><path d="M14 4v3M14 21v3M4 14h3M21 14h3M7 7l2 2M19 19l2 2M21 7l-2 2M9 19l-2 2"/><circle cx="14" cy="14" r="6"/><circle cx="14" cy="14" r="2"/></svg></i><span>Be&#225;ll&#237;t&#225;sok</span></button>
+            <button type="button" class="hud-help-button" data-hud-top-action="help" aria-label="Fel&uuml;letek r&eacute;szletes s&uacute;g&oacute;ja"><i aria-hidden="true">i</i><span>S&uacute;g&oacute;</span></button>
           </nav>
         </div>
         <aside id="hudInfluenceInfo" class="hud-influence-info hidden" aria-hidden="true"></aside>
@@ -585,10 +622,12 @@
       </button>
 
       <section id="hudMentorCard" class="hud-mentor-card hud-panel" aria-label="Mentor kuldetes">
+        <button id="hudMentorInfo" class="hud-mentor-card__info" type="button" aria-label="Részletes mentor útmutató" aria-expanded="false">i</button>
         <button id="hudMentorClose" class="hud-mentor-card__close" type="button" aria-label="Mentor bezarasa">x</button>
         <div class="hud-mini-title">Mentor</div>
         <strong id="hudMentorStepTitle">Elso munka</strong>
         <p id="hudMentorStepText">Valaszd ki a lakohazadat.</p>
+        <div id="hudMentorDetails" class="hud-mentor-card__details hidden" aria-live="polite"></div>
         <div id="hudMentorStepReward" class="hud-mentor-card__reward">Jutalom: +80 $, +10 XP</div>
         <div id="hudMentorProgress" class="hud-mentor-card__progress">1 / 10</div>
       </section>
@@ -653,6 +692,7 @@
           <button class="hud-quick-btn" id="hudQuickWorld" type="button">Világtérkép</button>
           <button class="hud-quick-btn hud-quick-btn--messages" id="hudQuickMessages" type="button">
             Üzenetek
+            <span id="hudMessageBadge" class="hud-message-badge hidden" aria-label="Olvasatlan értesítések"></span>
           </button>
         </div>
         <div class="hud-bottom-bar__action-row">
@@ -730,10 +770,11 @@
         document.documentElement.dataset.bootError = `Promise: ${event.reason?.message || event.reason || "unknown"}`;
       });
     </script>
-    <script src="./js/asset-runtime.js?v=perf-2026-07-19-2"></script>
+    <script src="./js/asset-runtime.js?v=cache-refresh-2026-08-01-1"></script>
     <script src="./assets-inline.js"></script>
     <script src="./js/world-map.js?v=influence-system-2026-07-30-1"></script>
-    <script src="./game.js?v=influence-system-2026-07-30-16"></script>
-    <script src="./js/app-shell.js?v=settings-popover-2026-07-27-1"></script>
+    <script src="./js/equipment-catalog-data.js?v=item-catalog-2026-08-01-1"></script>
+    <script src="./game.js?v=dock-mission-min-five-2026-08-05-1"></script>
+    <script src="./js/app-shell.js?v=cache-refresh-2026-08-01-1"></script>
   </body>
 </html>

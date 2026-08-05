@@ -4,6 +4,7 @@ const LAST_PROFILE_KEY = "maffia.birodalom.lastProfile";
 const SAVE_API_BASE = "/api/saves/current";
 const PROFILE_API_BASE = "/api/profile/current";
 const GAME_CONFIG_API = "/api/game-config";
+const SERVER_STATE_SYNC_INTERVAL_MS = 4_000;
 const PROTECTION_COOLDOWN_MS = 3 * 60 * 1000;
 const RECOVERY_DURATION_MS = 20 * 60 * 1000;
 const RECOVERY_AMOUNT = 50;
@@ -20,9 +21,9 @@ const MAX_PROCESS_TASKS = 3;
 const MAX_LOCAL_NOTIFICATIONS = 40;
 const EARLY_GAME_WINDOW_MS = 30 * 60 * 1000;
 const HEAT_GAIN_MULTIPLIER = 0.46;
-const RIVAL_SPAWN_MIN_MS = 4 * 60 * 60 * 1000;
+const RIVAL_SPAWN_MIN_MS = 3 * 60 * 60 * 1000;
 const RIVAL_SPAWN_MAX_MS = 5 * 60 * 60 * 1000;
-const RIVAL_EVENT_DURATION_MS = 5 * 60 * 60 * 1000;
+const RIVAL_EVENT_DURATION_MS = 3 * 60 * 60 * 1000;
 const RIVAL_ACTION_DURATION_MS = 5 * 60 * 1000;
 const WORLD_RIVAL_CITY_TRIBUTE_MS = 4 * 60 * 60 * 1000;
 const WORLD_RIVAL_CITY_PROTECTION_MS = 48 * 60 * 60 * 1000;
@@ -32,8 +33,12 @@ const WORLD_RIVAL_CITY_BASE_COUNT = 30;
 const WORLD_RIVAL_CITY_MAX_COUNT = 60;
 const WORLD_RIVAL_CITY_NEAR_BASE_COUNT = 5;
 const MARKET_REFRESH_MS = 6 * 60 * 60 * 1000;
+const EQUIPMENT_CATALOG_VERSION = "equipment-catalog-21-per-slot-v3-market-8";
+const MARKET_MAX_OFFERS = 8;
 const GARAGE_RUN_WINDOW_MS = 12 * 60 * 60 * 1000;
 const GARAGE_RUN_LIMIT = 4;
+const HARBOR_BAR_USE_LIMIT = 3;
+const HARBOR_BAR_USAGE_RESET_MS = 3 * 60 * 60 * 1000;
 const districtDefs = [
   {
     id: "center",
@@ -147,7 +152,7 @@ function getEquipmentRarityImage(slot, rarity = "gray") {
   return `./assets/items/item-${slot}-${normalizedRarity}.png`;
 }
 
-const equipmentCatalog = {
+const fallbackEquipmentCatalog = {
   hat: [
     { id: "hat-fedora-black", name: "Fekete fedora", power: 1, stat: "defense", rarity: "gray", image: getEquipmentRarityImage("hat", "gray") },
     { id: "hat-silk-band", name: "Selyemszalagos kalap", power: 3, stat: "defense", rarity: "yellow", image: getEquipmentRarityImage("hat", "yellow") },
@@ -179,6 +184,19 @@ const equipmentCatalog = {
     { id: "watch-family", name: "Csaladi kronometer", power: 4, stat: "attack", rarity: "red", image: getEquipmentRarityImage("watch", "red") },
   ],
 };
+
+function cloneEquipmentCatalog(source) {
+  return Object.fromEntries(equipmentSlotOrder.map((slot) => {
+    const items = Array.isArray(source?.[slot]) ? source[slot] : [];
+    return [slot, items.map((item) => ({ ...item }))];
+  }));
+}
+
+const equipmentCatalog = cloneEquipmentCatalog(
+  typeof globalThis !== "undefined" && globalThis.MAFFIA_EQUIPMENT_CATALOG
+    ? globalThis.MAFFIA_EQUIPMENT_CATALOG
+    : fallbackEquipmentCatalog,
+);
 
 function mapPolygon(points) {
   return points.map(([x, y]) => [x / 1534, y / 1025]);
@@ -248,6 +266,11 @@ const clickableLotDefs = [
       overlayNumberMarker: building.number === "13",
     })),
 ];
+const passiveIncomeOnlyLotIds = new Set([
+  "east-empty-lot",
+  "central-empty-lot",
+  "southeast-empty-lot",
+]);
 
 const lotHouseLevelDefs = {
   1: {
@@ -304,6 +327,13 @@ const crewHireCosts = {
   marco: 700,
   enzo: 1500,
 };
+
+function getCrewMaxHealth(template, level = 1, defenseLevel = 1) {
+  const attackSteps = Math.max(0, Math.round(Number(level) || 1) - 1);
+  const defenseSteps = Math.max(0, Math.round(Number(defenseLevel) || 1) - 1);
+  const veteranBonus = Math.floor((attackSteps ** 2 + defenseSteps ** 2) / 18);
+  return Math.max(1, Math.round(Number(template?.baseHealth) || 100) + attackSteps * 3 + defenseSteps * 2 + veteranBonus);
+}
 
 function makeCrewMembers() {
   return crewMemberTemplates.map((member) => ({
@@ -379,6 +409,7 @@ const state = {
   buildingDifficultyCycle: null,
   marketStock: [],
   marketRefreshAt: 0,
+  marketCatalogVersion: EQUIPMENT_CATALOG_VERSION,
   activeQuest: null,
   offeredQuests: [],
   activeQuests: [],
@@ -398,6 +429,10 @@ const state = {
     activeVehicleId: "sedan",
     unlockedVehicleIds: ["sedan"],
   },
+  harborBarUsage: {
+    health: { uses: 0, resetAt: 0 },
+    energy: { uses: 0, resetAt: 0 },
+  },
   rivalEvent: null,
   rivalNextSpawnAt: 0,
   mentorStep: 0,
@@ -410,6 +445,7 @@ const state = {
     energy: { uses: 0, resetAt: 0 },
   },
   naturalRecoveryAt: { health: Date.now(), energy: Date.now() },
+  pvpNextAttackAt: 0,
   nextPolicePressureAt: 0,
   mainBaseClaimDay: 0,
   baseRestDay: 0,
@@ -417,6 +453,8 @@ const state = {
   hideUsesToday: 0,
   hideUsesDay: 1,
   day: 1,
+  lastDayEndedAt: 0,
+  lastPassiveIncomeAt: 0,
   cityLevel: 1,
   districts: [],
   selectedDistrictIndex: 0,
@@ -427,19 +465,27 @@ let sceneRef = null;
 let pendingSaveTimer = null;
 let saveRequestInFlight = null;
 let latestQueuedSave = null;
+let lastKnownServerUpdatedAt = 0;
+let serverClockOffsetMs = 0;
+let serverStateSyncTimer = null;
+let serverStateSyncInFlight = false;
 let pendingRewardModals = [];
 let questCardQuestId = null;
 let questCommandInFlight = false;
 let empireCommandInFlight = false;
+let recoveryCommandInFlight = false;
 let activeEquipmentSlot = null;
 let selectedCraftItemKeys = [];
 let recentlyCraftedItemKey = "";
 let mentorCardOpen = false;
+let mentorDetailsOpen = false;
 let mentorStepCompleting = false;
 let garageMiniGameState = null;
 let garageMiniGameTimer = null;
 let harborMarketMode = "buy";
+let selectedHarborCustomsMissionId = null;
 let pendingHarborSaleKey = "";
+let harborOfficeTab = "overview";
 let worldChatPollTimer = null;
 let worldChatRequestInFlight = false;
 const MAP_DRAG_ENABLED = false;
@@ -515,9 +561,11 @@ const questOverviewClose = document.getElementById("questOverviewClose");
 const questOverviewList = document.getElementById("questOverviewList");
 const hudMentorToggle = document.getElementById("hudMentorToggle");
 const hudMentorCard = document.getElementById("hudMentorCard");
+const hudMentorInfo = document.getElementById("hudMentorInfo");
 const hudMentorClose = document.getElementById("hudMentorClose");
 const hudMentorStepTitle = document.getElementById("hudMentorStepTitle");
 const hudMentorStepText = document.getElementById("hudMentorStepText");
+const hudMentorDetails = document.getElementById("hudMentorDetails");
 const hudMentorStepReward = document.getElementById("hudMentorStepReward");
 const hudMentorProgress = document.getElementById("hudMentorProgress");
 const hudLog = document.getElementById("hudLog");
@@ -531,6 +579,8 @@ const settingsAnimations = document.getElementById("settingsAnimations");
 const settingsFullscreen = document.getElementById("settingsFullscreen");
 const settingsFullscreenState = document.getElementById("settingsFullscreenState");
 const settingsLogout = document.getElementById("settingsLogout");
+const helpDialog = document.getElementById("helpDialog");
+const helpClose = document.getElementById("helpClose");
 const hudQuickRank = document.getElementById("hudQuickRank");
 const hudQuickMarket = document.getElementById("hudQuickMarket");
 const hudQuickClan = document.getElementById("hudQuickClan");
@@ -551,7 +601,6 @@ const hudAction4 = document.getElementById("hudAction4");
 const hudAction5 = document.getElementById("hudAction5");
 const hudAction6 = document.getElementById("hudAction6");
 const hudReset = document.getElementById("hudReset");
-const hudEndDayInline = document.getElementById("hudEndDayInline");
 const choiceWheel = document.getElementById("choiceWheel");
 const choiceWheelBackdrop = document.getElementById("choiceWheelBackdrop");
 const choiceWheelPanel = document.getElementById("choiceWheelPanel");
@@ -609,6 +658,8 @@ const policeRaidBackdrop = document.getElementById("policeRaidBackdrop");
 const policeRaidTitle = document.getElementById("policeRaidTitle");
 const policeRaidText = document.getElementById("policeRaidText");
 const policeRaidLoss = document.getElementById("policeRaidLoss");
+const policeRaidCargoMetric = document.getElementById("policeRaidCargoMetric");
+const policeRaidCargo = document.getElementById("policeRaidCargo");
 const policeRaidHeat = document.getElementById("policeRaidHeat");
 const policeRaidClose = document.getElementById("policeRaidClose");
 const rewardModal = document.getElementById("rewardModal");
@@ -668,6 +719,7 @@ const crewPowerTotal = document.getElementById("crewPowerTotal");
 let crewPanelRenderKey = "";
 let activeCrewSheetMemberId = null;
 let activeCrewEquipmentSlot = null;
+let devRefillButton = null;
 
 let avatarNameEl = null;
 let avatarLevelEl = null;
@@ -871,8 +923,9 @@ function normalizeEquipmentItem(slot, rawItem, fallback = null) {
     purchasePrice: Number.isFinite(Number(rawItem?.purchasePrice))
       ? Math.max(0, Math.round(Number(rawItem.purchasePrice)))
       : 0,
-    // A regi mentesekben megmaradt kep-utvonalak helyett mindig a jelenlegi ritkasagi assetet hasznaljuk.
-    image: getEquipmentRarityImage(slot, rarity) || template.image || getEquipmentArt(slot),
+    image: typeof rawItem?.image === "string" && rawItem.image.trim()
+      ? rawItem.image.trim()
+      : template.image || getEquipmentRarityImage(slot, rarity) || getEquipmentArt(slot),
   };
 }
 
@@ -942,6 +995,64 @@ function getMarketOfferPrice(entry = {}) {
   return Math.max(1, Math.round(basePrice * (1 - getInfluenceBenefits().marketDiscountRate)));
 }
 
+function getMarketCompareDeltaText(slot, offerItem = {}, equippedItem = null) {
+  if (!equippedItem) return "Nincs felvett item ebben a helyen.";
+  const offerPower = Number(offerItem?.power) || 0;
+  const equippedPower = Number(equippedItem?.power) || 0;
+  const delta = offerPower - equippedPower;
+  const offerStat = offerItem?.stat || equipmentSlotDefs[slot]?.stat || "attack";
+  const equippedStat = equippedItem?.stat || equipmentSlotDefs[slot]?.stat || "attack";
+  const statLabel = offerStat === "defense" ? "vedelem" : "tamadas";
+  if (offerStat !== equippedStat) {
+    return `Piaci: ${getEquipmentBonusText(slot, offerPower, offerStat)} · Rajtad: ${getEquipmentBonusText(slot, equippedPower, equippedStat)}`;
+  }
+  if (delta > 0) return `+${delta} ${statLabel} a mostanihoz kepest`;
+  if (delta < 0) return `${delta} ${statLabel} a mostanihoz kepest`;
+  return "Ugyanolyan eros, mint ami most rajtad van.";
+}
+
+function getMarketEquippedCompareHtml(slot, offerItem = {}) {
+  const slotLabel = equipmentSlotDefs[slot]?.label || slot || "Item";
+  const equippedItem = state.equipment?.[slot]
+    ? normalizeEquipmentItem(slot, state.equipment[slot], state.equipment[slot])
+    : null;
+  if (!equippedItem) {
+    return `
+      <aside class="market-item__compare market-item__compare--empty" role="tooltip">
+        <div class="market-item__compare-title">Most rajtad</div>
+        <strong>${escapeHtml(slotLabel)}</strong>
+        <span>Nincs felvett item.</span>
+        <em>${escapeHtml(getMarketCompareDeltaText(slot, offerItem, null))}</em>
+      </aside>
+    `;
+  }
+  return `
+    <aside class="market-item__compare" role="tooltip">
+      <div class="market-item__compare-title">Most rajtad</div>
+      <div class="market-item__compare-card">
+        <img src="${equippedItem.image || getEquipmentArt(slot)}" alt="${escapeHtml(equippedItem.name)}">
+        <div>
+          <strong>${escapeHtml(equippedItem.name)}</strong>
+          <span class="market-item__rarity market-item__rarity--${equippedItem.rarity}">${getEquipmentRarityLabel(equippedItem.rarity)}</span>
+        </div>
+      </div>
+      <span>${escapeHtml(slotLabel)} · ${getEquipmentBonusText(slot, equippedItem.power, equippedItem.stat)}</span>
+      <em>${escapeHtml(getMarketCompareDeltaText(slot, offerItem, equippedItem))}</em>
+    </aside>
+  `;
+}
+
+function getMarketOfferDeltaPower(slot, offerItem = {}) {
+  const equippedItem = state.equipment?.[slot]
+    ? normalizeEquipmentItem(slot, state.equipment[slot], state.equipment[slot])
+    : null;
+  if (!equippedItem) return Number(offerItem?.power) || 0;
+  const offerStat = offerItem?.stat || equipmentSlotDefs[slot]?.stat || "attack";
+  const equippedStat = equippedItem.stat || equipmentSlotDefs[slot]?.stat || "attack";
+  if (offerStat !== equippedStat) return 0;
+  return (Number(offerItem?.power) || 0) - (Number(equippedItem.power) || 0);
+}
+
 function normalizeMarketStock(source) {
   if (!Array.isArray(source)) return [];
   return source.map((entry) => {
@@ -954,30 +1065,98 @@ function normalizeMarketStock(source) {
       price: Number.isFinite(entry?.price) ? Math.max(1, Math.round(entry.price)) : getEquipmentRarityPrice(item.rarity, item.power),
       item,
     };
-  }).filter(Boolean);
+  }).filter(Boolean).slice(0, MARKET_MAX_OFFERS);
+}
+
+function getMarketRarityCounts(stock = []) {
+  return stock.reduce((counts, entry) => {
+    const rarity = ["gray", "yellow", "red"].includes(entry?.item?.rarity) ? entry.item.rarity : "gray";
+    counts[rarity] = (counts[rarity] || 0) + 1;
+    return counts;
+  }, { gray: 0, yellow: 0, red: 0 });
+}
+
+function isMarketStockRuleCurrent(stock = []) {
+  if (!Array.isArray(stock) || !stock.length || stock.length > MARKET_MAX_OFFERS) return false;
+  const counts = getMarketRarityCounts(stock);
+  return counts.red >= 1
+    && counts.red <= 2
+    && counts.yellow <= 2
+    && counts.gray >= Math.max(1, stock.length - counts.red - counts.yellow);
+}
+
+function getMarketRarityPlan(seed = "market", cycle = 0, influenceBenefits = {}) {
+  const redBonus = Number(influenceBenefits.marketRedChanceBonus) || 0;
+  const yellowBonus = Number(influenceBenefits.marketYellowChanceBonus) || 0;
+  const twoRedChance = clamp(0.18 + redBonus * 2.2, 0.18, 0.42);
+  const twoYellowChance = clamp(0.35 + yellowBonus * 2.5, 0.35, 0.6);
+  const redCount = 1 + (hash2(seed.length + cycle * 7, 91, state.day + 13) < twoRedChance ? 1 : 0);
+  const yellowCount = 1 + (hash2(seed.length + cycle * 5, 47, state.day + 29) < twoYellowChance ? 1 : 0);
+  const grayCount = Math.max(0, MARKET_MAX_OFFERS - redCount - yellowCount);
+  const plan = [
+    ...Array(grayCount).fill("gray"),
+    ...Array(yellowCount).fill("yellow"),
+    ...Array(redCount).fill("red"),
+  ];
+  return plan
+    .map((rarity, index) => ({
+      rarity,
+      order: hash2(seed.length + cycle * 11 + index * 17, index + 31, state.day + 7),
+    }))
+    .sort((left, right) => left.order - right.order)
+    .map((entry) => entry.rarity)
+    .slice(0, MARKET_MAX_OFFERS);
+}
+
+function getMarketSlotPlan(seed = "market", cycle = 0) {
+  const shuffledSlots = equipmentSlotOrder
+    .map((slot, index) => ({
+      slot,
+      order: hash2(seed.length + cycle * 13 + index * 19, slot.charCodeAt(0), state.day + 41),
+    }))
+    .sort((left, right) => left.order - right.order)
+    .map((entry) => entry.slot);
+  const repeatSlots = shuffledSlots
+    .map((slot, index) => ({
+      slot,
+      order: hash2(seed.length + cycle * 17 + index * 23, slot.charCodeAt(slot.length - 1), state.day + 53),
+    }))
+    .sort((left, right) => left.order - right.order)
+    .map((entry) => entry.slot);
+  return [...shuffledSlots, ...repeatSlots].slice(0, MARKET_MAX_OFFERS);
 }
 
 function generateMarketStock(seed = state.profileName || "market", refreshAt = Date.now()) {
   const stock = [];
   const cycle = Math.floor(refreshAt / (4 * 60 * 60 * 1000));
   const influenceBenefits = getInfluenceBenefits();
-  const redThreshold = 0.86 - influenceBenefits.marketRedChanceBonus;
-  const yellowThreshold = redThreshold - (0.36 + influenceBenefits.marketYellowChanceBonus);
-  equipmentSlotOrder.forEach((slot, slotIndex) => {
+  const rarityPlan = getMarketRarityPlan(seed, cycle, influenceBenefits);
+  const slotPlan = getMarketSlotPlan(seed, cycle);
+  const usedTemplateIdsBySlot = new Map();
+  slotPlan.forEach((slot, offerIndex) => {
+    const slotIndex = equipmentSlotOrder.indexOf(slot);
     const catalog = equipmentCatalog[slot] || [];
     if (!catalog.length) return;
-    const choiceIndex = Math.floor(hash2(seed.length + cycle + slotIndex * 5, cycle + slot.charCodeAt(0), state.day + slotIndex) * catalog.length);
-    const baseItem = catalog[clamp(choiceIndex, 0, catalog.length - 1)] || catalog[0];
-    const rarityRoll = hash2(seed.length + cycle * 3, slot.charCodeAt(slot.length - 1), slotIndex + 19);
-    const rarity = rarityRoll > redThreshold ? "red" : rarityRoll > yellowThreshold ? "yellow" : "gray";
+    const rarity = rarityPlan[offerIndex] || "gray";
+    const rarityPool = catalog.filter((entry) => entry.rarity === rarity);
+    const itemPool = rarityPool.length ? rarityPool : catalog;
+    const usedTemplateIds = usedTemplateIdsBySlot.get(slot) || new Set();
+    usedTemplateIdsBySlot.set(slot, usedTemplateIds);
+    let choiceIndex = Math.floor(hash2(seed.length + cycle + slotIndex * 5, cycle + slot.charCodeAt(0) + offerIndex * 17, state.day + slotIndex) * itemPool.length);
+    let baseItem = itemPool[clamp(choiceIndex, 0, itemPool.length - 1)] || catalog[0];
+    for (let attempts = 0; attempts < itemPool.length && usedTemplateIds.has(baseItem.id); attempts += 1) {
+      choiceIndex = (choiceIndex + 1) % itemPool.length;
+      baseItem = itemPool[choiceIndex] || baseItem;
+    }
+    usedTemplateIds.add(baseItem.id);
     const bonusPower = rarity === "red" ? 2 : rarity === "yellow" ? 1 : 0;
     const item = normalizeEquipmentItem(slot, {
       ...baseItem,
-      id: `market-${slot}-${cycle}-${slotIndex}-${rarity}`,
+      id: `market-${slot}-${cycle}-${slotIndex}-${offerIndex}-${baseItem.id || rarity}`,
       name: `${baseItem.name} (${rarity === "red" ? "piros" : rarity === "yellow" ? "sarga" : "szurke"} piac)`,
       power: baseItem.power + bonusPower,
       rarity,
-      image: getEquipmentRarityImage(slot, rarity),
+      image: baseItem.image || getEquipmentRarityImage(slot, rarity),
     }, baseItem);
     if (!item) return;
     stock.push({
@@ -986,14 +1165,17 @@ function generateMarketStock(seed = state.profileName || "market", refreshAt = D
       item,
     });
   });
-  return stock;
+  return stock.slice(0, MARKET_MAX_OFFERS);
 }
 
 function ensureMarketStock(now = Date.now()) {
   const needsMigration = Array.isArray(state.marketStock) && state.marketStock.some((entry) => !String(entry?.item?.id || "").startsWith("market-"));
-  if (!Array.isArray(state.marketStock) || !state.marketStock.length || !Number.isFinite(state.marketRefreshAt) || now >= state.marketRefreshAt || needsMigration) {
+  const needsCatalogRefresh = state.marketCatalogVersion !== EQUIPMENT_CATALOG_VERSION;
+  const needsMarketRuleRefresh = Array.isArray(state.marketStock) && !isMarketStockRuleCurrent(state.marketStock);
+  if (!Array.isArray(state.marketStock) || !state.marketStock.length || !Number.isFinite(state.marketRefreshAt) || now >= state.marketRefreshAt || needsMigration || needsCatalogRefresh || needsMarketRuleRefresh) {
     state.marketStock = generateMarketStock(state.profileName || "market", now);
     state.marketRefreshAt = now + MARKET_REFRESH_MS;
+    state.marketCatalogVersion = EQUIPMENT_CATALOG_VERSION;
   }
 }
 
@@ -1057,6 +1239,11 @@ function isInventoryItemInUse(slot, item) {
     isSameEquipmentItem(slot, member.equipment?.[slot], item));
 }
 
+function getFreeInventoryItemsForSlot(slot) {
+  if (!equipmentSlotOrder.includes(slot)) return [];
+  return (state.itemInventory?.[slot] || []).filter((item) => item?.id && !isInventoryItemInUse(slot, item));
+}
+
 function getInventoryCraftItems() {
   const items = [];
   equipmentSlotOrder.forEach((slot) => {
@@ -1080,8 +1267,10 @@ function getCraftableInventoryItemsByRarity(rarity) {
 
 function createCraftedEquipmentItem(slot, rarity, ingredients = []) {
   const normalizedRarity = ["yellow", "red"].includes(rarity) ? rarity : "yellow";
-  const catalogItem = (equipmentCatalog[slot] || []).find((item) => item.rarity === normalizedRarity)
-    || equipmentCatalog[slot]?.[0];
+  const rarityPool = (equipmentCatalog[slot] || []).filter((item) => item.rarity === normalizedRarity);
+  const catalogItem = rarityPool.length
+    ? rarityPool[Math.floor(Math.random() * rarityPool.length)]
+    : equipmentCatalog[slot]?.[0];
   const ingredientPower = ingredients.reduce((sum, entry) => sum + (Number(entry.item?.power) || 0), 0);
   const averagePower = Math.max(1, Math.round(ingredientPower / Math.max(1, ingredients.length)));
   const rarityBonus = normalizedRarity === "red" ? 3 : 2;
@@ -1092,8 +1281,25 @@ function createCraftedEquipmentItem(slot, rarity, ingredients = []) {
     power: Math.max(Number(catalogItem?.power) || 1, averagePower + rarityBonus),
     stat: catalogItem?.stat || equipmentSlotDefs[slot]?.stat || "attack",
     rarity: normalizedRarity,
-    image: getEquipmentRarityImage(slot, normalizedRarity),
+    image: catalogItem?.image || getEquipmentRarityImage(slot, normalizedRarity),
   }, catalogItem);
+}
+
+function ensureCraftedItemInInventory(craftedItem) {
+  const slot = equipmentSlotOrder.includes(craftedItem?.slot) ? craftedItem.slot : null;
+  if (!slot) return null;
+  if (!state.itemInventory || typeof state.itemInventory !== "object") state.itemInventory = getDefaultItemInventory();
+  if (!Array.isArray(state.itemInventory[slot])) state.itemInventory[slot] = [];
+  const item = normalizeEquipmentItem(slot, craftedItem, craftedItem);
+  if (!item?.id) return null;
+  const existingIndex = state.itemInventory[slot].findIndex((entry) => String(entry?.id || "") === String(item.id));
+  if (existingIndex >= 0) {
+    state.itemInventory[slot][existingIndex] = { ...state.itemInventory[slot][existingIndex], ...item, slot };
+    moveInventoryItemToFront(slot, item.id);
+    return state.itemInventory[slot][0] || item;
+  }
+  state.itemInventory[slot].unshift({ ...item, slot });
+  return state.itemInventory[slot][0];
 }
 
 function removeInventoryIngredients(ingredients = []) {
@@ -1230,8 +1436,9 @@ async function craftSelectedEquipment() {
       refreshItemCraftPanel(text);
       return false;
     }
-    if (crafted?.id) recentlyCraftedItemKey = `${crafted.slot}::${crafted.id}`;
-    const text = `${crafted?.name || "Az uj targy"} elkeszult: ${getEquipmentRarityLabel(toRarity)} ${equipmentSlotDefs[crafted?.slot]?.label || "item"}.`;
+    const visibleCrafted = ensureCraftedItemInInventory(crafted) || crafted;
+    if (visibleCrafted?.id) recentlyCraftedItemKey = `${visibleCrafted.slot}::${visibleCrafted.id}`;
+    const text = `${visibleCrafted?.name || "Az uj targy"} elkeszult: ${getEquipmentRarityLabel(toRarity)} ${equipmentSlotDefs[visibleCrafted?.slot]?.label || "item"}.`;
     sceneRef?.setMessage(text);
     refreshCharacterPanel();
     refreshItemCraftPanel(text);
@@ -1360,6 +1567,23 @@ function normalizeTerritories(source) {
   return territories;
 }
 
+function mergeProtectedClientTerritories(existingSource, incomingSource) {
+  const existing = normalizeTerritories(existingSource);
+  const incoming = normalizeTerritories(incomingSource);
+  const merged = { ...existing };
+  Object.entries(incoming).forEach(([territoryId, territory]) => {
+    const previous = existing[territoryId];
+    merged[territoryId] = previous
+      ? {
+          ...territory,
+          level: Math.max(previous.level || 1, territory.level || 1),
+          ownerType: previous.ownerType || territory.ownerType || "private",
+        }
+      : territory;
+  });
+  return merged;
+}
+
 function getLotMaxLevel(lot) {
   return clamp(Math.floor(Number(lot?.maxLevel) || 3), 1, 3);
 }
@@ -1421,14 +1645,25 @@ function setChoiceWheelButtons(visibleIds) {
     robbery: choiceWheelAction1,
     protection: choiceWheelAction2,
     close: choiceWheelAction4,
-    quest: choiceWheelAction5,
   };
   Object.entries(map).forEach(([id, button]) => {
     if (!button) return;
     button.classList.toggle("hidden", !visibleIds.includes(id));
     button.disabled = false;
+    button.removeAttribute("title");
     if (visibleIds.includes(id)) button.dataset.choiceAction = id;
   });
+  if (choiceWheelAction5) {
+    const fifthAction = visibleIds.includes("quest")
+      ? "quest"
+      : visibleIds.includes("lotRobbery")
+        ? "lotRobbery"
+        : "";
+    choiceWheelAction5.classList.toggle("hidden", !fifthAction);
+    choiceWheelAction5.disabled = false;
+    choiceWheelAction5.removeAttribute("title");
+    choiceWheelAction5.dataset.choiceAction = fifthAction;
+  }
   if (choiceWheelAction3) {
     const thirdAction = visibleIds.includes("rival")
       ? "rival"
@@ -1444,9 +1679,12 @@ function setChoiceWheelButtons(visibleIds) {
 }
 
 let activeAuxPanelKind = null;
+let activeMessagesTab = "messages";
+let messagesPanelData = { messages: [], notifications: [] };
 
 function hideMentorPanel(markUserClosed = false) {
   mentorCardOpen = false;
+  mentorDetailsOpen = false;
   if (hudMentorCard) {
     if (markUserClosed) hudMentorCard.dataset.userClosed = "true";
     else delete hudMentorCard.dataset.userClosed;
@@ -1459,6 +1697,8 @@ function hideAuxPanel() {
     sceneRef?.setMessage("Elobb valassz egy ures telket a varosodnak.");
     return;
   }
+  stopClanWarCountdownTimer();
+  stopClanWarRefreshTimer();
   hideQuestCard();
   hideMentorPanel(true);
   document.body.classList.remove("is-world-map-open");
@@ -1468,7 +1708,7 @@ function hideAuxPanel() {
   auxPanel?.setAttribute("aria-hidden", "true");
 }
 
-function showPoliceRaidPanel(loss, summaryText) {
+function showPoliceRaidPanel(loss, summaryText, cargoLoss = {}) {
   if (policeRaidTitle) {
     policeRaidTitle.textContent = state.heat >= 60
       ? "A rendorok razziat tartottak"
@@ -1476,6 +1716,9 @@ function showPoliceRaidPanel(loss, summaryText) {
   }
   if (policeRaidText) policeRaidText.textContent = summaryText;
   if (policeRaidLoss) policeRaidLoss.textContent = `${loss} $`;
+  const cargoLossText = formatCargoLoss(cargoLoss);
+  if (policeRaidCargoMetric) policeRaidCargoMetric.classList.toggle("hidden", !cargoLossText);
+  if (policeRaidCargo) policeRaidCargo.textContent = cargoLossText || "Nem vittek el arut";
   if (policeRaidHeat) policeRaidHeat.textContent = `${state.heat}%`;
   policeRaidPanel?.classList.remove("hidden");
   policeRaidPanel?.setAttribute("aria-hidden", "false");
@@ -1488,6 +1731,9 @@ function hidePoliceRaidPanel() {
 
 function setAuxPanelContent(title, subtitle, bodyHtml) {
   document.body.classList.remove("is-world-map-open");
+  stopClanWarCountdownTimer();
+  stopClanWarRefreshTimer();
+  if (auxPanel) delete auxPanel.dataset.worldSelection;
   if (auxPanelTitle) auxPanelTitle.textContent = title;
   if (auxPanelSubtitle) auxPanelSubtitle.textContent = subtitle;
   if (auxPanelHeaderTools) auxPanelHeaderTools.replaceChildren();
@@ -1528,8 +1774,9 @@ function setPublicProfileDialogContent(title, subtitle, bodyHtml) {
 
 function updateMessageBadge(unreadCount = 0) {
   if (hudMessageBadge) {
-    hudMessageBadge.textContent = "";
-    hudMessageBadge.classList.add("hidden");
+    const count = Math.max(0, Math.round(Number(unreadCount) || 0));
+    hudMessageBadge.textContent = count > 99 ? "99+" : String(count);
+    hudMessageBadge.classList.toggle("hidden", count <= 0);
   }
 }
 
@@ -1541,6 +1788,7 @@ function normalizeLocalNotifications(source) {
       body: String(entry?.body || ""),
       messageType: String(entry?.messageType || "event"),
       senderProfileName: entry?.senderProfileName ? String(entry.senderProfileName) : "",
+      payload: entry?.payload && typeof entry.payload === "object" ? { ...entry.payload } : {},
       createdAt: Number.isFinite(Number(entry?.createdAt)) ? Number(entry.createdAt) : Date.now(),
       readAt: Number.isFinite(Number(entry?.readAt)) ? Number(entry.readAt) : 0,
       localOnly: true,
@@ -1549,8 +1797,17 @@ function normalizeLocalNotifications(source) {
     .slice(0, MAX_LOCAL_NOTIFICATIONS);
 }
 
+function isImportantNotification(entry = {}) {
+  const kind = String(entry?.payload?.kind || "").toLowerCase();
+  if (kind === "pvp_attack_received" || kind.startsWith("rival_") || kind.startsWith("clan_war_")) return true;
+  if (entry?.messageType === "pvp" && entry?.senderProfileName) return true;
+  return /riv[aá]lis\s+banda/i.test(`${entry?.title || ""} ${entry?.body || ""}`);
+}
+
 function getLocalUnreadCount() {
-  return normalizeLocalNotifications(state.localNotifications).filter((entry) => !entry.readAt).length;
+  return normalizeLocalNotifications(state.localNotifications)
+    .filter((entry) => isImportantNotification(entry) && !entry.readAt)
+    .length;
 }
 
 function addLocalNotification(title, body, options = {}) {
@@ -1560,6 +1817,7 @@ function addLocalNotification(title, body, options = {}) {
     body: String(body || ""),
     messageType: String(options.messageType || "event"),
     senderProfileName: options.senderProfileName ? String(options.senderProfileName) : "",
+    payload: options.payload && typeof options.payload === "object" ? { ...options.payload } : {},
     createdAt: Number.isFinite(Number(options.createdAt)) ? Number(options.createdAt) : Date.now(),
     readAt: Number.isFinite(Number(options.readAt)) ? Number(options.readAt) : 0,
     localOnly: true,
@@ -1669,7 +1927,7 @@ async function refreshMessageBadge() {
     return;
   }
   try {
-    const response = await fetch("/api/messages?limit=1", {
+    const response = await fetch("/api/messages?limit=200", {
       headers: { Accept: "application/json" },
     });
     const payload = response.ok ? await response.json() : { unreadCount: 0 };
@@ -1690,7 +1948,15 @@ function formatInboxDate(timestamp) {
 }
 
 function getMessageTypeLabel(messageType, payload = {}) {
-  return payload?.kind === "clan_invitation" ? "Klánmeghívó" : "Játékos";
+  if (payload?.kind === "clan_invitation") return "Klánmeghívó";
+  if (String(payload?.kind || "").startsWith("clan_war_")) return "Klánháború";
+  return ({
+    player: "Játékos",
+    pvp: "PvP",
+    event: "Esemény",
+    system: "Rendszer",
+    clan: "Klán",
+  })[messageType] || "Értesítés";
 }
 
 function getPlayerInboxMessages(messages = []) {
@@ -1698,15 +1964,40 @@ function getPlayerInboxMessages(messages = []) {
     .filter((message) => message?.messageType === "player" && message.senderProfileName && message.senderProfileName !== state.profileName);
 }
 
-function renderMessagesPanel(messages = []) {
-  const playerMessages = getPlayerInboxMessages(messages);
-  const body = playerMessages.length
+function getPvpCounterattackState(message = {}) {
+  const attackerProfileName = String(message.payload?.attackerProfileName || message.senderProfileName || "").trim();
+  const rawAttackerLevel = Number(message.payload?.attackerLevel);
+  const hasAttackerLevel = Number.isFinite(rawAttackerLevel) && rawAttackerLevel > 0;
+  const attackerLevel = hasAttackerLevel ? Math.max(1, Math.round(rawAttackerLevel)) : 0;
+  const currentLevel = getRankLevel(state.fame);
+  const levelProtected = hasAttackerLevel && Math.abs(currentLevel - attackerLevel) > 3;
+  const cooldownRemaining = Math.max(0, Number(state.pvpNextAttackAt) - getSynchronizedNow());
+  const exhausted = Number(state.health) <= 0 || Number(state.energy) < 12;
+  const disabled = !attackerProfileName || attackerProfileName === state.profileName || levelProtected || cooldownRemaining > 0 || exhausted;
+  const label = levelProtected
+    ? "Szintvédelem aktív"
+    : cooldownRemaining > 0
+      ? `Visszatámadás (${formatCountdown(cooldownRemaining)})`
+      : exhausted
+        ? "Nincs elég HP vagy energia"
+        : "Visszatámadás";
+  return { attackerProfileName, disabled, label };
+}
+
+function renderInboxCards(entries = [], notificationMode = false) {
+  return entries.length
     ? `
-      <section class="messages-panel">
-        <div class="messages-list">
-          ${playerMessages.map((message) => `
-            <article class="message-card message-card--${escapeHtml(message.messageType || "player")}${message.payload?.kind === "clan_invitation" ? " message-card--clan-invitation" : ""}${message.readAt ? "" : " is-unread"}" data-message-id="${Number(message.id) || 0}" tabindex="0">
-              <button class="message-card__delete" type="button" data-message-delete="${Number(message.id) || 0}" aria-label="Uzenet torlese">x</button>
+      <div class="messages-list">
+          ${entries.map((message, messageIndex) => {
+            const typeClass = String(message.messageType || (notificationMode ? "event" : "player")).replace(/[^a-z0-9_-]/gi, "");
+            const isPvpAttackNotice = message.payload?.kind === "pvp_attack_received"
+              || (message.messageType === "pvp" && message.senderProfileName);
+            const pvpCounterattack = isPvpAttackNotice
+              ? getPvpCounterattackState(message)
+              : null;
+            return `
+            <article class="message-card message-card--${typeClass}${message.payload?.kind === "clan_invitation" ? " message-card--clan-invitation" : ""}${message.readAt ? " is-read" : " is-unread"}" data-message-index="${messageIndex}" tabindex="0">
+              ${notificationMode ? "" : `<button class="message-card__delete" type="button" data-message-delete="${Number(message.id) || 0}" aria-label="Üzenet törlése">×</button>`}
               <div class="message-card__stamp">${getMessageTypeLabel(message.messageType, message.payload)}</div>
               <div class="message-card__copy">
                 <div class="message-card__heading">
@@ -1717,7 +2008,7 @@ function renderMessagesPanel(messages = []) {
                 <p class="message-card__preview">${escapeHtml(message.body || "")}</p>
                 <div class="message-card__details">
                   <p>${escapeHtml(message.body || "")}</p>
-                  ${message.payload?.kind === "clan_invitation" ? `
+                  ${!notificationMode && message.payload?.kind === "clan_invitation" ? `
                     <div class="clan-invitation-response" data-clan-invitation-actions="${Number(message.payload.invitationId) || 0}">
                       <div>
                         <small>A család ajánlata</small>
@@ -1729,27 +2020,55 @@ function renderMessagesPanel(messages = []) {
                       ` : `<span class="clan-invitation-response__status">${message.payload.invitationStatus === "accepted" ? "Elfogadva · A család tagja vagy" : message.payload.invitationStatus === "declined" ? "Elutasítva" : "A meghívó lejárt"}</span>`}
                     </div>
                   ` : ""}
-                  <form class="message-reply-form" data-message-reply="${escapeHtml(message.senderProfileName || "")}">
+                  ${notificationMode && pvpCounterattack ? `
+                    <div class="pvp-counterattack-response">
+                      <div>
+                        <small>Támadó játékos</small>
+                        <strong>${escapeHtml(pvpCounterattack.attackerProfileName)}</strong>
+                      </div>
+                      <button type="button" data-pvp-counterattack="${escapeHtml(pvpCounterattack.attackerProfileName)}"${pvpCounterattack.disabled ? " disabled" : ""}>${escapeHtml(pvpCounterattack.label)}</button>
+                    </div>
+                  ` : ""}
+                  ${notificationMode ? "" : `<form class="message-reply-form" data-message-reply="${escapeHtml(message.senderProfileName || "")}">
                     <label>Valasz ${escapeHtml(message.senderProfileName || "a feladonak")} reszere</label>
                     <textarea maxlength="1200" placeholder="Ird ide a valaszodat..."></textarea>
                     <button type="submit">Valasz kuldese</button>
                     <span class="message-reply-form__status" aria-live="polite"></span>
-                  </form>
+                  </form>`}
                 </div>
               </div>
             </article>
-          `).join("")}
-        </div>
-      </section>
+          `;}).join("")}
+      </div>
     `
     : `
       <div class="messages-panel__empty">
-        <strong>Még üres a postaláda.</strong>
-        <span>Itt csak akkor jelenik meg valami, ha egy másik játékos ír neked.</span>
+        <strong>${notificationMode ? "Még nincs értesítésed." : "Még üres a postaláda."}</strong>
+        <span>${notificationMode ? "Itt a PvP-támadások, a rivális banda és a klánháborúk fontos jelzései jelennek meg." : "Itt csak akkor jelenik meg valami, ha egy másik játékos ír neked."}</span>
       </div>
     `;
+}
+
+function renderMessagesPanel(payload = messagesPanelData) {
+  const normalized = Array.isArray(payload) ? { messages: payload, notifications: [] } : (payload || {});
+  messagesPanelData = {
+    messages: getPlayerInboxMessages(normalized.messages),
+    notifications: (Array.isArray(normalized.notifications) ? normalized.notifications : [])
+      .filter(isImportantNotification),
+  };
+  const notificationMode = activeMessagesTab === "notifications";
+  const entries = notificationMode ? messagesPanelData.notifications : messagesPanelData.messages;
+  const body = `
+    <section class="messages-panel">
+      <nav class="messages-panel__tabs" aria-label="Üzenetek menüpontjai">
+        <button type="button" class="${notificationMode ? "" : "is-active"}" data-messages-tab="messages">Üzenetek <span>${messagesPanelData.messages.length}</span></button>
+        <button type="button" class="${notificationMode ? "is-active" : ""}" data-messages-tab="notifications">Értesítések <span>${messagesPanelData.notifications.length}</span></button>
+      </nav>
+      ${renderInboxCards(entries, notificationMode)}
+    </section>
+  `;
   hideAuxPanel();
-  setMessagesDialogContent("Üzenetek", "Privát üzenetek", body);
+  setMessagesDialogContent("Üzenetek", notificationMode ? "Játékértesítések" : "Privát üzenetek", body);
   activeAuxPanelKind = "messages";
   bindMessagesPanelActions();
 }
@@ -1757,6 +2076,12 @@ function renderMessagesPanel(messages = []) {
 function bindMessagesPanelActions() {
   if (!messagesDialogBody) return;
   messagesDialogBody.onclick = async (event) => {
+    const tabButton = event.target.closest("[data-messages-tab]");
+    if (tabButton) {
+      activeMessagesTab = tabButton.dataset.messagesTab === "notifications" ? "notifications" : "messages";
+      renderMessagesPanel(messagesPanelData);
+      return;
+    }
     const invitationButton = event.target.closest("[data-clan-invite-decision]");
     if (invitationButton) {
       event.preventDefault();
@@ -1798,6 +2123,17 @@ function bindMessagesPanelActions() {
       }
       return;
     }
+    const counterattackButton = event.target.closest("[data-pvp-counterattack]");
+    if (counterattackButton) {
+      event.preventDefault();
+      event.stopPropagation();
+      const defenderProfileName = String(counterattackButton.dataset.pvpCounterattack || "").trim();
+      if (!defenderProfileName || counterattackButton.disabled) return;
+      counterattackButton.disabled = true;
+      hideMessagesDialog();
+      void runWorldPvpAttack(defenderProfileName);
+      return;
+    }
     const deleteButton = event.target.closest("[data-message-delete]");
     if (deleteButton) {
       event.preventDefault();
@@ -1808,8 +2144,8 @@ function bindMessagesPanelActions() {
       try {
         const response = await fetch(`/api/messages/${messageId}`, { method: "DELETE" });
         if (!response.ok) throw new Error("delete_failed");
-        deleteButton.closest(".message-card")?.remove();
-        if (!messagesDialogBody.querySelector(".message-card")) openMessagesPanel();
+        messagesPanelData.messages = messagesPanelData.messages.filter((message) => Number(message.id) !== messageId);
+        renderMessagesPanel(messagesPanelData);
       } catch {
         deleteButton.disabled = false;
       }
@@ -1821,8 +2157,29 @@ function bindMessagesPanelActions() {
     messagesDialogBody.querySelectorAll(".message-card.is-open").forEach((entry) => {
       if (entry !== card) entry.classList.remove("is-open");
     });
+    const willOpen = !card.classList.contains("is-open");
     card.classList.toggle("is-open");
-    card.classList.remove("is-unread");
+    if (willOpen && card.classList.contains("is-unread")) {
+      const messageIndex = Math.max(0, Math.round(Number(card.dataset.messageIndex) || 0));
+      const collection = activeMessagesTab === "notifications"
+        ? messagesPanelData.notifications
+        : messagesPanelData.messages;
+      if (collection[messageIndex]) collection[messageIndex].readAt = Date.now();
+      card.classList.remove("is-unread");
+      card.classList.add("is-read");
+      const messageId = Number(collection[messageIndex]?.id) || 0;
+      if (messageId > 0) {
+        void fetch("/api/messages/read", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ messageId }),
+        });
+      }
+      const unreadCount = [...messagesPanelData.messages, ...messagesPanelData.notifications]
+        .filter((message) => !message.readAt)
+        .length;
+      updateMessageBadge(unreadCount);
+    }
   };
   messagesDialogBody.onkeydown = (event) => {
     if ((event.key === "Enter" || event.key === " ") && event.target.matches(".message-card")) {
@@ -1865,20 +2222,29 @@ async function openMessagesPanel() {
     const response = await fetch("/api/messages?limit=80", {
       headers: { Accept: "application/json" },
     });
-    const payload = response.ok ? await response.json() : { messages: [] };
-    renderMessagesPanel(payload.messages);
-    updateMessageBadge(0);
-    void fetch("/api/messages/read", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({}),
-    });
+    const payload = response.ok ? await response.json() : { messages: [], notifications: [] };
+    messagesPanelData = {
+      messages: Array.isArray(payload.messages) ? payload.messages : [],
+      notifications: Array.isArray(payload.notifications) ? payload.notifications : [],
+    };
+    renderMessagesPanel(messagesPanelData);
+    updateMessageBadge(Number(payload.unreadCount) || 0);
   } catch {
     setMessagesDialogContent("Üzenetek", "Privát üzenetek", `<div class="aux-panel__carditem"><strong>Az üzenetek most nem érhetők el.</strong><div class="aux-panel__muted">Próbáld meg néhány pillanat múlva.</div></div>`);
   }
 }
 
 function renderPublicPlayerProfile(profile, focusMessage = false) {
+  const ownLevel = getRankLevel(state.fame);
+  const levelDifference = Math.abs(ownLevel - Math.max(1, Number(profile.level) || 1));
+  const levelProtected = levelDifference > 3;
+  const pvpCooldownRemaining = Math.max(0, Number(state.pvpNextAttackAt) - getSynchronizedNow());
+  const pvpBlocked = levelProtected || pvpCooldownRemaining > 0;
+  const pvpButtonText = levelProtected
+    ? "Szintkülönbség túl nagy"
+    : pvpCooldownRemaining > 0
+      ? `PvP pihenő: ${formatCountdown(pvpCooldownRemaining)}`
+      : "PvP támadás";
   const body = `
     <section class="public-profile">
       <article class="public-profile__dossier">
@@ -1895,7 +2261,7 @@ function renderPublicPlayerProfile(profile, focusMessage = false) {
         <div><span>Város</span><strong>${Math.max(0, Math.round(Number(profile.npcVillageVictories) || 0))} legyőzve</strong></div>
       </div>
       <div class="public-profile__actions">
-        <button type="button" data-public-action="pvp" data-player="${escapeHtml(profile.profileName)}">PvP támadás</button>
+        <button type="button" data-public-action="pvp" data-player="${escapeHtml(profile.profileName)}" ${pvpBlocked ? "disabled" : ""} title="${levelProtected ? "PvP csak legfeljebb 3 szint eltéréssel indítható." : pvpCooldownRemaining > 0 ? "A következő PvP-támadásig hátralévő idő." : "15 perces PvP pihenőt indít."}">${pvpButtonText}</button>
         <button type="button" data-public-action="world">Vissza a térképhez</button>
       </div>
       <form id="playerMessageForm" class="player-message-form" data-recipient="${escapeHtml(profile.profileName)}">
@@ -2244,7 +2610,15 @@ async function runWorldPvpAttack(defenderProfileName) {
       body: JSON.stringify({ defenderProfileName }),
     });
     const payload = await response.json();
-    if (!response.ok) throw new Error(payload.error || "PvP hiba");
+    if (!response.ok) {
+      const synchronizedNow = getSynchronizedNow();
+      if (Number(payload.cooldownAt) > synchronizedNow) state.pvpNextAttackAt = Number(payload.cooldownAt);
+      const cooldownText = Number(payload.cooldownAt) > synchronizedNow
+        ? ` Hátralévő idő: ${formatCountdown(Number(payload.cooldownAt) - synchronizedNow)}.`
+        : "";
+      throw new Error(`${payload.error || "PvP hiba"}${cooldownText}`);
+    }
+    markServerMutation(response, payload);
     applyServerRobberyState(payload.state || payload.attackerState || {});
     sceneRef?.refreshHUD();
     sceneRef?.refreshMap();
@@ -2257,8 +2631,13 @@ async function runWorldPvpAttack(defenderProfileName) {
         <h3>${resultText}</h3>
         <div class="pvp-result__stats">
           <span>Támadó erő <strong>${payload.attackerAttack}</strong></span>
+          <span>Saját támadás <strong>${payload.attackerPlayerAttack}</strong></span>
+          <span>${payload.attackerCrewCount} megvásárolt bandatag <strong>+${payload.attackerCrewAttack}</strong></span>
           <span>Védő erő <strong>${payload.defenderDefense}</strong></span>
+          <span>Védő saját értéke <strong>${payload.defenderPlayerDefense}</strong></span>
+          <span>${payload.defenderCrewCount} megvásárolt védő <strong>+${payload.defenderCrewDefense}</strong></span>
           <span>Sérülés <strong>-${payload.healthLoss} HP</strong></span>
+          <span>Új PvP indítható <strong>15 perc múlva</strong></span>
           ${payload.influenceGain ? `<span>Befolyás <strong>+${payload.influenceGain}%</strong></span>` : ""}
           ${payload.influenceLoss ? `<span>Befolyás <strong>-${payload.influenceLoss}%</strong></span>` : ""}
         </div>
@@ -2266,7 +2645,6 @@ async function runWorldPvpAttack(defenderProfileName) {
       </section>
     `);
     document.getElementById("pvpBackToWorld")?.addEventListener("click", () => openAuxPanel("world"));
-    void refreshMessageBadge();
   } catch (error) {
     setAuxPanelContent("PvP támadás", defenderProfileName, `
       <div class="pvp-result is-loss">
@@ -2503,6 +2881,7 @@ function renderLeaderboardPanel(saves) {
       ...entry,
       level: Number.isFinite(Number(entry.level)) ? Number(entry.level) : getRankLevel(entry.fame || 0),
       rankTitle: entry.rankTitle || getCurrentRankEntry(entry.fame || 0)?.name || "Utcai figura",
+      clanName: String(entry.clanName || entry.clan_name || "").trim(),
     }))
     .sort((left, right) =>
       (right.level - left.level)
@@ -2526,7 +2905,7 @@ function renderLeaderboardPanel(saves) {
               <span class="leaderboard__place">#${index + 1}</span>
               <span class="leaderboard__name">
                 <strong>${escapeHtml(entry.profileName)}</strong>
-                <em>${escapeHtml(entry.rankTitle)}</em>
+                ${entry.clanName ? `<span class="leaderboard__clan">Clan: ${escapeHtml(entry.clanName)}</span>` : ""}
               </span>
               <span class="leaderboard__value">${entry.level}</span>
               <span class="leaderboard__value">${entry.fame}</span>
@@ -2558,6 +2937,37 @@ function getMarketPanelHtml() {
           <em>A piacon most ${stock.length} elerheto aru var rad.</em>
         </div>
       </article>
+      <div class="market-panel__tools" data-market-tools>
+        <label>
+          <span>Slot</span>
+          <select data-market-filter-slot>
+            <option value="all">Mind</option>
+            ${equipmentSlotOrder.map((slot) => `<option value="${slot}">${escapeHtml(equipmentSlotDefs[slot]?.label || slot)}</option>`).join("")}
+          </select>
+        </label>
+        <label>
+          <span>Ritkaság</span>
+          <select data-market-filter-rarity>
+            <option value="all">Mind</option>
+            <option value="gray">Szürke</option>
+            <option value="yellow">Sárga</option>
+            <option value="red">Piros</option>
+          </select>
+        </label>
+        <label>
+          <span>Rendezés</span>
+          <select data-market-sort>
+            <option value="default">Alap</option>
+            <option value="upgrade">Jobb elöl</option>
+            <option value="power">Erő szerint</option>
+            <option value="price">Ár szerint</option>
+          </select>
+        </label>
+        <label class="market-panel__upgrade-toggle">
+          <input type="checkbox" data-market-upgrades-only>
+          <span>Csak ami jobb</span>
+        </label>
+      </div>
       <div class="market-panel__grid">
         ${stock.map((entry) => {
           const alreadyOwned = Array.isArray(state.itemInventory?.[entry.slot])
@@ -2566,8 +2976,18 @@ function getMarketPanelHtml() {
           const discountPercent = Math.round(getInfluenceBenefits().marketDiscountRate * 1000) / 10;
           const cannotAfford = state.money < discountedPrice;
           const disabled = alreadyOwned || cannotAfford;
+          const upgradeDelta = getMarketOfferDeltaPower(entry.slot, entry.item);
+          const isUpgrade = upgradeDelta > 0;
           return `
-          <article class="market-item${alreadyOwned ? " is-owned" : ""}">
+          <article
+            class="market-item market-item--buying${alreadyOwned ? " is-owned" : ""}"
+            tabindex="0"
+            data-market-card
+            data-market-slot="${entry.slot}"
+            data-market-rarity="${entry.item.rarity}"
+            data-market-price="${discountedPrice}"
+            data-market-power="${Math.max(0, Math.round(Number(entry.item.power) || 0))}"
+            data-market-upgrade="${isUpgrade ? "1" : "0"}">
             <img class="market-item__art" src="${entry.item.image || getEquipmentArt(entry.slot)}" alt="${escapeHtml(entry.item.name)}">
             <div class="market-item__meta">
               <strong>${escapeHtml(entry.item.name)}</strong>
@@ -2578,6 +2998,7 @@ function getMarketPanelHtml() {
               <span>Ara: <strong>${discountedPrice} $</strong>${discountPercent > 0 ? ` <del>${entry.price} $</del>` : ""}</span>
               <span>${entry.item.stat === "defense" ? "Vedel" : "Tamad"} a harcban</span>
             </div>
+            ${isUpgrade ? `<span class="market-item__upgrade">Jobb mint rajtad +${upgradeDelta}</span>` : ""}
             <button
               class="market-item__buy"
               type="button"
@@ -2585,6 +3006,7 @@ function getMarketPanelHtml() {
               ${disabled ? "disabled" : ""}>
               ${alreadyOwned ? "Elkelt" : cannotAfford ? "Nincs eleg penz" : "Megveszem"}
             </button>
+            ${getMarketEquippedCompareHtml(entry.slot, entry.item)}
           </article>
         `;
         }).join("")}
@@ -2592,6 +3014,52 @@ function getMarketPanelHtml() {
       <div class="market-panel__footnote">A megvett item bekerul a felszereleseid koze, es a karakterlapodon tudod felvenni.</div>
     </section>
   `;
+}
+
+function applyMarketPanelFilters(rootElement) {
+  const root = rootElement || auxPanelBody;
+  const grid = root?.querySelector(".market-panel__grid");
+  if (!grid) return;
+  const slotFilter = root.querySelector("[data-market-filter-slot]")?.value || "all";
+  const rarityFilter = root.querySelector("[data-market-filter-rarity]")?.value || "all";
+  const sortMode = root.querySelector("[data-market-sort]")?.value || "default";
+  const upgradesOnly = Boolean(root.querySelector("[data-market-upgrades-only]")?.checked);
+  const cards = [...grid.querySelectorAll("[data-market-card]")];
+  cards.forEach((card, index) => {
+    if (!card.dataset.marketDefaultOrder) card.dataset.marketDefaultOrder = String(index);
+    const visible = (slotFilter === "all" || card.dataset.marketSlot === slotFilter)
+      && (rarityFilter === "all" || card.dataset.marketRarity === rarityFilter)
+      && (!upgradesOnly || card.dataset.marketUpgrade === "1");
+    card.classList.toggle("hidden", !visible);
+  });
+  const sorters = {
+    default: (left, right) => Number(left.dataset.marketDefaultOrder || 0) - Number(right.dataset.marketDefaultOrder || 0),
+    upgrade: (left, right) => (Number(right.dataset.marketUpgrade || 0) - Number(left.dataset.marketUpgrade || 0))
+      || (Number(right.dataset.marketPower || 0) - Number(left.dataset.marketPower || 0)),
+    power: (left, right) => Number(right.dataset.marketPower || 0) - Number(left.dataset.marketPower || 0),
+    price: (left, right) => Number(left.dataset.marketPrice || 0) - Number(right.dataset.marketPrice || 0),
+  };
+  cards.sort(sorters[sortMode] || sorters.default).forEach((card) => grid.appendChild(card));
+  const visibleCount = cards.filter((card) => !card.classList.contains("hidden")).length;
+  let empty = grid.querySelector(".market-panel__empty-filter");
+  if (!visibleCount) {
+    if (!empty) {
+      empty = document.createElement("div");
+      empty.className = "market-panel__empty-filter";
+      empty.textContent = "Nincs ilyen aru a mostani keszletben.";
+      grid.appendChild(empty);
+    }
+  } else {
+    empty?.remove();
+  }
+}
+
+function bindMarketPanelControls(rootElement) {
+  const root = rootElement || auxPanelBody;
+  root?.querySelectorAll("[data-market-filter-slot], [data-market-filter-rarity], [data-market-sort], [data-market-upgrades-only]").forEach((control) => {
+    control.addEventListener("change", () => applyMarketPanelFilters(root));
+  });
+  applyMarketPanelFilters(root);
 }
 
 function bindMarketBuyButtons(rootElement, options = {}) {
@@ -2602,6 +3070,7 @@ function bindMarketBuyButtons(rootElement, options = {}) {
       buyMarketItem(button.dataset.marketBuy, options);
     });
   });
+  bindMarketPanelControls(rootElement);
 }
 
 function renderBlackMarketPanel() {
@@ -2614,6 +3083,9 @@ function renderBlackMarketPanel() {
 
 let clanPanelData = null;
 let clanActiveTab = "members";
+let clanWarCountdownTimer = null;
+let clanWarRefreshTimer = null;
+let clanWarRefreshInFlight = false;
 
 function getClanMemberName(member) {
   return member?.display_name || member?.profile_name || "Ismeretlen";
@@ -2640,11 +3112,86 @@ function hasClanPermission(data, permission) {
 }
 
 function getClanWarTimeLeft(endsAt) {
-  const remaining = Math.max(0, Number(endsAt || 0) - Date.now());
-  if (!remaining) return "Lezárult";
-  const hours = Math.floor(remaining / 3600000);
-  const minutes = Math.ceil((remaining % 3600000) / 60000);
-  return `${hours} óra ${minutes} perc`;
+  const totalSeconds = Math.max(0, Math.ceil((Number(endsAt || 0) - getSynchronizedNow()) / 1000));
+  if (!totalSeconds) return "Lezárult";
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  if (hours > 0) return `${hours} óra ${minutes} perc ${seconds} mp`;
+  if (minutes > 0) return `${minutes} perc ${seconds} mp`;
+  return `${seconds} mp`;
+}
+
+function stopClanWarCountdownTimer() {
+  if (!clanWarCountdownTimer) return;
+  window.clearInterval(clanWarCountdownTimer);
+  clanWarCountdownTimer = null;
+}
+
+function stopClanWarRefreshTimer() {
+  if (!clanWarRefreshTimer) return;
+  window.clearInterval(clanWarRefreshTimer);
+  clanWarRefreshTimer = null;
+}
+
+function updateClanWarCountdowns() {
+  const countdowns = [...(auxPanelBody?.querySelectorAll("[data-clan-war-countdown]") || [])];
+  let activeCount = 0;
+  countdowns.forEach((element) => {
+    const endsAt = Number(element.dataset.clanWarCountdown) || 0;
+    const isActive = endsAt > getSynchronizedNow();
+    element.textContent = isActive ? getClanWarTimeLeft(endsAt) : "Lezárult";
+    const card = element.closest(".clan-war-card");
+    if (isActive) {
+      activeCount += 1;
+      card?.classList.add("is-active");
+      return;
+    }
+    card?.classList.remove("is-active");
+    element.removeAttribute("data-clan-war-countdown");
+    const ribbon = card?.querySelector(".clan-war-card__ribbon");
+    if (ribbon) ribbon.textContent = "Lezárt akta";
+  });
+  const activeCounter = auxPanelBody?.querySelector("[data-clan-war-active-count]");
+  if (activeCounter) activeCounter.textContent = `${activeCount} aktív`;
+  return activeCount;
+}
+
+function isClanWarCountdownViewOpen() {
+  return activeAuxPanelKind === "clan-war-report"
+    || (activeAuxPanelKind === "clan" && clanActiveTab === "wars");
+}
+
+function startClanWarCountdownTimer() {
+  stopClanWarCountdownTimer();
+  if (!isClanWarCountdownViewOpen()) return;
+  const activeCount = updateClanWarCountdowns();
+  if (!activeCount) return;
+  clanWarCountdownTimer = window.setInterval(() => {
+    if (!isClanWarCountdownViewOpen() || auxPanel?.classList.contains("hidden")) {
+      stopClanWarCountdownTimer();
+      return;
+    }
+    if (!updateClanWarCountdowns()) stopClanWarCountdownTimer();
+  }, 1000);
+}
+
+function startClanWarRefreshTimer() {
+  stopClanWarRefreshTimer();
+  if (activeAuxPanelKind !== "clan" || clanActiveTab !== "wars") return;
+  clanWarRefreshTimer = window.setInterval(async () => {
+    if (activeAuxPanelKind !== "clan" || clanActiveTab !== "wars" || auxPanel?.classList.contains("hidden")) {
+      stopClanWarRefreshTimer();
+      return;
+    }
+    if (clanWarRefreshInFlight) return;
+    clanWarRefreshInFlight = true;
+    try {
+      await loadClanPanel({ silent: true });
+    } finally {
+      clanWarRefreshInFlight = false;
+    }
+  }, 10000);
 }
 
 function getClanMembersHtml(data) {
@@ -2701,7 +3248,7 @@ function getClanRecruitHtml(data) {
   const canInvite = hasClanPermission(data, "inviteMembers");
   const candidates = Array.isArray(data.candidates) ? data.candidates : [];
   const pendingNames = new Set((Array.isArray(data.invitations) ? data.invitations : [])
-    .filter((entry) => entry.status === "pending" && Number(entry.expiresAt) > Date.now())
+    .filter((entry) => entry.status === "pending" && Number(entry.expiresAt) > getSynchronizedNow())
     .map((entry) => entry.profileName));
   return `
     <section class="clan-dossier">
@@ -2733,6 +3280,76 @@ function getClanRecruitHtml(data) {
   `;
 }
 
+function getClanWarParticipantListHtml(war, side) {
+  const participants = (Array.isArray(war?.participants) ? war.participants : [])
+    .filter((entry) => entry.side === side)
+    .sort((left, right) => Number(right.totalPower || 0) - Number(left.totalPower || 0));
+  return participants.length
+    ? participants.map((participant, index) => `
+      <article class="clan-war-fighter">
+        <div class="clan-war-fighter__rank">${String(index + 1).padStart(2, "0")}</div>
+        <div class="clan-war-fighter__identity">
+          <strong>${escapeHtml(participant.profileName || "Ismeretlen")}</strong>
+          <span>${Math.max(0, Number(participant.crewCount) || 0)} megvásárolt bandatag</span>
+        </div>
+        <div><small>Saját karakter</small><strong>${Math.max(0, Number(participant.combat?.playerAttack) || 0)} T / ${Math.max(0, Number(participant.combat?.playerDefense) || 0)} V</strong></div>
+        <div><small>Bandatagok</small><strong>${Math.max(0, Number(participant.combat?.crewAttack) || 0)} T / ${Math.max(0, Number(participant.combat?.crewDefense) || 0)} V</strong></div>
+        <div class="clan-war-fighter__power"><small>Összerő</small><strong>${Math.max(0, Number(participant.totalPower) || 0)}</strong></div>
+      </article>
+    `).join("")
+    : `<div class="clan-empty-note">Erről az oldalról még senki nem fogadta el a részvételt.</div>`;
+}
+
+function getClanWarReportHtml(data, war) {
+  const active = war.status === "active" && Number(war.endsAt) > getSynchronizedNow();
+  const attackerScore = Math.max(0, Number(war.attackerScore) || 0);
+  const defenderScore = Math.max(0, Number(war.defenderScore) || 0);
+  const winnerClanId = war.outcome?.winnerClanId || (attackerScore === defenderScore ? null : attackerScore > defenderScore ? war.attackerClanId : war.defenderClanId);
+  const winnerName = winnerClanId === war.attackerClanId ? war.attackerClanName : winnerClanId === war.defenderClanId ? war.defenderClanName : "";
+  const participants = Array.isArray(war.participants) ? war.participants : [];
+  const strongest = [...participants].sort((left, right) => Number(right.totalPower || 0) - Number(left.totalPower || 0))[0] || null;
+  const resultTitle = winnerName
+    ? `${escapeHtml(winnerName)} ${active ? "jelenleg vezet" : "megnyerte a háborút"}`
+    : (active ? "Jelenleg döntetlen" : "A háború döntetlennel zárult");
+  return `
+    <section class="clan-war-report">
+      <header class="clan-war-report__hero ${active ? "is-active" : "is-finished"}">
+        <span>${active ? "Élő hadijelentés" : "Lezárt csatajelentés"}</span>
+        <h2>${resultTitle}</h2>
+        <div class="clan-war-report__versus">
+          <div><small>Támadó család</small><strong>${escapeHtml(war.attackerClanName || "Ismeretlen")}</strong><b>${attackerScore}</b></div>
+          <i>VS</i>
+          <div><small>Védekező család</small><strong>${escapeHtml(war.defenderClanName || "Ismeretlen")}</strong><b>${defenderScore}</b></div>
+        </div>
+        ${active ? `<time data-clan-war-countdown="${Math.max(0, Number(war.endsAt) || 0)}">${getClanWarTimeLeft(war.endsAt)}</time>` : `<time>${new Date(Number(war.endsAt) || Date.now()).toLocaleString("hu-HU")}</time>`}
+      </header>
+      <div class="clan-war-report__summary">
+        <div><small>${escapeHtml(war.attackerClanName || "Támadók")}</small><strong>${Math.max(0, Number(war.attackerTeam?.participantCount) || 0)} fő</strong><span>${Math.max(0, Number(war.attackerTeam?.attack) || 0)} támadás · ${Math.max(0, Number(war.attackerTeam?.defense) || 0)} védelem</span></div>
+        <div><small>${escapeHtml(war.defenderClanName || "Védők")}</small><strong>${Math.max(0, Number(war.defenderTeam?.participantCount) || 0)} fő</strong><span>${Math.max(0, Number(war.defenderTeam?.attack) || 0)} támadás · ${Math.max(0, Number(war.defenderTeam?.defense) || 0)} védelem</span></div>
+        <div><small>Legerősebb harcos</small><strong>${escapeHtml(strongest?.profileName || "Nincs résztvevő")}</strong><span>${strongest ? `${Math.max(0, Number(strongest.totalPower) || 0)} összerő` : "–"}</span></div>
+      </div>
+      <section class="clan-war-report__side">
+        <div class="clan-section-heading"><div><span>Támadó oldal</span><h3>${escapeHtml(war.attackerClanName || "Ismeretlen")}</h3></div><strong>${attackerScore} összerő</strong></div>
+        <div class="clan-war-fighter-list">${getClanWarParticipantListHtml(war, "attacker")}</div>
+      </section>
+      <section class="clan-war-report__side">
+        <div class="clan-section-heading"><div><span>Védekező oldal</span><h3>${escapeHtml(war.defenderClanName || "Ismeretlen")}</h3></div><strong>${defenderScore} összerő</strong></div>
+        <div class="clan-war-fighter-list">${getClanWarParticipantListHtml(war, "defender")}</div>
+      </section>
+      <button class="clan-action-button clan-war-report__back" type="button" data-clan-war-report-back>Vissza a klánháborúkhoz</button>
+    </section>
+  `;
+}
+
+function renderClanWarReport(data, war) {
+  if (!data?.clan || !war) return;
+  setAuxPanelContent("Csatajelentés", `${war.attackerClanName || "Ismeretlen"} · ${war.defenderClanName || "Ismeretlen"}`, getClanWarReportHtml(data, war));
+  auxPanel?.setAttribute("data-kind", "clan-war-report");
+  activeAuxPanelKind = "clan-war-report";
+  auxPanelBody?.querySelector("[data-clan-war-report-back]")?.addEventListener("click", () => renderClanPanel(data));
+  if (war.status === "active" && Number(war.endsAt) > getSynchronizedNow()) startClanWarCountdownTimer();
+}
+
 function getClanWarsHtml(data) {
   const clan = data.clan;
   const canDeclareWar = hasClanPermission(data, "declareWar");
@@ -2743,7 +3360,7 @@ function getClanWarsHtml(data) {
     <section class="clan-dossier clan-war-room">
       <div class="clan-section-heading">
         <div><span>Hadüzenetek és leszámolások</span><h3>Bandaháború</h3></div>
-        <strong>${activeWars.length} aktív</strong>
+        <strong data-clan-war-active-count>${activeWars.length} aktív</strong>
       </div>
       ${canDeclareWar ? `
         <div class="clan-war-declare">
@@ -2760,13 +3377,33 @@ function getClanWarsHtml(data) {
           const opponent = ownIsAttacker ? war.defenderClanName : war.attackerClanName;
           const ownScore = ownIsAttacker ? war.attackerScore : war.defenderScore;
           const enemyScore = ownIsAttacker ? war.defenderScore : war.attackerScore;
+          const ownTeam = ownIsAttacker ? war.attackerTeam : war.defenderTeam;
+          const enemyTeam = ownIsAttacker ? war.defenderTeam : war.attackerTeam;
           const active = war.status === "active" && Number(war.endsAt) > Date.now();
+          const endsAt = Math.max(0, Math.round(Number(war.endsAt) || 0));
+          const ownAccepted = Boolean(war.accepted);
+          const joiningPower = Math.max(0, Number(data.warCombat?.totalPower) || 0);
           return `
             <article class="clan-war-card${active ? " is-active" : ""}">
               <div class="clan-war-card__ribbon">${active ? "Háborúban" : "Lezárt akta"}</div>
               <div class="clan-war-card__families"><strong>${escapeHtml(clan.clanName)}</strong><span>VS</span><strong>${escapeHtml(opponent || "Ismeretlen")}</strong></div>
-              <div class="clan-war-card__score">${Number(ownScore) || 0}<span>:</span>${Number(enemyScore) || 0}</div>
-              <div class="clan-war-card__time">${active ? getClanWarTimeLeft(war.endsAt) : new Date(war.endsAt).toLocaleDateString("hu-HU")}</div>
+              <div class="clan-war-card__score"><small>Összerő</small>${Number(ownScore) || 0}<span>:</span>${Number(enemyScore) || 0}</div>
+              <div class="clan-war-card__time"${active ? ` data-clan-war-countdown="${endsAt}"` : ""}>${active ? getClanWarTimeLeft(endsAt) : new Date(war.endsAt).toLocaleDateString("hu-HU")}</div>
+              <div class="clan-war-card__teams">
+                <span><strong>${Math.max(0, Number(ownTeam?.participantCount) || 0)} elfogadó</strong> · Támadás ${Math.max(0, Number(ownTeam?.attack) || 0)} · Védelem ${Math.max(0, Number(ownTeam?.defense) || 0)}</span>
+                <span><strong>${Math.max(0, Number(enemyTeam?.participantCount) || 0)} ellenfél</strong> · Támadás ${Math.max(0, Number(enemyTeam?.attack) || 0)} · Védelem ${Math.max(0, Number(enemyTeam?.defense) || 0)}</span>
+              </div>
+              <div class="clan-war-card__join">
+                <div>
+                ${active ? `
+                  ${ownAccepted
+                    ? `<strong class="is-accepted">✓ Csatlakoztál a háborúhoz</strong>`
+                    : `<button class="clan-action-button clan-action-button--war" type="button" data-clan-war-accept="${Number(war.warId) || 0}">Csatlakozom a háborúhoz</button>`}
+                  <small>Saját összerőd: ${joiningPower} · Saját karakter és ${Math.max(0, Number(data.warCombat?.crewCount) || 0)} megvásárolt bandatag</small>
+                ` : `<strong class="${war.outcome?.draw ? "" : war.outcome?.winnerClanId === clan.clanId ? "is-accepted" : ""}">${war.outcome?.draw ? "Döntetlen" : war.outcome?.winnerClanId === clan.clanId ? "✓ Győzelem" : "Vereség"}</strong>`}
+                </div>
+                <button class="clan-action-button clan-war-card__report-button" type="button" data-clan-war-report="${Number(war.warId) || 0}">${active ? "Erőlista" : "Csatajelentés"}</button>
+              </div>
             </article>
           `;
         }).join("") || `<div class="clan-empty-note">Még egyetlen bandaháború sem került a családi krónikába.</div>`}
@@ -2985,6 +3622,35 @@ function bindClanPanelActions(data) {
       button.disabled = false;
     }
   });
+  auxPanelBody?.querySelectorAll("[data-clan-war-accept]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const warId = Number(button.dataset.clanWarAccept) || 0;
+      const notice = document.getElementById("clanPanelNotice");
+      if (!warId) return;
+      button.disabled = true;
+      button.textContent = "Csatlakozás...";
+      try {
+        const response = await fetch(`/api/clans/wars/${warId}/accept`, {
+          method: "POST",
+          headers: { Accept: "application/json" },
+        });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || "A csatlakozás sikertelen.");
+        await loadClanPanel();
+      } catch (error) {
+        if (notice) notice.textContent = error.message;
+        button.disabled = false;
+        button.textContent = "Csatlakozom a háborúhoz";
+      }
+    });
+  });
+  auxPanelBody?.querySelectorAll("[data-clan-war-report]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const warId = Number(button.dataset.clanWarReport) || 0;
+      const war = (Array.isArray(data?.wars) ? data.wars : []).find((entry) => Number(entry.warId) === warId);
+      if (war) renderClanWarReport(data, war);
+    });
+  });
 }
 
 function renderClanPanel(data = clanPanelData) {
@@ -3042,17 +3708,29 @@ function renderClanPanel(data = clanPanelData) {
   auxPanel?.setAttribute("data-kind", "clan");
   activeAuxPanelKind = "clan";
   bindClanPanelActions(data);
+  if (clanActiveTab === "wars") {
+    startClanWarCountdownTimer();
+    startClanWarRefreshTimer();
+  } else {
+    stopClanWarCountdownTimer();
+    stopClanWarRefreshTimer();
+  }
 }
 
-async function loadClanPanel() {
-  renderClanPanel(null);
+async function loadClanPanel(options = {}) {
+  const silent = Boolean(options.silent);
+  const previousScrollTop = silent ? Math.max(0, Number(auxPanelBody?.scrollTop) || 0) : 0;
+  if (!silent) renderClanPanel(null);
   try {
     const response = await fetch("/api/clans/dashboard", { headers: { Accept: "application/json" } });
+    observeServerClock(response);
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.error || "A klánadatok nem tölthetők be.");
     clanPanelData = payload;
     renderClanPanel(payload);
+    if (silent && auxPanelBody) auxPanelBody.scrollTop = previousScrollTop;
   } catch (error) {
+    if (silent) return;
     setAuxPanelContent("Klán", "Családi ügyek", `<div class="clan-empty-note">${escapeHtml(error.message)}</div>`);
     auxPanel?.setAttribute("data-kind", "clan");
     activeAuxPanelKind = "clan";
@@ -3124,8 +3802,9 @@ function renderWorldMapPanelWithSaves(saves = []) {
       </div>
     </section>
   `;
-  setAuxPanelContent("Vilagterkep", selectionMode ? "Valaszd ki a varosod helyet" : "", body);
+  setAuxPanelContent(selectionMode ? "Válaszd ki a városod helyét" : "Világtérkép", "", body);
   auxPanel?.setAttribute("data-kind", "world");
+  if (selectionMode && auxPanel) auxPanel.dataset.worldSelection = "true";
   if (!selectionMode && auxPanelHeaderTools) {
     auxPanelHeaderTools.innerHTML = `
       <div class="worldmap__searchrow worldmap__searchrow--header">
@@ -3511,7 +4190,7 @@ const harborGarageVehicleDefs = [
   {
     id: "van",
     title: "Csempesz furgon",
-    cost: 520,
+    cost: 754,
     requiredLevel: 2,
     speed: 1,
     stealth: 2,
@@ -3525,7 +4204,7 @@ const harborGarageVehicleDefs = [
   {
     id: "armor",
     title: "Pancelkocsi",
-    cost: 980,
+    cost: 1421,
     requiredLevel: 3,
     speed: 2,
     stealth: 1,
@@ -3594,6 +4273,14 @@ const harborGarageMissionDefs = [
 
 const harborMissionCatalog = Array.from({ length: 50 }, (_, index) => {
   const batch = Math.floor(index / 4);
+  const dockVariants = [
+    { title: "Rakparti atadas", requires: { counterfeitMoney: 7 + (batch % 4), weapons: 5 + (batch % 2) }, rewardMoney: 165 + batch * 8, rewardXp: 27 + (batch % 8), durationMs: 30 * 60 * 1000, successChance: 0.9 },
+    { title: "Kodos kontenercsere", requires: { drugs: 6 + (batch % 4), papers: 5 + (batch % 3) }, rewardMoney: 152 + batch * 7, rewardXp: 26 + (batch % 7), durationMs: 28 * 60 * 1000, successChance: 0.92 },
+    { title: "Pecsetelt rakparti lada", requires: { papers: 6 + (batch % 4), counterfeitMoney: 5 + (batch % 3) }, rewardMoney: 158 + batch * 7, rewardXp: 25 + (batch % 7), durationMs: 32 * 60 * 1000, successChance: 0.89 },
+    { title: "Csendes hajoraktar", requires: { weapons: 5 + (batch % 3), drugs: 5 + (batch % 4) }, rewardMoney: 178 + batch * 9, rewardXp: 30 + (batch % 8), durationMs: 34 * 60 * 1000, successChance: 0.84 },
+    { title: "Vegyes csempesz boritek", requires: { papers: 5 + (batch % 3), drugs: 5 + (batch % 3), counterfeitMoney: 5 + (batch % 3) }, rewardMoney: 188 + batch * 9, rewardXp: 32 + (batch % 8), durationMs: 36 * 60 * 1000, successChance: 0.82 },
+    { title: "Kapitanyi tartozas", requires: { papers: 5 + (batch % 2), weapons: 5 + (batch % 2), counterfeitMoney: 6 + (batch % 4) }, rewardMoney: 198 + batch * 10, rewardXp: 34 + (batch % 9), durationMs: 38 * 60 * 1000, successChance: 0.8 },
+  ];
   const customsVariants = [
     { title: "Gyors vami boritek", gives: { papers: 4 + (batch % 3), counterfeitMoney: 2 + (batch % 2) }, rewardMoney: 45 + batch * 3, rewardXp: 14 + (batch % 4), durationMs: 35 * 60 * 1000, successChance: 0.94 },
     { title: "Hamis papiros csere", gives: { papers: 8 + (batch % 4) }, rewardMoney: 72 + batch * 4, rewardXp: 20 + (batch % 5), durationMs: 35 * 60 * 1000, successChance: 0.88 },
@@ -3607,10 +4294,19 @@ const harborMissionCatalog = Array.from({ length: 50 }, (_, index) => {
     { title: "Ejfeli vonatrablas", gives: { drugs: 12 + (batch % 6), weapons: 6 + (batch % 3), counterfeitMoney: 2 }, rewardMoney: 190 + batch * 7, rewardXp: 42 + (batch % 8), durationMs: 35 * 60 * 1000, successChance: 0.64 },
   ];
   const profiles = [
-    { zone: "docks", title: "Rakparti atadas", requires: { counterfeitMoney: 6 + (index % 4), weapons: 1 + (index % 3) }, rewardMoney: 170 + index * 5, rewardXp: 28 + (index % 8), durationMs: 30 * 60 * 1000 },
+    { zone: "docks", ...dockVariants[batch % dockVariants.length] },
     { zone: "customs", ...customsVariants[batch % customsVariants.length] },
     { zone: "rail", ...railVariants[batch % railVariants.length] },
-    { zone: "fish", title: "Hajnali halaszat", gives: {}, rewardMoney: 90 + index * 3, rewardXp: 18 + (index % 10), heal: 20, energy: 20, durationMs: [60, 180, 360][index % 3] * 60 * 1000 },
+    {
+      zone: "fish",
+      title: "Hajnali halaszat",
+      gives: {},
+      rewardMoney: [330, 660, 990][index % 3],
+      rewardXp: [18, 34, 58][index % 3],
+      heal: [20, 50, 100][index % 3],
+      energy: [20, 50, 100][index % 3],
+      durationMs: [60, 180, 360][index % 3] * 60 * 1000,
+    },
   ];
   const profile = profiles[index % profiles.length];
   return {
@@ -3621,9 +4317,9 @@ const harborMissionCatalog = Array.from({ length: 50 }, (_, index) => {
 });
 
 const harborFishMissionDefs = [
-  { id: "fish-1h", zone: "fish", title: "Hajnali halaszat - 1 ora", gives: {}, rewardMoney: 90, rewardXp: 18, heal: 20, energy: 20, durationMs: 60 * 60 * 1000 },
-  { id: "fish-3h", zone: "fish", title: "Part menti halaszat - 3 ora", gives: {}, rewardMoney: 180, rewardXp: 34, heal: 28, energy: 28, durationMs: 180 * 60 * 1000 },
-  { id: "fish-6h", zone: "fish", title: "Ejszakai halaszat - 6 ora", gives: {}, rewardMoney: 330, rewardXp: 58, heal: 40, energy: 40, durationMs: 360 * 60 * 1000 },
+  { id: "fish-1h", zone: "fish", title: "Hajnali halaszat - 1 ora", gives: {}, rewardMoney: 330, rewardXp: 18, heal: 20, energy: 20, durationMs: 60 * 60 * 1000 },
+  { id: "fish-3h", zone: "fish", title: "Part menti halaszat - 3 ora", gives: {}, rewardMoney: 660, rewardXp: 34, heal: 50, energy: 50, durationMs: 180 * 60 * 1000 },
+  { id: "fish-6h", zone: "fish", title: "Ejszakai halaszat - 6 ora", gives: {}, rewardMoney: 990, rewardXp: 58, heal: 100, energy: 100, durationMs: 360 * 60 * 1000 },
 ];
 
 function replaceConfigArray(target, incoming, requiredKeys = ["id"]) {
@@ -3766,6 +4462,41 @@ function normalizeSmuggledGoods(goods) {
   ]));
 }
 
+function getPoliceCargoLossRate(heat, severe = false) {
+  const normalizedHeat = clamp(Number(heat) || 0, 0, 100);
+  if (normalizedHeat <= 85) return 0;
+  const overheat = normalizedHeat - 85;
+  return severe
+    ? clamp(0.22 + overheat * 0.006, 0.22, 0.32)
+    : clamp(0.1 + overheat * 0.005, 0.1, 0.18);
+}
+
+function confiscatePoliceCargo(heat, severe = false) {
+  const lossRate = getPoliceCargoLossRate(heat, severe);
+  const goods = normalizeSmuggledGoods(state.smuggledGoods);
+  const lost = normalizeSmuggledGoods();
+  if (lossRate <= 0) {
+    state.smuggledGoods = goods;
+    return lost;
+  }
+  Object.keys(harborCargoDefs).forEach((key) => {
+    const amount = Math.max(0, Math.round(Number(goods[key]) || 0));
+    if (!amount) return;
+    const loss = Math.min(amount, Math.max(1, Math.floor(amount * lossRate)));
+    goods[key] = Math.max(0, amount - loss);
+    lost[key] = loss;
+  });
+  state.smuggledGoods = goods;
+  return lost;
+}
+
+function formatCargoLoss(cargo = {}) {
+  return Object.entries(normalizeSmuggledGoods(cargo))
+    .filter(([, amount]) => amount > 0)
+    .map(([key, amount]) => `${harborCargoDefs[key]?.label || key}: ${amount}`)
+    .join(", ");
+}
+
 function normalizeHarborGarage(saved) {
   const unlockedSet = new Set(
     Array.isArray(saved?.unlockedVehicleIds)
@@ -3829,7 +4560,34 @@ function getHarborGarageStats() {
 }
 
 function getHarborGarageUpgradeCost() {
-  return 360 + (Math.max(1, state.harborGarage?.level || 1) - 1) * 290;
+  const baseCost = 360 + (Math.max(1, state.harborGarage?.level || 1) - 1) * 290;
+  return Math.round(baseCost * 1.45);
+}
+
+function normalizeHarborBarUsage(source = {}, now = getSynchronizedNow()) {
+  const normalizeEntry = (entry) => {
+    const resetAt = Math.max(0, Number(entry?.resetAt) || 0);
+    if (!resetAt || resetAt <= now) return { uses: 0, resetAt: 0 };
+    return {
+      uses: clamp(Math.round(Number(entry?.uses) || 0), 0, HARBOR_BAR_USE_LIMIT),
+      resetAt,
+    };
+  };
+  return {
+    health: normalizeEntry(source?.health),
+    energy: normalizeEntry(source?.energy),
+  };
+}
+
+function getHarborBarLimitState(kind, now = getSynchronizedNow()) {
+  state.harborBarUsage = normalizeHarborBarUsage(state.harborBarUsage, now);
+  const usage = state.harborBarUsage[kind] || { uses: 0, resetAt: 0 };
+  return {
+    uses: usage.uses,
+    remaining: Math.max(0, HARBOR_BAR_USE_LIMIT - usage.uses),
+    resetAt: usage.resetAt,
+    resetIn: Math.max(0, usage.resetAt - now),
+  };
 }
 
 function scaleGarageCargoReward(cargo = {}, load = 1, quantityBonus = 0) {
@@ -4015,6 +4773,8 @@ function getHarborMissionsForZone(zoneId) {
 function setHarborPanelContent(zone, bodyHtml) {
   if (!harborOperationPanel) return;
   const lockClose = zone?.id === "garage" && Boolean(garageMiniGameState);
+  harborOperationPanel.classList.toggle("harbor-operation-panel--customs", zone?.id === "customs");
+  harborOperationPanel.classList.toggle("harbor-operation-panel--office", zone?.id === "office");
   harborOperationPanel.innerHTML = `
     <header class="harbor-operation-panel__header">
       <div>
@@ -4038,6 +4798,13 @@ function hideHarborOperationPanel() {
 }
 
 function renderHarborBar(zone) {
+  const healthLimit = getHarborBarLimitState("health");
+  const energyLimit = getHarborBarLimitState("energy");
+  const getLimitHtml = (limit) => `
+    <aside class="harbor-service-card__limit${limit.remaining <= 0 ? " is-empty" : ""}" aria-label="Felhasználható: ${limit.remaining}/${HARBOR_BAR_USE_LIMIT}">
+      <strong>${limit.remaining}/${HARBOR_BAR_USE_LIMIT}</strong>
+    </aside>
+  `;
   setHarborPanelContent(zone, `
     <section class="harbor-place">
       <div class="harbor-hero harbor-hero--bar" aria-hidden="true">
@@ -4048,17 +4815,19 @@ function renderHarborBar(zone) {
         </div>
       </div>
       <div class="harbor-service-grid">
-        <article class="harbor-service-card">
+        <article class="harbor-service-card harbor-service-card--limited">
+          ${getLimitHtml(healthLimit)}
           <strong>Orvosi whiskey</strong>
           <span>+35 eletero</span>
           <small>Ersebb ital a kikoto embereitol. Gyors foltozas, dragabb aron.</small>
-          <button type="button" data-harbor-buy="health">Megveszem - 75 $</button>
+          <button type="button" data-harbor-buy="health" ${healthLimit.remaining <= 0 || state.health >= 100 || state.money < 75 ? "disabled" : ""}>${healthLimit.remaining <= 0 ? "Limit elerve" : state.health >= 100 ? "Teljes eletero" : "Megveszem - 75 $"}</button>
         </article>
-        <article class="harbor-service-card">
+        <article class="harbor-service-card harbor-service-card--limited">
+          ${getLimitHtml(energyLimit)}
           <strong>Fekete kave</strong>
           <span>+35 energia</span>
           <small>Forro, eros fekete. Osszerantja az embert egy ujabb akciohoz.</small>
-          <button type="button" data-harbor-buy="energy">Megveszem - 75 $</button>
+          <button type="button" data-harbor-buy="energy" ${energyLimit.remaining <= 0 || state.energy >= 100 || state.money < 75 ? "disabled" : ""}>${energyLimit.remaining <= 0 ? "Limit elerve" : state.energy >= 100 ? "Teljes energia" : "Megveszem - 75 $"}</button>
         </article>
         <article class="harbor-service-card harbor-service-card--locked">
           <strong>Mentor ital</strong>
@@ -4120,7 +4889,10 @@ function renderHarborOrders(zone, kind = "mixed") {
           const chanceText = Number.isFinite(Number(mission.successChance)) && mission.successChance < 1
             ? `, ${Math.round(Number(mission.successChance) * 100)}% esely`
             : "";
-          const reward = `+${mission.rewardMoney} $, +${mission.rewardXp} XP${mission.heal ? ", pihenes" : ""}${chanceText}`;
+          const recoveryText = mission.heal || mission.energy
+            ? `, +${Math.max(0, Number(mission.heal) || 0)}% elet, +${Math.max(0, Number(mission.energy) || 0)}% energia`
+            : "";
+          const reward = `+${mission.rewardMoney} $, +${mission.rewardXp} XP${recoveryText}${chanceText}`;
           return `
           <div class="harbor-orders__row">
             <strong>${escapeHtml(mission.title)}</strong>
@@ -4135,27 +4907,264 @@ function renderHarborOrders(zone, kind = "mixed") {
   `);
 }
 
-function renderHarborOffice(zone) {
+function isHarborMissionQueued(mission) {
+  return normalizeProcessTasks(state.harborProcessTasks).some((task) =>
+    task.type === "harbor"
+    && (task.payload?.missionId === mission.id || (!task.payload?.missionId && task.payload?.title === mission.title)),
+  );
+}
+
+function getHarborCustomsDifficulty(mission) {
+  const chance = clamp(Number(mission?.successChance) || 1, 0, 1);
+  if (chance >= 0.9) return 1;
+  if (chance >= 0.76) return 2;
+  return 3;
+}
+
+function getHarborCustomsRelationshipLabel() {
+  const influence = clamp(Math.round(Number(state.influence) || 0), 0, 100);
+  if (influence >= 75) return "Nagyon jó";
+  if (influence >= 50) return "Erős";
+  if (influence >= 25) return "Megbízható";
+  return "Kezdő";
+}
+
+function renderHarborCustomsCargo(cargo = {}, compact = false) {
+  const entries = Object.entries(cargo).filter(([, amount]) => Number(amount) > 0);
+  if (!entries.length) return `<span class="customs-cargo-empty">Nincs külön rakomány</span>`;
+  return entries.map(([key, amount]) => {
+    const definition = harborCargoDefs[key] || { label: key, image: "" };
+    return `
+      <span class="customs-cargo-item${compact ? " customs-cargo-item--compact" : ""}">
+        ${definition.image ? `<img src="${definition.image}" alt="">` : ""}
+        <span><strong>${Math.max(0, Math.round(Number(amount) || 0))}</strong> ${escapeHtml(definition.label)}</span>
+      </span>
+    `;
+  }).join("");
+}
+
+function renderHarborCustoms(zone) {
+  const missions = getHarborMissionsForZone("customs");
+  if (!missions.length) {
+    setHarborPanelContent(zone, `<p class="harbor-operation-panel__muted">Jelenleg nincs elérhető vámmegbízás.</p>`);
+    return;
+  }
+  const selectedMission = missions.find((mission) => mission.id === selectedHarborCustomsMissionId) || missions[0];
+  selectedHarborCustomsMissionId = selectedMission.id;
+  const difficulty = getHarborCustomsDifficulty(selectedMission);
+  const successChance = Math.round(clamp(Number(selectedMission.successChance) || 1, 0, 1) * 100);
+  const selectedQueued = isHarborMissionQueued(selectedMission);
+  const cargoTotal = Object.values(normalizeSmuggledGoods(state.smuggledGoods)).reduce((sum, amount) => sum + Math.max(0, Number(amount) || 0), 0);
+  const activeCustomsJobs = normalizeProcessTasks(state.harborProcessTasks).filter((task) => task.type === "harbor" && task.payload?.zone === "customs").length;
+
   setHarborPanelContent(zone, `
-    <section class="harbor-place">
-      <p class="harbor-operation-panel__muted">Egy boritek a megfelelo asztalra neha tobbet er, mint egy pisztoly az utcan.</p>
-      <div class="harbor-service-grid">
-        <article class="harbor-service-card">
-          <strong>Kis lefizetes</strong>
-          <span>Korozes -10%</span>
-          <button type="button" data-harbor-bribe="small">100 $</button>
-        </article>
-        <article class="harbor-service-card">
-          <strong>Nagy lefizetes</strong>
-          <span>Korozes -25%</span>
-          <button type="button" data-harbor-bribe="large">350 $</button>
-        </article>
-        <article class="harbor-service-card harbor-service-card--locked">
-          <strong>Kapcsolat epites</strong>
-          <span>Kesobb uj opciok</span>
-          <button type="button" disabled>Hamarosan</button>
-        </article>
+    <section class="customs-hub">
+      <p class="customs-hub__intro">Válassz vámmegbízást, majd indítsd útnak az árut. A jutalom és a rakomány csak a folyamat lejártakor kerül jóváírásra.</p>
+      <div class="customs-hub__layout">
+        <section class="customs-board" aria-label="Elérhető vámmegbízások">
+          <div class="customs-board__head">
+            <span>Megbízás</span><span>Árucsomag</span><span>Idő</span><span>Jutalom</span><span>Esély</span>
+          </div>
+          <div class="customs-board__list">
+            ${missions.map((mission, index) => {
+              const chance = Math.round(clamp(Number(mission.successChance) || 1, 0, 1) * 100);
+              const missionDifficulty = getHarborCustomsDifficulty(mission);
+              const queued = isHarborMissionQueued(mission);
+              const selected = mission.id === selectedMission.id;
+              return `
+                <div class="customs-mission-row${selected ? " is-selected" : ""}${queued ? " is-queued" : ""}" data-customs-select="${mission.id}" role="button" tabindex="0" aria-pressed="${selected}">
+                  <span class="customs-mission-row__title"><strong>Vám megbízás ${index + 1}</strong><em>${"★".repeat(missionDifficulty)}</em></span>
+                  <span class="customs-mission-row__cargo">${renderHarborCustomsCargo(mission.gives || mission.requires, true)}</span>
+                  <span class="customs-mission-row__time">${formatCountdown(mission.durationMs)}</span>
+                  <span class="customs-mission-row__reward"><strong>${Math.max(0, Math.round(Number(mission.rewardMoney) || 0))} $</strong><small>+${Math.max(0, Math.round(Number(mission.rewardXp) || 0))} XP</small></span>
+                  <span class="customs-mission-row__chance">${chance}%</span>
+                </div>
+              `;
+            }).join("")}
+          </div>
+          <footer class="customs-board__footer">
+            <span>A kínálat a kikötői nap váltásakor frissül.</span>
+            <strong>${activeCustomsJobs ? `${activeCustomsJobs} vámmunka folyamatban` : "Nincs futó vámmunka"}</strong>
+          </footer>
+        </section>
+
+        <aside class="customs-detail" aria-label="Kiválasztott vámmegbízás">
+          <span class="customs-detail__eyebrow">Kiválasztott megbízás</span>
+          <img class="customs-detail__image" src="./assets/harbor/customs-office-detail-v1.png" alt="Éjszakai vámhivatal iratokkal és kikötői rakománnyal">
+          <div class="customs-detail__body">
+            <h3>${escapeHtml(selectedMission.title)} <span>${"★".repeat(difficulty)}</span></h3>
+            <p>A hivatal emberei előkészítik a papírokat, az áru pedig ellenőrzött útvonalon jut át a kikötőn.</p>
+            <section class="customs-detail__cargo">
+              <span>Árucsomag</span>
+              <div>${renderHarborCustomsCargo(selectedMission.gives || selectedMission.requires)}</div>
+            </section>
+            <div class="customs-detail__stats">
+              <div><span>Idő</span><strong>${formatCountdown(selectedMission.durationMs)}</strong></div>
+              <div><span>Jutalom</span><strong>${Math.max(0, Math.round(Number(selectedMission.rewardMoney) || 0))} $</strong><small>+${Math.max(0, Math.round(Number(selectedMission.rewardXp) || 0))} XP</small></div>
+              <div><span>Siker esélye</span><strong>${successChance}%</strong></div>
+            </div>
+            <section class="customs-detail__requirements">
+              <span>Műveleti állapot</span>
+              <div><strong>Kapcsolat</strong><em>${getHarborCustomsRelationshipLabel()}</em></div>
+              <div><strong>Körözés</strong><em>${clamp(Math.round(Number(state.heat) || 0), 0, 100)}%</em></div>
+            </section>
+            <button class="customs-detail__start" type="button" data-harbor-mission="${selectedMission.id}" ${selectedQueued ? "disabled" : ""}>${selectedQueued ? "Már folyamatban" : "Megbízás indítása"}</button>
+          </div>
+        </aside>
       </div>
+      <footer class="customs-status-grid">
+        <article><span class="customs-status-grid__icon">▣</span><div><small>Raktárkészlet</small><strong>${Math.round(cargoTotal)} db áru</strong></div></article>
+        <article><span class="customs-status-grid__icon">♢</span><div><small>Nehézségi szint</small><strong>${"◆".repeat(difficulty)}${"◇".repeat(3 - difficulty)}</strong></div></article>
+        <article><span class="customs-status-grid__icon">♟</span><div><small>Kikötői kapcsolatok</small><strong>${getHarborCustomsRelationshipLabel()}</strong></div></article>
+      </footer>
+    </section>
+  `);
+}
+
+function getHarborOfficeRelationship(influence = state.influence) {
+  const normalizedInfluence = clamp(Math.round(Number(influence) || 0), 0, 100);
+  if (normalizedInfluence >= 75) return { label: "Tekintélyes", tone: "excellent" };
+  if (normalizedInfluence >= 50) return { label: "Nagyon jó", tone: "good" };
+  if (normalizedInfluence >= 25) return { label: "Stabil", tone: "steady" };
+  return { label: "Óvatos", tone: "cautious" };
+}
+
+function getHarborOfficeLogEntries() {
+  const entries = Array.isArray(state.localNotifications) ? state.localNotifications : [];
+  const harborPattern = /kiköt|kikoto|vám|vam|csempész|csempesz|rakpart|dok|halpiac|garázs|garazs/i;
+  return entries
+    .filter((entry) => harborPattern.test(`${entry?.title || ""} ${entry?.body || ""}`))
+    .sort((left, right) => Number(right?.createdAt || 0) - Number(left?.createdAt || 0))
+    .slice(0, 8);
+}
+
+function renderHarborOfficeOverview({ smallBribeCost, largeBribeCost, relationship, benefits, cargoTotal, activeJobs }) {
+  const officeCards = [
+    { art: "routes", icon: "✥", title: "Csempészeti útvonalak", copy: "Útvonalak kezelése, kockázat felmérése és haszon maximalizálása." },
+    { art: "contacts", icon: "◆", title: "Kapcsolatok", copy: "Befolyás építése a dokkmunkások, vámosok és kapitányok között." },
+    { art: "warehouse", icon: "▣", title: "Raktár és szállítmány", copy: "Árukészlet, lefoglalt rakomány és csempészcsomagok áttekintése." },
+    { art: "upgrades", icon: "⬆", title: "Fejlesztések", copy: "A kikötői járművek és műveleti háttér fejlesztése." },
+  ];
+  const discountText = benefits.harborPenaltyReductionRate > 0
+    ? `${formatInfluenceRate(benefits.harborPenaltyReductionRate)} kedvezmény aktív`
+    : "Nincs befolyáskedvezmény";
+  return `
+    <div class="harbor-office-overview-grid">
+      ${officeCards.map((card) => `
+        <article class="harbor-office-feature-card is-coming-soon">
+          <div class="harbor-office-feature-card__art harbor-office-feature-card__art--${card.art}" aria-hidden="true"><span>${card.icon}</span></div>
+          <div class="harbor-office-feature-card__body">
+            <strong>${card.title}</strong>
+            <p>${card.copy}</p>
+            <button type="button" disabled aria-disabled="true">Majd később</button>
+          </div>
+        </article>
+      `).join("")}
+    </div>
+    <div class="harbor-office-dashboard">
+      <article class="harbor-office-status-card">
+        <span>Hivatal állapota</span>
+        <div><small>Befolyás</small><i><b style="width:${clamp(Number(state.influence) || 0, 0, 100)}%"></b></i><strong>${clamp(Math.round(Number(state.influence) || 0), 0, 100)}%</strong></div>
+        <div><small>Körözés</small><i class="is-heat"><b style="width:${clamp(Number(state.heat) || 0, 0, 100)}%"></b></i><strong>${clamp(Math.round(Number(state.heat) || 0), 0, 100)}%</strong></div>
+        <footer><em>${cargoTotal} áru raktáron</em><em>${activeJobs} aktív munka</em></footer>
+      </article>
+      <article class="harbor-office-bribe-card">
+        <span>Kis lefizetés</span><p>Gyors megoldás kisebb gondokra.</p><strong>${smallBribeCost} $</strong>
+        <button type="button" data-harbor-bribe="small" ${state.money < smallBribeCost || state.heat <= 0 ? "disabled" : ""}>Lefizetés · −10% körözés</button>
+      </article>
+      <article class="harbor-office-bribe-card harbor-office-bribe-card--large">
+        <span>Nagy lefizetés</span><p>Nagyobb gondok, nagyobb hatás.</p><strong>${largeBribeCost} $</strong>
+        <button type="button" data-harbor-bribe="large" ${state.money < largeBribeCost || state.heat <= 0 ? "disabled" : ""}>Lefizetés · −25% körözés</button>
+      </article>
+      <article class="harbor-office-bonus-card">
+        <span>Aktuális bónuszok</span>
+        <div><small>Kapcsolat</small><strong class="is-positive">${relationship.label}</strong></div>
+        <div><small>Kikötői büntetés</small><strong class="is-positive">−${formatInfluenceRate(benefits.harborPenaltyReductionRate)}</strong></div>
+        <div><small>Feketepiaci kedvezmény</small><strong class="is-positive">${formatInfluenceRate(benefits.marketDiscountRate)}</strong></div>
+        <footer>${discountText}</footer>
+      </article>
+    </div>
+  `;
+}
+
+function renderHarborOfficeOperations({ smallBribeCost, largeBribeCost }) {
+  const operations = [
+    { zone: "docks", icon: "⚓", title: "Dokkok", copy: "Hajós csempészmunkák és rakparti útvonalak." },
+    { zone: "customs", icon: "▤", title: "Vám", copy: "Ellenőrzött rakományok és vámpapírok." },
+    { zone: "rail", icon: "▥", title: "Vasúti rakodó", copy: "Nehéz áru gyors mozgatása a városba." },
+    { zone: "fish", icon: "◈", title: "Halpiac", copy: "Pihenés, gyógyulás és kisebb kikötői munkák." },
+  ];
+  return `
+    <div class="harbor-office-operation-grid">
+      ${operations.map((entry) => `<button type="button" data-harbor-office-zone="${entry.zone}"><b>${entry.icon}</b><strong>${entry.title}</strong><span>${entry.copy}</span></button>`).join("")}
+    </div>
+    <div class="harbor-office-bribe-strip">
+      <div><span>Rendőrségi kapcsolat</span><strong>A lefizetés azonnal csökkenti a körözést.</strong></div>
+      <button type="button" data-harbor-bribe="small" ${state.money < smallBribeCost || state.heat <= 0 ? "disabled" : ""}>Kis boríték · ${smallBribeCost} $</button>
+      <button type="button" data-harbor-bribe="large" ${state.money < largeBribeCost || state.heat <= 0 ? "disabled" : ""}>Nagy boríték · ${largeBribeCost} $</button>
+    </div>
+  `;
+}
+
+function renderHarborOfficeNetwork(benefits, relationship) {
+  const rows = [
+    ["Feketepiaci kedvezmény", formatInfluenceRate(benefits.marketDiscountRate)],
+    ["Védelmipénz esélybónusz", formatInfluenceRate(benefits.protectionChanceBonus)],
+    ["Világtérképes sarcbónusz", formatInfluenceRate(benefits.worldTributeBonusRate)],
+    ["Kikötői büntetéscsökkentés", formatInfluenceRate(benefits.harborPenaltyReductionRate)],
+    ["Sárga felszerelés esély", formatInfluenceRate(benefits.marketYellowChanceBonus)],
+    ["Piros felszerelés esély", formatInfluenceRate(benefits.marketRedChanceBonus)],
+  ];
+  return `
+    <div class="harbor-office-network">
+      <section class="harbor-office-network__summary">
+        <span>Kikötői kapcsolatok</span><strong>${relationship.label}</strong>
+        <i><b style="width:${clamp(Number(state.influence) || 0, 0, 100)}%"></b></i>
+        <p>A kapcsolati háló a jelenlegi ${clamp(Math.round(Number(state.influence) || 0), 0, 100)}% befolyásod alapján biztosít előnyöket.</p>
+      </section>
+      <section class="harbor-office-network__benefits">
+        ${rows.map(([label, value]) => `<div><span>${label}</span><strong>${value}</strong></div>`).join("")}
+      </section>
+    </div>
+  `;
+}
+
+function renderHarborOfficeLog() {
+  const entries = getHarborOfficeLogEntries();
+  return `
+    <div class="harbor-office-log">
+      ${entries.length ? entries.map((entry) => `
+        <article><time>${entry.createdAt ? new Date(Number(entry.createdAt)).toLocaleString("hu-HU", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }) : "Most"}</time><div><strong>${escapeHtml(entry.title || "Kikötői esemény")}</strong><p>${escapeHtml(entry.body || "")}</p></div></article>
+      `).join("") : `<div class="harbor-office-log__empty"><strong>Még nincs kikötői bejegyzés</strong><span>Az elindított és befejezett műveletek itt jelennek meg.</span></div>`}
+    </div>
+  `;
+}
+
+function renderHarborOffice(zone, requestedTab = harborOfficeTab) {
+  harborOfficeTab = "overview";
+  const benefits = getInfluenceBenefits();
+  const relationship = getHarborOfficeRelationship();
+  const smallBribeCost = Math.max(1, Math.round(100 * (1 - benefits.harborPenaltyReductionRate)));
+  const largeBribeCost = Math.max(1, Math.round(350 * (1 - benefits.harborPenaltyReductionRate)));
+  const cargoTotal = Object.values(normalizeSmuggledGoods(state.smuggledGoods)).reduce((sum, amount) => sum + amount, 0);
+  const activeJobs = normalizeProcessTasks(state.harborProcessTasks).length;
+  const content = renderHarborOfficeOverview({ smallBribeCost, largeBribeCost, relationship, benefits, cargoTotal, activeJobs });
+  const tabs = [
+    ["overview", "Áttekintés", true],
+    ["operations", "Műveletek · később", false],
+    ["network", "Hálózat · később", false],
+    ["log", "Napló · később", false],
+  ];
+  setHarborPanelContent(zone, `
+    <section class="harbor-office-hub">
+      <header class="harbor-office-hub__brand">
+        <span class="harbor-office-hub__crest" aria-hidden="true"><img src="./assets/harbor/harbor-office-crest-v2.png" alt=""></span>
+        <div><strong>Kikötői iroda</strong><small>A kikötői műveletek központja</small></div>
+      </header>
+      <nav class="harbor-office-tabs" aria-label="Kikötői iroda menü">
+        ${tabs.map(([id, label, enabled]) => `<button type="button" ${enabled ? `data-harbor-office-tab="${id}"` : "disabled aria-disabled=\"true\""} class="${enabled ? "is-active" : "is-coming-soon"}">${label}</button>`).join("")}
+      </nav>
+      <div class="harbor-office-content harbor-office-content--${harborOfficeTab}">${content}</div>
     </section>
   `);
 }
@@ -4650,7 +5659,8 @@ function renderHarborZonePanel(zone) {
   if (zone.id === "office") return renderHarborOffice(zone);
   if (zone.id === "market") return renderHarborMarket(zone);
   if (zone.id === "garage") return renderHarborGarage(zone);
-  if (["docks", "customs", "rail", "fish"].includes(zone.id)) return renderHarborOrders(zone, zone.id === "fish" ? "fish" : "mixed");
+  if (zone.id === "customs") return renderHarborCustoms(zone);
+  if (["docks", "rail", "fish"].includes(zone.id)) return renderHarborOrders(zone, zone.id === "fish" ? "fish" : "mixed");
   setHarborPanelContent(zone, `
     <section class="harbor-place">
       <p class="harbor-operation-panel__muted">${escapeHtml(zone.note)}</p>
@@ -4681,6 +5691,20 @@ async function startHarborMission(missionId) {
 async function handleHarborPanelClick(event) {
   event.preventDefault();
   event.stopPropagation();
+  const officeTabButton = event.target.closest("[data-harbor-office-tab], [data-harbor-office-tab-target]");
+  if (officeTabButton) {
+    renderHarborOffice(
+      harborZoneDefs.find((zone) => zone.id === "office") || { id: "office", title: "Kikötői iroda" },
+      officeTabButton.dataset.harborOfficeTab || officeTabButton.dataset.harborOfficeTabTarget,
+    );
+    return;
+  }
+  const officeZoneButton = event.target.closest("[data-harbor-office-zone]");
+  if (officeZoneButton) {
+    const targetZone = harborZoneDefs.find((zone) => zone.id === officeZoneButton.dataset.harborOfficeZone);
+    if (targetZone) renderHarborZonePanel(targetZone);
+    return;
+  }
   const garageHitButton = event.target.closest("[data-garage-hit]");
   if (garageHitButton) {
     await resolveGarageCheckpoint();
@@ -4710,39 +5734,43 @@ async function handleHarborPanelClick(event) {
     await startHarborMission(missionButton.dataset.harborMission);
     return;
   }
+  const customsSelection = event.target.closest("[data-customs-select]");
+  if (customsSelection) {
+    selectedHarborCustomsMissionId = customsSelection.dataset.customsSelect;
+    renderHarborCustoms(harborZoneDefs.find((zone) => zone.id === "customs") || { id: "customs", title: "Vám" });
+    return;
+  }
 
   const buyButton = event.target.closest("[data-harbor-buy]");
   if (buyButton) {
     const kind = buyButton.dataset.harborBuy;
-    const cost = 75;
-    if (!canAfford(cost)) {
-      sceneRef?.setMessage("Nincs eleg penz az italra.");
-      return;
+    try {
+      const response = await requestServerHarbor({ operation: "bar", kind });
+      const result = response.result || {};
+      sceneRef?.refreshHUD();
+      renderHarborBar(harborZoneDefs.find((entry) => entry.id === "bar") || { id: "bar", title: "Kocsma" });
+      sceneRef?.setMessage(kind === "health"
+        ? `Az ital visszahozott egy kis eletet. Meg ${result.remaining ?? 0} hasznalat maradt.`
+        : `A fekete kave felrazta a bandat. Meg ${result.remaining ?? 0} hasznalat maradt.`);
+    } catch (error) {
+      sceneRef?.setMessage(error.message || "A kocsmai vasarlas sikertelen.");
     }
-    state.money -= cost;
-    if (kind === "health") state.health = clamp(state.health + 35, 0, 100);
-    if (kind === "energy") state.energy = clamp(state.energy + 35, 0, 100);
-    saveGame();
-    sceneRef?.refreshHUD();
-    sceneRef?.setMessage(kind === "health" ? "Az ital visszahozott egy kis eletet." : "A fekete kave felrazta a bandat.");
     return;
   }
   const bribeButton = event.target.closest("[data-harbor-bribe]");
   if (bribeButton) {
     const large = bribeButton.dataset.harborBribe === "large";
-    const cost = large ? 350 : 100;
-    if (!canAfford(cost)) {
-      sceneRef?.setMessage("Nincs eleg penz a boritekra.");
-      return;
+    try {
+      const response = await requestServerHarbor({ operation: "bribe", size: large ? "large" : "small" });
+      const result = response.result || {};
+      sceneRef?.refreshHUD();
+      renderHarborOffice(harborZoneDefs.find((zone) => zone.id === "office") || { title: "Kikotoi iroda" });
+      const discountText = result.discountPercent ? ` (${result.discountPercent}% befolyas kedvezmeny)` : "";
+      sceneRef?.pushLog(`Kikotoi lefizetes: -${result.cost || 0} $${discountText}, -${result.heatLoss || 0}% korozes.`);
+      sceneRef?.setMessage(`A boritek celba ert. Korozes -${result.heatLoss || 0}%.`);
+    } catch (error) {
+      sceneRef?.setMessage(error.message || "A lefizetes nem sikerult.");
     }
-    state.money -= cost;
-    const heatLoss = Math.min(state.heat, large ? 25 : 10);
-    state.heat = clamp(state.heat - heatLoss, 0, 100);
-    saveGame();
-    sceneRef?.refreshHUD();
-    renderHarborOffice(harborZoneDefs.find((zone) => zone.id === "office") || { title: "Kikotoi iroda" });
-    sceneRef?.pushLog(`Kikotoi lefizetes: -${cost} $, -${heatLoss}% korozes.`);
-    sceneRef?.setMessage(`A boritek celba ert. Korozes -${heatLoss}%.`);
   }
 }
 
@@ -4838,7 +5866,7 @@ async function openAuxPanel(kind) {
   if (kind === "market") {
     try {
       if (state.profileName) {
-        const response = await fetch("/api/market-items?limit=50", {
+        const response = await fetch(`/api/market-items?limit=${MARKET_MAX_OFFERS}`, {
           headers: { Accept: "application/json" },
         });
         const payload = response.ok ? await response.json() : { items: [] };
@@ -4955,6 +5983,54 @@ function suppressClickAfterMapDrag(event) {
   }
 }
 
+const QUEST_MONEY_REWARD_MAX = 666;
+const questRewardActionWeights = {
+  robbery: 56,
+  protection: 52,
+  harbor_job: 64,
+  cargo_spend: 62,
+  cargo_acquire: 56,
+  market_buy: 54,
+  garage_run: 72,
+};
+
+function hashQuestRewardSeed(value) {
+  let hash = 2166136261;
+  const text = String(value || "quest");
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+function calculateQuestMoneyReward(quest = {}, difficulty = 50) {
+  const normalizedDifficulty = clamp(Math.round(Number(difficulty) || 0), 0, 100);
+  const goals = Array.isArray(quest.steps) && quest.steps.length ? quest.steps : [quest.goal || quest];
+  const complexity = goals.reduce((sum, goal) => {
+    const action = String(goal?.action || quest.type || "robbery");
+    const target = clamp(Math.round(Number(goal?.target) || 1), 1, 12);
+    return sum + (questRewardActionWeights[action] || 50) + target * 14;
+  }, 0);
+  const center = clamp(Math.round(
+    55
+    + normalizedDifficulty * 1.3
+    + complexity * 0.82
+    + Math.max(0, goals.length - 1) * 22,
+  ), 60, 620);
+  const spread = clamp(Math.round(center * 0.16), 22, 90);
+  const minimum = Math.max(45, center - spread);
+  const maximum = Math.min(QUEST_MONEY_REWARD_MAX, center + spread);
+  const seed = [
+    quest.id,
+    quest.signature,
+    quest.createdAt,
+    normalizedDifficulty,
+    goals.map((goal) => `${goal?.action || ""}:${goal?.mode || ""}:${goal?.target || 1}`).join("|"),
+  ].join("#");
+  return minimum + (hashQuestRewardSeed(seed) % (maximum - minimum + 1));
+}
+
 function normalizeQuest(quest) {
   if (!quest || typeof quest !== "object") return null;
   const spot = getSpotById(quest.spotId);
@@ -4989,6 +6065,13 @@ function normalizeQuest(quest) {
   const aggregateTarget = steps.length ? steps.reduce((sum, step) => sum + step.target, 0) : target;
   const aggregateProgress = steps.length ? steps.reduce((sum, step) => sum + step.progress, 0) : progress;
   const primaryAction = steps.length > 1 ? "mixed" : (steps[0]?.action || action);
+  const rawRewardDifficulty = Number(quest.rewardDifficulty);
+  const rewardDifficulty = clamp(Number.isFinite(rawRewardDifficulty) ? Math.round(rawRewardDifficulty) : 50, 0, 100);
+  const rewardQuest = {
+    ...quest,
+    goal: { action: primaryAction, mode: steps.length > 1 ? "any" : (steps[0]?.mode || mode), target: aggregateTarget },
+    steps,
+  };
   return {
     id: typeof quest.id === "string" ? quest.id : `quest-${Date.now()}`,
     spotId: spot.id,
@@ -4997,6 +6080,7 @@ function normalizeQuest(quest) {
     type: primaryAction,
     status: allowedStatuses.has(quest.status) ? quest.status : "offered",
     title: typeof quest.title === "string" ? quest.title : "Kuldetes",
+    signature: typeof quest.signature === "string" ? quest.signature : "",
     description: typeof quest.description === "string" ? quest.description : "",
     objective: typeof quest.objective === "string" ? quest.objective : "",
     reward: reward
@@ -5010,7 +6094,9 @@ function normalizeQuest(quest) {
         image: typeof reward.image === "string" ? reward.image : getEquipmentArt(normalizedRewardSlot),
       }
       : null,
-    moneyReward: Number.isFinite(quest.moneyReward) ? Math.max(0, Math.round(quest.moneyReward)) : 80,
+    moneyReward: calculateQuestMoneyReward(rewardQuest, rewardDifficulty),
+    rewardDifficulty,
+    rewardVersion: 2,
     xpReward: Number.isFinite(quest.xpReward) ? Math.max(0, Math.round(quest.xpReward)) : 18,
     goal: {
       action: primaryAction,
@@ -5023,14 +6109,29 @@ function normalizeQuest(quest) {
   };
 }
 
+const harborQuestActions = new Set(["harbor_job", "cargo_spend", "cargo_acquire", "garage_run", "market_buy"]);
+const harborQuestModes = new Set(["docks", "customs", "rail", "warehouse", "fish", "garage", "counterfeitMoney", "drugs", "weapons", "papers"]);
+
+function questRequiresHarbor(quest) {
+  if (!quest || typeof quest !== "object") return false;
+  const goals = Array.isArray(quest.steps) && quest.steps.length ? quest.steps : [quest.goal || quest];
+  return goals.some((goal) => harborQuestActions.has(goal?.action) || harborQuestModes.has(goal?.mode));
+}
+
 function normalizeQuestList(quests) {
   const normalized = Array.isArray(quests) ? quests.map(normalizeQuest).filter(Boolean) : [];
-  return normalized.filter((quest) => quest.status === "accepted" || quest.status === "completed").slice(0, 2);
+  const harborUnlocked = getRankLevel(state.fame) >= getHarborRequiredLevel();
+  return normalized
+    .filter((quest) => (quest.status === "accepted" || quest.status === "completed") && (harborUnlocked || !questRequiresHarbor(quest)))
+    .slice(0, 2);
 }
 
 function normalizeOfferedQuestList(quests) {
   const normalized = Array.isArray(quests) ? quests.map(normalizeQuest).filter(Boolean) : [];
-  return normalized.filter((quest) => quest.status === "offered").slice(0, 3);
+  const harborUnlocked = getRankLevel(state.fame) >= getHarborRequiredLevel();
+  return normalized
+    .filter((quest) => quest.status === "offered" && (harborUnlocked || !questRequiresHarbor(quest)))
+    .slice(0, 3);
 }
 
 function removeQuestFromActiveList(targetQuest) {
@@ -5199,6 +6300,19 @@ const mentorSteps = [
   { id: "harbor", title: "Kikotoi kapu", text: "Lepj be a kikoto negyedbe.", reward: { money: 220, xp: 10 } },
 ];
 
+const mentorStepInstructions = {
+  base: "1. Kattints egy városi házra a főtérképen. 2. A megjelenő körmenüben válaszd a Fő bázis gombot. 3. Erősítsd meg a választást; ez lesz a pihenőhelyed.",
+  crew: "1. Keresd meg jobb oldalon az A BANDA panelt. 2. Válassz egy még fel nem bérelt bandatagot. 3. Nyomd meg a Vétel gombot. Ha már van embered, egy támadás- vagy védelemfejlesztés is teljesíti a feladatot.",
+  equip: "1. Kattints bal oldalon a saját karaktered képére. 2. A karakterablak alján válassz egy fegyvert a szabad itemek közül. 3. Kattints a fegyverre, majd a Felveszem gombra.",
+  robbery: "1. A főtérképen keress zöld jelölésű, könnyű célpontot. 2. Kattints rá, majd válaszd az Utcai támadás vagy Üzletkirablás gombot. 3. Jelölj ki 1–2 felbérelt bandatagot, és indítsd el a támadást.",
+  protection: "1. Kattints egy olyan városi házra, amelynél elérhető a beszedés. 2. A körmenüben nyomd meg a Védelmi pénz gombot. 3. Sikeres beszedés után a gombon megjelenik az újabb beszedésig hátralévő idő.",
+  quest: "1. Nyisd meg felül a Küldetések menüt, vagy kattints egy térképen megjelenő küldetésjelölőre. 2. Válaszd az Elfogadás gombot. 3. Teljesítsd a felsorolt feladatokat. 4. A bal oldali I. vagy II. küldetéssávban nyomd meg az Átadás gombot.",
+  rest: "1. Kattints arra a házra, amelyet Fő bázisnak választottál. 2. A körmenüben válaszd a Pihenés gombot. A pihenés akkor is számít, ha csak részben hiányzik az életerőd vagy energiád.",
+  world: "1. Keresd meg alul a Világtérkép gombot. 2. Kattints rá, és várd meg, amíg megnyílik a teljes világtérkép.",
+  level5: "A feladat kezdetekor a 4. szint felénél jársz. Szerezz még XP-t sikeres kirablásokkal, védelmipénz-beszedéssel és városi küldetések átadásával. A pontos szintedet és az XP-sávot bal oldalon, a karaktered alatt látod. A kikötő az 5. szint eléréséig zárva marad.",
+  harbor: "1. Az 5. szint elérése után keresd meg a Kikötő gombot a HUD-on. 2. Kattints a horgonyos kikötőikonra. 3. A feladat akkor teljesül, amikor megnyílik a Kikötő negyed térképe.",
+};
+
 function getCurrentMentorStep() {
   if (state.mentorCompleted) return null;
   return mentorSteps[clamp(Math.round(Number(state.mentorStep) || 0), 0, mentorSteps.length - 1)] || null;
@@ -5218,9 +6332,19 @@ function getMentorRewardText(step) {
   return `Jutalom: ${parts.join(", ")}`;
 }
 
+function getMentorLevel5StartingFame() {
+  const level4Threshold = Math.max(0, Number(rankTable[3]?.fame) || 0);
+  const level5Threshold = Math.max(level4Threshold, Number(rankTable[4]?.fame) || level4Threshold);
+  return Math.round(level4Threshold + ((level5Threshold - level4Threshold) * 0.5));
+}
+
 function updateMentorPanel() {
   const visible = shouldShowMentorHud();
   const step = getCurrentMentorStep();
+  if (visible && step?.id === "level5" && getRankLevel(state.fame) >= 5 && !mentorStepCompleting) {
+    completeMentorStep("level5");
+    return;
+  }
   if (visible && step && hudMentorCard?.dataset.userClosed !== "true") {
     mentorCardOpen = true;
   }
@@ -5228,9 +6352,13 @@ function updateMentorPanel() {
   hudMentorToggle?.classList.toggle("is-attention", visible && !mentorCardOpen);
   hudMentorCard?.classList.toggle("hidden", !(visible && mentorCardOpen));
   hudMentorCard?.setAttribute("aria-hidden", visible && mentorCardOpen ? "false" : "true");
+  hudMentorInfo?.setAttribute("aria-expanded", mentorDetailsOpen ? "true" : "false");
+  hudMentorInfo?.classList.toggle("is-active", mentorDetailsOpen);
+  hudMentorDetails?.classList.toggle("hidden", !mentorDetailsOpen);
   if (!visible || !step) return;
   if (hudMentorStepTitle) hudMentorStepTitle.textContent = step.title;
   if (hudMentorStepText) hudMentorStepText.textContent = step.text;
+  if (hudMentorDetails) hudMentorDetails.textContent = mentorStepInstructions[step.id] || "Kövesd az aktuális küldetés rövid leírását. A szükséges gomb a fő HUD-on vagy a kijelölt térképi hely körmenüjében található.";
   if (hudMentorStepReward) hudMentorStepReward.textContent = getMentorRewardText(step);
   if (hudMentorProgress) hudMentorProgress.textContent = `${Math.min(mentorSteps.length, (Number(state.mentorStep) || 0) + 1)} / ${mentorSteps.length}`;
 }
@@ -5252,9 +6380,13 @@ function completeMentorStep(stepId) {
   const step = getCurrentMentorStep();
   if (!step || step.id !== stepId) return false;
   mentorStepCompleting = true;
+  mentorDetailsOpen = false;
   try {
     grantMentorReward(step);
     state.mentorStep = Math.round(Number(state.mentorStep) || 0) + 1;
+    if (mentorSteps[state.mentorStep]?.id === "level5") {
+      state.fame = getMentorLevel5StartingFame();
+    }
   } finally {
     mentorStepCompleting = false;
   }
@@ -5382,6 +6514,7 @@ function renderQuestOverview() {
 
 function openQuestOverview() {
   if (!questOverview) return;
+  closeHelpDialog();
   closeSettingsDialog();
   hideQuestCard();
   const trigger = document.querySelector('[data-hud-top-action="quests"]');
@@ -5617,20 +6750,20 @@ const mainQuestTemplateDefs = {
       money: 145,
     },
     {
-      type: "harbor_job",
-      title: "Elso rakparti munka",
-      description: "Teljesits 1 munkat a Kikoto negyedben.",
-      objective: "1 sikeres kikotoi megbizas.",
-      goal: { action: "harbor_job", mode: "any", target: 1, progress: 0 },
+      type: "robbery",
+      title: "Sikatori proba",
+      description: "Hajts vegre 1 sikeres utcai tamadast a foterkepen.",
+      objective: "1 sikeres utcai tamadas.",
+      goal: { action: "robbery", mode: "street", target: 1, progress: 0 },
       xp: 5,
       money: 155,
     },
     {
-      type: "cargo_acquire",
-      title: "Kezdo rakomany",
-      description: "Szerezz {target} darab {cargo} arut a Kikoto negyedben.",
-      objective: "Szerezz {target} darab {cargo} arut.",
-      goal: { action: "cargo_acquire", mode: "randomCargo", targetMin: 1, targetMax: 3, progress: 0 },
+      type: "protection",
+      title: "Biztos boritekok",
+      description: "Szedj be vedelmi penzt 2 helyrol a foterkepen.",
+      objective: "2 sikeres vedelmi penz beszedese.",
+      goal: { action: "protection", mode: "any", target: 2, progress: 0 },
       xp: 5,
       money: 160,
     },
@@ -5753,15 +6886,19 @@ function normalizeQuestTemplate(template, spot, phase = "standard") {
 function getMainQuestTemplates(spot) {
   const phase = isEarlyGameAccelerated() ? "early" : "standard";
   const templates = Array.isArray(mainQuestTemplateDefs[phase]) ? mainQuestTemplateDefs[phase] : [];
-  const normalized = templates.map((template) => normalizeQuestTemplate(template, spot, phase)).filter(Boolean);
-  return normalized.length ? normalized : mainQuestTemplateDefs.standard.map((template) => normalizeQuestTemplate(template, spot, "standard")).filter(Boolean);
+  const harborUnlocked = getRankLevel(state.fame) >= getHarborRequiredLevel();
+  const allowed = (template) => harborUnlocked || !questRequiresHarbor({ goal: template?.goal });
+  const normalized = templates.filter(allowed).map((template) => normalizeQuestTemplate(template, spot, phase)).filter(Boolean);
+  return normalized.length
+    ? normalized
+    : mainQuestTemplateDefs.standard.filter(allowed).map((template) => normalizeQuestTemplate(template, spot, "standard")).filter(Boolean);
 }
 
 const proceduralQuestBlueprints = [
   { id: "rob-shop", group: "main", action: "robbery", mode: "shop", min: 1, max: 4, money: 72, xp: 13, label: (target) => `Rabolj ki ${target} boltot a foterkepen.` },
   { id: "rob-street", group: "main", action: "robbery", mode: "street", min: 1, max: 4, money: 66, xp: 12, label: (target) => `Hajts vegre ${target} utcai kirablast.` },
   { id: "protect", group: "main", action: "protection", mode: "any", min: 1, max: 4, money: 76, xp: 13, label: (target) => `Szedj be vedelmi penzt ${target} helyrol.` },
-  { id: "market", group: "main", action: "market_buy", mode: "any", min: 1, max: 2, money: 58, xp: 10, label: (target) => `Vasarolj ${target} felszerelest a feketepiacon.` },
+  { id: "market", group: "harbor", action: "market_buy", mode: "any", min: 1, max: 2, money: 58, xp: 10, label: (target) => `Vasarolj ${target} felszerelest a feketepiacon.` },
   { id: "dock-job", group: "harbor", action: "harbor_job", mode: "docks", min: 1, max: 3, money: 92, xp: 17, label: (target) => `Fejezz be ${target} rakparti atadast a dokkoknal.` },
   { id: "customs-job", group: "harbor", action: "harbor_job", mode: "customs", min: 1, max: 3, money: 88, xp: 16, label: (target) => `Teljesits ${target} vamos megbizast a kikotoben.` },
   { id: "rail-job", group: "harbor", action: "harbor_job", mode: "rail", min: 1, max: 3, money: 94, xp: 18, label: (target) => `Teljesits ${target} vasuti csempeszfuvar-megbizast.` },
@@ -5777,7 +6914,7 @@ const proceduralCargoLabels = { counterfeitMoney: "hamis penz", drugs: "drog", w
 
 function instantiateProceduralQuestStep(blueprint, earlyGame = false) {
   const acquireCargo = ["counterfeitMoney", "drugs", "weapons", "papers"];
-  const spendCargo = ["counterfeitMoney", "weapons"];
+  const spendCargo = ["counterfeitMoney", "drugs", "weapons", "papers"];
   const mode = blueprint.mode === "randomCargo"
     ? acquireCargo[randomInt(0, acquireCargo.length - 1)]
     : blueprint.mode === "randomSpendCargo"
@@ -5801,20 +6938,24 @@ function instantiateProceduralQuestStep(blueprint, earlyGame = false) {
 
 function buildProceduralQuestPlan(existingQuests = []) {
   const earlyGame = isEarlyGameAccelerated();
+  const harborUnlocked = getRankLevel(state.fame) >= getHarborRequiredLevel();
+  const availableBlueprints = harborUnlocked
+    ? proceduralQuestBlueprints
+    : proceduralQuestBlueprints.filter((entry) => entry.group === "main");
   const usedSignatures = new Set(existingQuests.map((quest) => quest.signature).filter(Boolean));
   const usedTitles = new Set(existingQuests.map((quest) => quest.title).filter(Boolean));
   for (let attempt = 0; attempt < 30; attempt += 1) {
     const roll = Math.random();
     const stepCount = earlyGame ? (roll < 0.68 ? 1 : 2) : (roll < 0.22 ? 1 : roll < 0.74 ? 2 : 3);
     const picked = [];
-    const needsMixedMap = stepCount >= 2 && Math.random() < 0.72;
+    const needsMixedMap = harborUnlocked && stepCount >= 2 && Math.random() < 0.72;
     if (needsMixedMap) {
       const mainPool = proceduralQuestBlueprints.filter((entry) => entry.group === "main");
       const harborPool = proceduralQuestBlueprints.filter((entry) => entry.group === "harbor");
       picked.push(mainPool[randomInt(0, mainPool.length - 1)], harborPool[randomInt(0, harborPool.length - 1)]);
     }
     while (picked.length < stepCount) {
-      const candidate = proceduralQuestBlueprints[randomInt(0, proceduralQuestBlueprints.length - 1)];
+      const candidate = availableBlueprints[randomInt(0, availableBlueprints.length - 1)];
       if (!picked.some((entry) => entry.id === candidate.id)) picked.push(candidate);
     }
     const steps = picked.slice(0, stepCount).map((entry) => instantiateProceduralQuestStep(entry, earlyGame));
@@ -5885,12 +7026,15 @@ function spawnRandomQuest() {
     description: `${spot.name} kozvetitette a melot. ${plan.description}`,
     objective: plan.objective,
     reward,
-    moneyReward: Math.min(500, plan.money + Math.round(difficulty * 0.7)),
+    moneyReward: 0,
+    rewardDifficulty: difficulty,
+    rewardVersion: 2,
     xpReward: Math.min(100, plan.xp + Math.floor(difficulty / (isEarlyGameAccelerated() ? 22 : 8))),
     goal: plan.goal,
     steps: plan.steps,
     createdAt: Date.now(),
   };
+  offeredQuest.moneyReward = calculateQuestMoneyReward(offeredQuest, difficulty);
   state.offeredQuests.push(offeredQuest);
   state.questHistory = [...questHistory, { signature: plan.signature, title: plan.title }].slice(-40);
   state.activeQuest = offeredQuest;
@@ -6038,7 +7182,7 @@ function formatCountdown(milliseconds) {
   return `${String(minutes).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
 }
 
-function getProtectionCooldownRemaining(spotId, now = Date.now()) {
+function getProtectionCooldownRemaining(spotId, now = getSynchronizedNow()) {
   const expiresAt = Number(state.protectionCooldowns?.[spotId]) || 0;
   return Math.max(0, expiresAt - now);
 }
@@ -6053,10 +7197,12 @@ function normalizeRecoveryEffect(effect) {
     startedAt,
     endsAt,
     appliedAmount: clamp(Number.isFinite(appliedAmount) ? Math.floor(appliedAmount) : 0, 0, RECOVERY_AMOUNT),
+    spotId: String(effect.spotId || "").trim().slice(0, 80),
+    spotName: String(effect.spotName || "").trim().slice(0, 80),
   };
 }
 
-function normalizeRecoveryUsage(source = {}, now = Date.now()) {
+function normalizeRecoveryUsage(source = {}, now = getSynchronizedNow()) {
   const normalize = (entry) => {
     const uses = clamp(Math.floor(Number(entry?.uses) || 0), 0, RECOVERY_USAGE_LIMIT);
     const resetAt = Number(entry?.resetAt);
@@ -6073,7 +7219,7 @@ function normalizeRecoveryUsage(source = {}, now = Date.now()) {
   };
 }
 
-function getRecoveryUsageState(stat, now = Date.now()) {
+function getRecoveryUsageState(stat, now = getSynchronizedNow()) {
   state.recoveryUsage = normalizeRecoveryUsage(state.recoveryUsage, now);
   return state.recoveryUsage[stat === "energy" ? "energy" : "health"];
 }
@@ -6083,11 +7229,11 @@ function getRecoveryActionLabel(stat) {
 }
 
 function normalizeTimedActions() {
-  const now = Date.now();
+  const now = getSynchronizedNow();
   const cooldowns = {};
   if (state.protectionCooldowns && typeof state.protectionCooldowns === "object") {
     Object.entries(state.protectionCooldowns).forEach(([spotId, expiresAt]) => {
-      if (getSpotById(spotId) && Number.isFinite(Number(expiresAt)) && Number(expiresAt) > Date.now()) {
+      if (getSpotById(spotId) && Number.isFinite(Number(expiresAt)) && Number(expiresAt) > now) {
         cooldowns[spotId] = Number(expiresAt);
       }
     });
@@ -6173,24 +7319,28 @@ function processPolicePressure(now = Date.now()) {
 
   const heatBefore = clamp(state.heat, 0, 100);
   const { loss, lossRate } = getPoliceMoneyLoss(state.money, heatBefore);
+  const cargoLoss = confiscatePoliceCargo(heatBefore, false);
+  const cargoLossText = formatCargoLoss(cargoLoss);
   const lossPercent = Math.round(lossRate * 100);
   state.money = Math.max(0, state.money - loss);
   state.heat = clamp(heatBefore - 13, 0, 100);
-  sceneRef?.pushLog(`A rendorok razziat tartottak. -${loss} $ (${lossPercent}%) sarc a ${heatBefore}% korozes miatt.`);
+  sceneRef?.pushLog(`A rendorok razziat tartottak. -${loss} $ (${lossPercent}%) sarc${cargoLossText ? `, elkobzott aru: ${cargoLossText}` : ""} a ${heatBefore}% korozes miatt.`);
   const summaryText = heatBefore >= 60
-    ? `A ${heatBefore}%-os korozes miatt a nyomozok a kasszad ${lossPercent}%-at vittek el.`
+    ? `A ${heatBefore}%-os korozes miatt a nyomozok a kasszad ${lossPercent}%-at vittek el.${cargoLossText ? ` Csempesz arut is elkoboztak: ${cargoLossText}.` : ""}`
     : `A korzet jarorei kiszurtak a mozgasodat, es a kasszad ${lossPercent}%-aval tomted be a szajukat.`;
   sceneRef?.setMessage(
-    heatBefore >= 60
-      ? `Magas korozes: a rendorok ${lossPercent}%-ot vittek el a kasszabol.`
+    cargoLossText
+      ? `Magas korozes: -${loss} $, elkobzott aru: ${cargoLossText}.`
+      : heatBefore >= 60
+        ? `Magas korozes: a rendorok ${lossPercent}%-ot vittek el a kasszabol.`
       : "A rendorok gyanut fogtak, es egy kisebb sarcot vittek el.",
   );
-  showPoliceRaidPanel(loss, summaryText);
+  showPoliceRaidPanel(loss, summaryText, cargoLoss);
   postGameEvent(
     "police_raid",
     "Rendőri razzia",
-    `A rendőrök ${loss} $-t, a kasszád ${lossPercent}%-át vitték el. A körözésed 13%-kal csökkent.`,
-    { loss, lossPercent, heatBefore, heat: state.heat },
+    `A rendőrök ${loss} $-t, a kasszád ${lossPercent}%-át vitték el.${cargoLossText ? ` Elkobzott csempészáru: ${cargoLossText}.` : ""} A körözésed 13%-kal csökkent.`,
+    { loss, lossPercent, cargoLoss, heatBefore, heat: state.heat },
   );
   return true;
 }
@@ -6285,22 +7435,40 @@ function ensureProcessQueueStarted(kind = "main", now = Date.now()) {
   return false;
 }
 
-function getRivalAttackProcessTask(now = Date.now()) {
+function getRivalAttackProcessTask(now = getSynchronizedNow()) {
   const rival = state.rivalEvent;
+  if (!rival) return null;
   const action = rival?.pendingAction;
-  if (action?.type !== "attack") return null;
-  const readyAt = Number(action.readyAt);
-  const startedAt = Number.isFinite(Number(action.startedAt))
-    ? Number(action.startedAt)
-    : readyAt - RIVAL_ACTION_DURATION_MS;
-  if (!Number.isFinite(readyAt) || readyAt <= now) return null;
   const spot = getSpotById(rival.spotId);
+  if (action?.type === "attack") {
+    const readyAt = Number(action.readyAt);
+    const startedAt = Number.isFinite(Number(action.startedAt))
+      ? Number(action.startedAt)
+      : readyAt - RIVAL_ACTION_DURATION_MS;
+    if (!Number.isFinite(readyAt) || readyAt <= now) return null;
+    return {
+      id: `rival-attack-${rival.id || rival.spotId}`,
+      type: "rival-attack",
+      title: spot ? `Rivalis tamadas: ${spot.name}` : "Rivalis tamadas",
+      icon: "R",
+      durationMs: Math.max(5000, readyAt - startedAt || RIVAL_ACTION_DURATION_MS),
+      startedAt: Math.max(0, startedAt),
+      readyAt,
+      spotId: rival.spotId,
+    };
+  }
+  if (action) return null;
+  const readyAt = Number(rival?.expiresAt);
+  const startedAt = Number.isFinite(Number(rival?.createdAt))
+    ? Number(rival.createdAt)
+    : readyAt - RIVAL_EVENT_DURATION_MS;
+  if (!Number.isFinite(readyAt) || readyAt <= now) return null;
   return {
-    id: `rival-attack-${rival.id || rival.spotId}`,
-    type: "rival-attack",
-    title: spot ? `Rivalis tamadas: ${spot.name}` : "Rivalis tamadas",
+    id: `rival-ambush-${rival.id || rival.spotId}`,
+    type: "rival-ambush",
+    title: spot ? `Rivalis rajtautesig: ${spot.name}` : "Rivalis rajtautesig",
     icon: "R",
-    durationMs: Math.max(5000, readyAt - startedAt || RIVAL_ACTION_DURATION_MS),
+    durationMs: Math.max(5000, readyAt - startedAt || RIVAL_EVENT_DURATION_MS),
     startedAt: Math.max(0, startedAt),
     readyAt,
     spotId: rival.spotId,
@@ -6547,9 +7715,18 @@ let serverHarborSyncInFlight = false;
 
 function showCompletedHarborResult(result = {}) {
   if (result.success) {
-    sceneRef?.pushLog(`${result.title || "Kikotoi munka"} kesz. +${result.moneyGain || 0} $, +${result.xpGain || 0} XP, +${result.influenceGain || 0}% befolyas.`);
+    const recoveryText = result.heal || result.energy
+      ? `, +${result.heal || 0}% elet, +${result.energy || 0}% energia`
+      : "";
+    sceneRef?.pushLog(`${result.title || "Kikotoi munka"} kesz. +${result.moneyGain || 0} $, +${result.xpGain || 0} XP${recoveryText}, +${result.influenceGain || 0}% befolyas.`);
     sceneRef?.setMessage(`${result.title || "Kikotoi munka"} sikerult. A szerver kiosztotta a jutalmat.`);
-    queueRewardModal({ title: "Feladat vege", text: `${result.title || "Kikotoi munka"} befejezodott.`, money: result.moneyGain || 0, xp: result.xpGain || 0, fame: result.xpGain || 0 });
+    queueRewardModal({
+      title: "Feladat vege",
+      text: `${result.title || "Kikotoi munka"} befejezodott.${recoveryText ? ` Feltoltes:${recoveryText}.` : ""}`,
+      money: result.moneyGain || 0,
+      xp: result.xpGain || 0,
+      fame: result.xpGain || 0,
+    });
   } else {
     sceneRef?.pushLog(`${result.title || "Kikotoi munka"} elbukott. -${result.fine || 0} $ buntetes${result.penaltyReductionPercent ? ` (${result.penaltyReductionPercent}% befolyasvedelem)` : ""}.`);
     sceneRef?.setMessage("A kikotoi munka balul sult el.");
@@ -6618,7 +7795,10 @@ function normalizeRivalEvent(event, now = Date.now()) {
   const spotId = typeof event.spotId === "string" ? event.spotId : "";
   if (!getSpotById(spotId)) return null;
   const expiresAt = Number(event.expiresAt);
-  if (!Number.isFinite(expiresAt) || expiresAt <= now) return null;
+  if (!Number.isFinite(expiresAt) || expiresAt <= 0) return null;
+  const createdAt = Number.isFinite(Number(event.createdAt))
+    ? Number(event.createdAt)
+    : Math.max(0, expiresAt - RIVAL_EVENT_DURATION_MS);
   const pendingType = ["scout", "intimidate", "attack"].includes(event.pendingAction?.type)
     ? event.pendingAction.type
     : "";
@@ -6640,11 +7820,12 @@ function normalizeRivalEvent(event, now = Date.now()) {
     scouted: Boolean(event.scouted),
     intimidationStacks: clamp(Math.round(Number(event.intimidationStacks) || 0), 0, 3),
     pendingAction,
+    createdAt,
     expiresAt,
   };
 }
 
-function getActiveRivalEvent(now = Date.now()) {
+function getActiveRivalEvent(now = getSynchronizedNow()) {
   state.rivalEvent = normalizeRivalEvent(state.rivalEvent, now);
   return state.rivalEvent;
 }
@@ -6704,6 +7885,7 @@ function renderRivalActionPanel(spot) {
   const intimidateChance = Math.round(getRivalIntimidateChance(rival) * 100);
   const attackChance = Math.round(getRivalAttackChance(rival) * 100);
   const pendingAction = rival.pendingAction;
+  const attackRemaining = Math.max(0, Number(rival.expiresAt) - getSynchronizedNow());
   const pendingLabels = {
     scout: "Felderites",
     intimidate: "Megfelemlites",
@@ -6715,13 +7897,14 @@ function renderRivalActionPanel(spot) {
         <strong>${escapeHtml(spot.name)}</strong>
         <div class="aux-panel__muted">
           Rivalis nyomas a kornyeken. ${rival.scouted ? `Felderitett ero: ${effectiveStrength}.` : "A pontos ero meg ismeretlen."}
+          Ha nem foglalkozol veluk, <strong data-rival-ambush-countdown="${rival.expiresAt}">${formatCountdown(attackRemaining)}</strong> mulva megtamadnak.
           ${rival.intimidationStacks ? ` Megfelemlites: ${rival.intimidationStacks}/3.` : ""}
         </div>
       </div>
       ${pendingAction ? `
         <div class="rival-panel__progress">
           <span>${escapeHtml(pendingLabels[pendingAction.type] || "Muvelet")} folyamatban</span>
-          <strong data-rival-action-countdown="${pendingAction.readyAt}">${formatCountdown(pendingAction.readyAt - Date.now())}</strong>
+          <strong data-rival-action-countdown="${pendingAction.readyAt}">${formatCountdown(pendingAction.readyAt - getSynchronizedNow())}</strong>
           <small>Az informaciok es az eredmeny az ido lejartakor jelennek meg.</small>
         </div>
       ` : ""}
@@ -6752,35 +7935,37 @@ function renderRivalActionPanel(spot) {
   return true;
 }
 
-function startRivalTimedAction(spot, actionType) {
+async function startRivalTimedAction(spot, actionType) {
   const rival = getRivalEventAtSpot(spot?.id);
   if (!rival) {
     sceneRef?.setMessage("Itt most nincs rivalis banda.");
     return false;
   }
   if (rival.pendingAction) {
-    sceneRef?.setMessage(`Mar folyamatban van egy rivalis muvelet: ${formatCountdown(rival.pendingAction.readyAt - Date.now())}.`);
+    sceneRef?.setMessage(`Mar folyamatban van egy rivalis muvelet: ${formatCountdown(rival.pendingAction.readyAt - getSynchronizedNow())}.`);
     renderRivalActionPanel(spot);
     return false;
   }
-  const costs = { scout: 4, intimidate: 8, attack: 14 };
   const labels = { scout: "Felderites", intimidate: "Megfelemlites", attack: "Tamadas" };
-  if (!Object.hasOwn(costs, actionType)) return false;
-  if (actionType !== "scout" && !canStartCombat(`A ${labels[actionType].toLowerCase()} akciot`)) return false;
-  if (!spendEnergy(costs[actionType])) return false;
-  const now = Date.now();
-  const readyAt = now + RIVAL_ACTION_DURATION_MS;
-  state.rivalEvent = normalizeRivalEvent({
-    ...rival,
-    pendingAction: { type: actionType, startedAt: now, readyAt },
-    expiresAt: Math.max(rival.expiresAt, readyAt + 60 * 1000),
-  }, now);
-  sceneRef?.setMessage(`${labels[actionType]} elindult. Eredmeny: ${formatCountdown(RIVAL_ACTION_DURATION_MS)} mulva.`);
-  sceneRef?.pushLog(`${spot.name}: ${labels[actionType].toLowerCase()} elindult, ido 5 perc.`);
-  saveGame(true);
-  sceneRef?.refreshHUD();
-  renderRivalActionPanel(spot);
-  return true;
+  if (!Object.hasOwn(labels, actionType)) return false;
+  try {
+    const response = await requestServerProgression("rival", {
+      operation: "start",
+      actionType,
+      spotId: spot.id,
+    });
+    const readyAt = Number(response.result?.readyAt) || (getSynchronizedNow() + RIVAL_ACTION_DURATION_MS);
+    sceneRef?.setMessage(`${labels[actionType]} elindult. Eredmeny: ${formatCountdown(readyAt - getSynchronizedNow())} mulva.`);
+    sceneRef?.pushLog(`${spot.name}: ${labels[actionType].toLowerCase()} elindult, ido 5 perc.`);
+    sceneRef?.refreshHUD();
+    sceneRef?.refreshMap();
+    renderRivalActionPanel(spot);
+    return true;
+  } catch (error) {
+    sceneRef?.setMessage(error.message || "A rivalis muvelet nem indithato el.");
+    sceneRef?.refreshHUD();
+    return false;
+  }
 }
 
 function handleRivalScout(spot) {
@@ -6791,11 +7976,48 @@ function handleRivalIntimidate(spot) {
   return startRivalTimedAction(spot, "intimidate");
 }
 
-function refreshRivalActionCountdown(now = Date.now()) {
+function refreshRivalActionCountdown(now = getSynchronizedNow()) {
   document.querySelectorAll("[data-rival-action-countdown]").forEach((element) => {
     const readyAt = Number(element.getAttribute("data-rival-action-countdown")) || 0;
     element.textContent = formatCountdown(Math.max(0, readyAt - now));
   });
+  document.querySelectorAll("[data-rival-ambush-countdown]").forEach((element) => {
+    const readyAt = Number(element.getAttribute("data-rival-ambush-countdown")) || 0;
+    element.textContent = formatCountdown(Math.max(0, readyAt - now));
+  });
+}
+
+function handleServerRivalEvents(events = []) {
+  const normalizedEvents = Array.isArray(events) ? events : [];
+  normalizedEvents.forEach((event) => {
+    const title = String(event?.title || "Rivalis banda");
+    const body = String(event?.body || "A rivalis banda allapota megvaltozott.");
+    sceneRef?.pushLog(body);
+    sceneRef?.setMessage(body);
+    void refreshMessageBadge();
+    if (event.kind === "rival_attack_finished" || event.kind === "rival_ambush") {
+      queueRewardModal({
+        title,
+        text: body,
+        money: event.success ? Math.max(0, Number(event.moneyGain) || 0) : -Math.max(0, Number(event.moneyLoss) || 0),
+        xp: event.success ? Math.max(0, Number(event.fameGain) || 0) : 0,
+        fame: event.success ? Math.max(0, Number(event.fameGain) || 0) : 0,
+        itemName: event.rewardItem?.name || "",
+        showZeroValues: !event.success,
+      });
+    }
+  });
+  if (normalizedEvents.length) {
+    void refreshMessageBadge();
+    sceneRef?.refreshHUD();
+    sceneRef?.refreshMap();
+    if (activeAuxPanelKind === "rival") {
+      const rival = getActiveRivalEvent();
+      const spot = rival ? getSpotById(rival.spotId) : null;
+      if (spot) renderRivalActionPanel(spot);
+      else hideAuxPanel();
+    }
+  }
 }
 
 function completeRivalPendingAction(rival, now = Date.now()) {
@@ -6859,15 +8081,28 @@ function completeRivalPendingAction(rival, now = Date.now()) {
   return false;
 }
 
-function handleRivalRetreat(spot) {
+async function handleRivalRetreat(spot) {
   const rival = getRivalEventAtSpot(spot?.id);
   if (!rival) {
     sceneRef?.setMessage("Itt most nincs rivalis banda.");
     return false;
   }
-  hideAuxPanel();
-  sceneRef?.setMessage(`${spot.name}: a banda most elvonult. Kesobb visszaterhetsz.`);
-  return true;
+  try {
+    const response = await requestServerProgression("rival", { operation: "retreat", spotId: spot.id });
+    hideAuxPanel();
+    if (response.result?.abandonedAttack) {
+      const crewCount = Array.isArray(response.result.crewDamage) ? response.result.crewDamage.length : 0;
+      sceneRef?.setMessage(
+        `${spot.name}: visszavonultal a harcbol. -${Math.max(0, Number(response.result.healthLoss) || 0)} eletero${crewCount ? `, ${crewCount} bandatag is megserult` : ""}.`,
+      );
+    } else {
+      sceneRef?.setMessage(`${spot.name}: a banda most elvonult. Kesobb visszaterhetsz.`);
+    }
+    return true;
+  } catch (error) {
+    sceneRef?.setMessage(error.message || "A visszavonulas nem sikerult.");
+    return false;
+  }
 }
 
 function normalizeRivalNextSpawnAt(value, now = Date.now()) {
@@ -6897,54 +8132,26 @@ function spawnRivalEvent(now = Date.now()) {
     strength,
     rewardMoney: 120 + strength * 3 + randomInt(20, 80),
     rewardXp: 14 + Math.round(strength / 7),
+    createdAt: now,
     expiresAt: now + RIVAL_EVENT_DURATION_MS,
   };
   sceneRef?.pushLog(`Rivalis banda jelent meg: ${spot.name}.`);
-  sceneRef?.setMessage(`${spot.name} korul rivalis banda mozgolodik.`);
+  sceneRef?.setMessage(`${spot.name} korul rivalis banda mozgolodik. 3 ora mulva tamadnak, ha nem lepsz.`);
   addLocalNotification(
     "Rivalis banda",
-    `${spot.name} kornyeken rivalis banda jelent meg. Lepj kozbe 5 oran belul.`,
+    `${spot.name} kornyeken rivalis banda jelent meg. Lepj kozbe 3 oran belul, kulonben megtamadnak.`,
     { messageType: "event" },
   );
   sceneRef?.refreshMap();
   return true;
 }
 
-function syncRivalEvent(now = Date.now()) {
-  if (!state.registered) return false;
-  const hadRival = Boolean(state.rivalEvent);
-  const active = getActiveRivalEvent(now);
-  if (hadRival && !active) {
-    const loss = Math.min(state.money, Math.max(15, Math.round(state.money * 0.04)));
-    state.money = Math.max(0, state.money - loss);
-    const influenceLoss = applyInfluenceLoss(2);
-    state.districts.forEach((district) => {
-      district.loyalty = clamp(district.loyalty - 2, 0, 100);
-    });
-    scheduleNextRivalEvent(now);
-    sceneRef?.pushLog(`A rivalis banda elvitt ${loss} $-t, mert tul sokaig vartal.`);
-    sceneRef?.setMessage(`Rivalis banda eltunt: -${loss} $, -${influenceLoss}% befolyas.`);
-    addLocalNotification(
-      "Rivalis banda",
-      `A rivalis banda eltunt, mire odaertel. Veszteseg: -${loss} $, -${influenceLoss}% befolyas.`,
-      { messageType: "event" },
-    );
-    sceneRef?.refreshMap();
-    return true;
-  }
-  if (active) {
-    if (active.pendingAction?.readyAt <= now) return completeRivalPendingAction(active, now);
-    return false;
-  }
-  if (!Number.isFinite(Number(state.rivalNextSpawnAt)) || Number(state.rivalNextSpawnAt) <= 0) {
-    scheduleNextRivalEvent(now);
-    return true;
-  }
-  if (now >= Number(state.rivalNextSpawnAt)) return spawnRivalEvent(now);
+function syncRivalEvent(now = getSynchronizedNow()) {
+  // A rivalis esemenyeket a szerver oldja fel. A kliens csak a szerver idobelyegeit jeleniti meg.
   return false;
 }
 
-function syncTimedActions(now = Date.now()) {
+function syncTimedActions(now = getSynchronizedNow()) {
   const previousRecoveryUsage = JSON.stringify(state.recoveryUsage || {});
   state.recoveryUsage = normalizeRecoveryUsage(state.recoveryUsage, now);
   let changed = previousRecoveryUsage !== JSON.stringify(state.recoveryUsage);
@@ -6988,32 +8195,36 @@ function getEncounterEnemyPower(encounter = activeRobberyGame) {
 
 async function startRecovery(stat, options = {}) {
   syncTimedActions();
+  if (recoveryCommandInFlight) {
+    sceneRef?.setMessage("A Lapulás vagy Találkozó indítása már folyamatban van.");
+    return false;
+  }
   const usage = getRecoveryUsageState(stat);
   if (usage.uses >= RECOVERY_USAGE_LIMIT) {
     sceneRef?.setMessage(`${getRecoveryActionLabel(stat)} ${formatCountdown(usage.resetAt - Date.now())} múlva használható újra.`);
     return false;
   }
-  const otherStat = stat === "health" ? "energy" : "health";
-  if (state.recoveryEffects?.[otherStat]) {
-    const remaining = state.recoveryEffects[otherStat].endsAt - Date.now();
-    sceneRef?.setMessage(
-      otherStat === "health"
-        ? `A Lapulás már folyamatban van. Hátralévő idő: ${formatCountdown(remaining)}.`
-        : `A Találkozó már folyamatban van. Hátralévő idő: ${formatCountdown(remaining)}.`,
-    );
+  const activeRecovery = state.recoveryEffects?.health || state.recoveryEffects?.energy;
+  if (activeRecovery) {
+    const remaining = activeRecovery.endsAt - Date.now();
+    const activeName = state.recoveryEffects?.health ? "Lapulás" : "Találkozó";
+    const location = activeRecovery.spotName ? ` (${activeRecovery.spotName})` : "";
+    sceneRef?.setMessage(`A ${activeName}${location} már folyamatban van. Hátralévő idő: ${formatCountdown(remaining)}.`);
     return false;
   }
   if (state[stat] >= 100) {
     sceneRef?.setMessage(stat === "health" ? "Az életerőd már maximumon van." : "Az energiád már maximumon van.");
     return false;
   }
-  if (state.recoveryEffects?.[stat]) {
-    const remaining = state.recoveryEffects[stat].endsAt - Date.now();
-    sceneRef?.setMessage(`Ez a töltés már folyamatban van. Hátralévő idő: ${formatCountdown(remaining)}.`);
-    return false;
-  }
+  recoveryCommandInFlight = true;
   try {
-    const response = await requestServerProgression("recovery", { operation: "start", stat, layLow: Boolean(options.layLow) });
+    const response = await requestServerProgression("recovery", {
+      operation: "start",
+      stat,
+      layLow: Boolean(options.layLow),
+      spotId: String(options.spotId || ""),
+      spotName: String(options.spotName || ""),
+    });
     sceneRef?.refreshHUD();
     sceneRef?.refreshMap();
     return response;
@@ -7025,6 +8236,8 @@ async function startRecovery(stat, options = {}) {
       sceneRef?.setMessage(error.message || "A töltés nem indítható el.");
     }
     return false;
+  } finally {
+    recoveryCommandInFlight = false;
   }
 }
 
@@ -7549,7 +8762,7 @@ function normalizeCrewMembers(members, storedCrewCount = 0) {
     const hasSavedMember = Boolean(savedMembers.find((member) => member?.id === template.id));
     const level = clamp(Number.isFinite(saved.level) ? Math.round(saved.level) : 1, 1, 20);
     const defenseLevel = clamp(Number.isFinite(saved.defenseLevel) ? Math.round(saved.defenseLevel) : 1, 1, 20);
-    const maxHealth = template.baseHealth + (level - 1) * 2 + (defenseLevel - 1);
+    const maxHealth = getCrewMaxHealth(template, level, defenseLevel);
     const savedMaxHealth = Math.max(1, Number(saved.baseHealth) || template.baseHealth);
     const savedHealth = clamp(Number.isFinite(saved.health) ? saved.health : savedMaxHealth, 0, savedMaxHealth);
     const hasEquipment = saved.equipment && typeof saved.equipment === "object"
@@ -7575,6 +8788,69 @@ function normalizeCrewMembers(members, storedCrewCount = 0) {
       equipment: normalizeCrewEquipment(saved.equipment),
     };
   });
+}
+
+function mergeProtectedClientCrewMembers(existingSource, incomingSource, existingCrewCount = 0, incomingCrewCount = 0) {
+  const existing = normalizeCrewMembers(existingSource, existingCrewCount);
+  const incoming = normalizeCrewMembers(incomingSource, incomingCrewCount);
+  const existingById = new Map(existing.map((member) => [member.id, member]));
+  return incoming.map((member) => {
+    const previous = existingById.get(member.id);
+    if (!previous?.hired) return member;
+    const isRegression = !member.hired
+      || member.level < previous.level
+      || member.defenseLevel < previous.defenseLevel
+      || member.baseHealth < previous.baseHealth;
+    const equipment = isRegression
+      ? Object.fromEntries(equipmentSlotOrder.map((slot) => [
+          slot,
+          member.equipment?.[slot] || previous.equipment?.[slot] || null,
+        ]))
+      : member.equipment;
+    return {
+      ...previous,
+      ...member,
+      hired: true,
+      level: Math.max(previous.level, member.level),
+      defenseLevel: Math.max(previous.defenseLevel, member.defenseLevel),
+      baseHealth: Math.max(previous.baseHealth, member.baseHealth),
+      attackBonus: Math.max(previous.attackBonus || 0, member.attackBonus || 0),
+      defenseBonus: Math.max(previous.defenseBonus || 0, member.defenseBonus || 0),
+      health: isRegression ? previous.health : member.health,
+      equipment,
+    };
+  });
+}
+
+function protectClientPersistentProgress(saved) {
+  if (!saved || typeof saved !== "object") return saved;
+  const savedProfileName = String(saved.profileName || "");
+  const isSameLoadedProfile = Boolean(
+    state.registered
+    && state.profileName
+    && savedProfileName
+    && savedProfileName === state.profileName,
+  );
+  if (!isSameLoadedProfile) return saved;
+  const crewMembers = mergeProtectedClientCrewMembers(
+    state.crewMembers,
+    saved.crewMembers,
+    state.crew,
+    saved.crew,
+  );
+  const hiredCrewCount = crewMembers.filter((member) => member.hired).length;
+  const activeCrewMemberId = crewMembers.some((member) => member.hired && member.id === saved.activeCrewMemberId)
+    ? saved.activeCrewMemberId
+    : crewMembers.some((member) => member.hired && member.id === state.activeCrewMemberId)
+      ? state.activeCrewMemberId
+      : (crewMembers.find((member) => member.hired)?.id || null);
+  return {
+    ...saved,
+    territories: mergeProtectedClientTerritories(state.territories, saved.territories),
+    crewMembers,
+    crew: Math.max(hiredCrewCount, Number(state.crew) || 0, Number(saved.crew) || 0),
+    activeCrewMemberId,
+  };
 }
 
 function normalizeCrewEquipment(source) {
@@ -7635,18 +8911,29 @@ function getCrewMemberDefense(member) {
 }
 
 function getCrewMemberUpgradeCost(member) {
-  return member ? 45 + member.level * 35 : 0;
+  if (!member) return 0;
+  const level = clamp(Math.round(Number(member.level) || 1), 1, 20);
+  return 115 + level * 58 + level ** 2 * 7;
 }
 
 function getCrewMemberDefenseUpgradeCost(member) {
-  return member ? 35 + member.defenseLevel * 30 : 0;
+  if (!member) return 0;
+  const level = clamp(Math.round(Number(member.defenseLevel) || 1), 1, 20);
+  return 95 + level * 52 + level ** 2 * 6;
 }
 
 function getCrewMemberHealCost(member) {
   if (!member) return 0;
   const missingHealth = Math.max(0, member.baseHealth - member.health);
   if (!missingHealth) return 0;
-  return 4 + Math.ceil(missingHealth * 0.55);
+  const missingRatio = clamp(missingHealth / Math.max(1, Number(member.baseHealth) || 1), 0, 1);
+  const levelWeight = Math.max(1, Number(member.level) || 1) + Math.max(1, Number(member.defenseLevel) || 1);
+  const combatStrength = getCrewMemberAttack(member) + getCrewMemberDefense(member);
+  const treatmentFee = (60 + levelWeight * 12 + levelWeight ** 2 * 0.22) * missingRatio ** 0.75;
+  const healthPointPrice = 2.2 + levelWeight * 0.09 + combatStrength * 0.012;
+  return Math.max(25, Math.ceil(
+    (treatmentFee + missingHealth * healthPointPrice) * 0.5,
+  ));
 }
 
 function getActiveCrewMember() {
@@ -7913,6 +9200,7 @@ function hideCrewEquipmentPicker() {
   activeCrewEquipmentSlot = null;
   crewEquipmentPicker?.classList.add("hidden");
   crewEquipmentPicker?.setAttribute("aria-hidden", "true");
+  resetEquipmentPickerPosition(crewEquipmentPicker);
   refreshCrewMemberPanel();
 }
 
@@ -7943,29 +9231,74 @@ async function equipCrewInventoryItem(memberId, slot, itemId) {
   }
 }
 
-function showCrewEquipmentPicker(slot) {
+function getEquipmentPickerAnchorSlot(slot) {
+  if (!equipmentSlotOrder.includes(slot)) return null;
+  return document.querySelector(`.character-equipment__slot[data-slot="${slot}"]`);
+}
+
+function getCrewEquipmentPickerAnchorSlot(slot) {
+  if (!equipmentSlotOrder.includes(slot) || !crewEquipmentGrid) return null;
+  return crewEquipmentGrid.querySelector(`[data-crew-slot="${slot}"]`);
+}
+
+function resetEquipmentPickerPosition(picker) {
+  if (!picker) return;
+  picker.style.left = "";
+  picker.style.top = "";
+  picker.style.right = "";
+  picker.style.bottom = "";
+}
+
+function positionEquipmentPickerNearAnchor(picker, anchor) {
+  if (!picker || !anchor) {
+    resetEquipmentPickerPosition(picker);
+    return;
+  }
+  const container = picker.offsetParent || picker.parentElement;
+  if (!container) return;
+  const gap = 10;
+  const containerRect = container.getBoundingClientRect();
+  const anchorRect = anchor.getBoundingClientRect();
+  const pickerRect = picker.getBoundingClientRect();
+  const pickerWidth = Math.max(240, pickerRect.width || 286);
+  const pickerHeight = Math.max(120, pickerRect.height || 220);
+  const rightSpace = containerRect.right - anchorRect.right - gap;
+  const leftSpace = anchorRect.left - containerRect.left - gap;
+  let left = rightSpace >= pickerWidth || rightSpace >= leftSpace
+    ? anchorRect.right - containerRect.left + gap
+    : anchorRect.left - containerRect.left - pickerWidth - gap;
+  let top = anchorRect.top - containerRect.top;
+  left = Math.max(gap, Math.min(left, containerRect.width - pickerWidth - gap));
+  top = Math.max(gap, Math.min(top, containerRect.height - pickerHeight - gap));
+  picker.style.left = `${Math.round(left)}px`;
+  picker.style.top = `${Math.round(top)}px`;
+  picker.style.right = "auto";
+  picker.style.bottom = "auto";
+}
+
+function showCrewEquipmentPicker(slot, anchor = null) {
   const member = getCrewMemberById(activeCrewSheetMemberId);
   const slotDef = equipmentSlotDefs[slot];
-  const items = state.itemInventory?.[slot] || [];
   if (!member?.hired || !slotDef || !crewEquipmentPicker || !crewEquipmentPickerList) return;
+  const availableItems = getFreeInventoryItemsForSlot(slot);
   activeCrewEquipmentSlot = slot;
   if (crewEquipmentPickerTitle) crewEquipmentPickerTitle.textContent = `${member.name}: ${slotDef.label}`;
-  crewEquipmentPickerList.innerHTML = items.map((item) => {
-    const equipped = member.equipment?.[slot]?.id === item.id;
-    const used = !equipped && isItemEquippedAnywhere(item.id, { owner: "crew", memberId: member.id });
+  const listHtml = availableItems.length ? availableItems.map((item) => {
     return `
-      <button class="equipment-picker__item${equipped ? " is-equipped" : ""}" type="button" data-crew-equip-slot="${slot}" data-item-id="${item.id}"${used ? " disabled" : ""}>
+      <button class="equipment-picker__item" type="button" data-crew-equip-slot="${slot}" data-item-id="${escapeHtml(item.id)}">
         <img class="equipment-picker__art equipment-picker__art--${slot}" src="${item.image || getEquipmentArt(slot)}" alt="">
         <span class="equipment-picker__copy">
-          <strong>${item.name}</strong>
-          <small>${used ? "Mar hasznalatban" : getEquipmentBonusText(slot, item.power, item.stat)}</small>
+          <strong>${escapeHtml(item.name)}</strong>
+          <small>${getEquipmentBonusText(slot, item.power, item.stat)}</small>
         </span>
-        <em>${equipped ? "Felveve" : used ? "Foglalt" : "Felveszem"}</em>
+        <em>Felveszem</em>
       </button>
     `;
-  }).join("");
+  }).join("") : `<div class="equipment-picker__empty">Nincs szabad ${escapeHtml(slotDef.label.toLowerCase())} itemed. A viselt tárgyak nem jelennek meg a listában.</div>`;
+  crewEquipmentPickerList.innerHTML = listHtml;
   crewEquipmentPicker.classList.remove("hidden");
   crewEquipmentPicker.setAttribute("aria-hidden", "false");
+  positionEquipmentPickerNearAnchor(crewEquipmentPicker, anchor || getCrewEquipmentPickerAnchorSlot(slot));
   refreshCrewMemberPanel();
 }
 
@@ -8034,6 +9367,8 @@ function makeDistricts() {
 function setHudVisible(visible) {
   hudRoot?.classList.toggle("hidden", !visible);
   mapSvgOverlay?.classList.toggle("hidden", !visible);
+  devRefillButton?.classList.toggle("hidden", !visible);
+  devRefillButton?.setAttribute("aria-hidden", visible ? "false" : "true");
   if (!visible) {
     clearRobberyAutoPlay();
     hideCharacterPanel();
@@ -8074,6 +9409,7 @@ function selectPlayerAvatar(avatarId) {
 }
 
 let activeChoiceSpot = null;
+let choiceWheelCountdownTimer = null;
 let activeRobberyGame = null;
 let robberyAutoPlayTimer = null;
 
@@ -8104,22 +9440,38 @@ const robberyDefenderTemplates = {
   boss: { role: "Helyi főnök", icon: "B" },
 };
 
+function getRobberyEnemyCountForSpot(spot, difficulty) {
+  const spotId = String(spot?.id || "robbery");
+  const seed = [...spotId].reduce((sum, char) => sum + char.charCodeAt(0), 0);
+  const label = getDifficultyInfo(difficulty)?.label;
+  const roll = hash2(seed, Math.round(Number(difficulty) || 1), state.buildingDifficultyCycle || state.day || 0);
+  const twoEnemyThreshold = label === "Veszelyes"
+    ? 0.38
+    : label === "Kockazatos"
+      ? 0.5
+      : 0.62;
+  return roll < twoEnemyThreshold ? 2 : 3;
+}
+
 function createRobberyDefenders(spot, difficulty, forcedCount = null) {
+  const roles = [
+    { name: "Vincent", type: "boss" },
+    { name: "Salvatore", type: "watcher" },
+    { name: "Tommy", type: "bodyguard" },
+  ];
   const count = clamp(
-    Number.isFinite(Number(forcedCount)) ? Math.round(Number(forcedCount)) : (difficulty >= 72 ? 4 : difficulty >= 44 ? 3 : 2),
-    1,
-    4,
+    Number.isFinite(Number(forcedCount)) ? Math.round(Number(forcedCount)) : getRobberyEnemyCountForSpot(spot, difficulty),
+    2,
+    roles.length,
   );
-  const types = ["watcher", "bodyguard", "boss", "bodyguard"];
-  const names = ["Salvatore", "Tommy", "Vincent", "Giovanni"];
 
   return Array.from({ length: count }, (_, index) => {
-    const type = types[index];
+    const role = roles[index];
     const maxHealth = Math.round(28 + difficulty * 0.42 + index * 4);
     return {
       id: `${spot.id}-guard-${index}`,
-      name: names[index],
-      type,
+      name: role.name,
+      type: role.type,
       maxHealth,
       health: maxHealth,
     };
@@ -8430,6 +9782,7 @@ function hideEquipmentPicker() {
   activeEquipmentSlot = null;
   equipmentPicker?.classList.add("hidden");
   equipmentPicker?.setAttribute("aria-hidden", "true");
+  resetEquipmentPickerPosition(equipmentPicker);
   syncEquipmentSheet();
 }
 
@@ -8455,28 +9808,28 @@ async function equipInventoryItem(slot, itemId) {
   }
 }
 
-function showEquipmentPicker(slot) {
+function showEquipmentPicker(slot, anchor = null) {
   const slotDef = equipmentSlotDefs[slot];
-  const items = state.itemInventory?.[slot];
-  if (!slotDef || !Array.isArray(items) || !items.length || !equipmentPicker || !equipmentPickerList) return;
+  if (!slotDef || !equipmentPicker || !equipmentPickerList) return;
+  const availableItems = getFreeInventoryItemsForSlot(slot);
   activeEquipmentSlot = slot;
   if (equipmentPickerTitle) equipmentPickerTitle.textContent = slotDef.label;
-  equipmentPickerList.innerHTML = items.map((item) => {
-    const equipped = state.equipment?.[slot]?.id === item.id;
-    const used = !equipped && isItemEquippedAnywhere(item.id, { owner: "player" });
+  const listHtml = availableItems.length ? availableItems.map((item) => {
     return `
-      <button class="equipment-picker__item${equipped ? " is-equipped" : ""}" type="button" data-equip-slot="${slot}" data-item-id="${item.id}"${used ? " disabled" : ""}>
+      <button class="equipment-picker__item" type="button" data-equip-slot="${slot}" data-item-id="${escapeHtml(item.id)}">
         <img class="equipment-picker__art equipment-picker__art--${slot}" src="${item.image || getEquipmentArt(slot)}" alt="">
         <span class="equipment-picker__copy">
-          <strong>${item.name}</strong>
-          <small>${used ? "Mar hasznalatban" : getEquipmentBonusText(slot, item.power, item.stat)}</small>
+          <strong>${escapeHtml(item.name)}</strong>
+          <small>${getEquipmentBonusText(slot, item.power, item.stat)}</small>
         </span>
-        <em>${equipped ? "Felveve" : used ? "Foglalt" : "Felveszem"}</em>
+        <em>Felveszem</em>
       </button>
     `;
-  }).join("");
+  }).join("") : `<div class="equipment-picker__empty">Nincs szabad ${escapeHtml(slotDef.label.toLowerCase())} itemed. A viselt tárgyak nem jelennek meg a listában.</div>`;
+  equipmentPickerList.innerHTML = listHtml;
   equipmentPicker.classList.remove("hidden");
   equipmentPicker.setAttribute("aria-hidden", "false");
+  positionEquipmentPickerNearAnchor(equipmentPicker, anchor || getEquipmentPickerAnchorSlot(slot));
   syncEquipmentSheet();
 }
 
@@ -8527,11 +9880,38 @@ function hideCharacterPanel() {
 }
 
 function hideChoiceWheel() {
+  if (choiceWheelCountdownTimer) {
+    window.clearInterval(choiceWheelCountdownTimer);
+    choiceWheelCountdownTimer = null;
+  }
   activeChoiceSpot = null;
   choiceWheel?.classList.add("hidden");
   choiceWheel?.setAttribute("aria-hidden", "true");
   sceneRef?.spotGraphics?.clear();
   clearSvgMapSelection();
+}
+
+function refreshChoiceWheelProtectionCountdown() {
+  const spot = activeChoiceSpot;
+  if (!spot || spot.kind === "park" || !choiceWheelAction2 || choiceWheel?.classList.contains("hidden")) return;
+  if (choiceWheelAction2.dataset.choiceAction !== "protection") return;
+  if (spot.kind === "lot") {
+    if (getLotLevel(spot) <= 0 || passiveIncomeOnlyLotIds.has(spot.id)) return;
+  }
+  const protectionCost = 8;
+  const cooldown = getProtectionCooldownRemaining(spot.id);
+  const canProtect = state.health > 0 && state.energy >= protectionCost;
+  choiceWheelAction2.textContent = cooldown > 0
+    ? `Védelmi pénz (${formatCountdown(cooldown)})`
+    : canProtect
+      ? `Védelmi pénz (-${protectionCost} energia)`
+      : `Védelmi pénz (${protectionCost} energia kell)`;
+  choiceWheelAction2.disabled = cooldown > 0 || !canProtect;
+}
+
+function startChoiceWheelCountdown() {
+  if (choiceWheelCountdownTimer) window.clearInterval(choiceWheelCountdownTimer);
+  choiceWheelCountdownTimer = window.setInterval(refreshChoiceWheelProtectionCountdown, 1000);
 }
 
 function showLotInfoModal(lot) {
@@ -8593,6 +9973,29 @@ function hideLotInfoModal() {
   lotInfoModal?.setAttribute("aria-hidden", "true");
 }
 
+function getRobberyChoiceDetails(spot = {}) {
+  const mode = spot.mode === "shop" ? "shop" : "street";
+  return mode === "shop"
+    ? { mode, energyCost: 18, label: "Üzletkirablás – 18 energia" }
+    : { mode, energyCost: 12, label: "Utcai támadás – 12 energia" };
+}
+
+function setRobberyChoiceButton(button, spot = {}) {
+  if (!button) return;
+  const details = getRobberyChoiceDetails(spot);
+  const available = state.health > 0 && state.energy >= details.energyCost;
+  button.textContent = details.label;
+  button.disabled = !available;
+  if (!available) {
+    button.title = state.health <= 0
+      ? "A támadáshoz legalább 1 életerő kell."
+      : `Nincs elég energia. Szükséges: ${details.energyCost}.`;
+  } else {
+    button.removeAttribute("title");
+  }
+  return details;
+}
+
 function showChoiceWheel(spot) {
   activeChoiceSpot = spot;
   if (!choiceWheel || !choiceWheelPanel) return;
@@ -8611,12 +10014,15 @@ function showChoiceWheel(spot) {
 
   choiceWheel.classList.remove("hidden");
   choiceWheel.setAttribute("aria-hidden", "false");
+  startChoiceWheelCountdown();
   choiceWheelPanel.style.left = `${x}px`;
   choiceWheelPanel.style.top = `${y}px`;
   if (spot.kind === "park") {
     setChoiceWheelButtons(["robbery", "protection", "baseRest", "close"]);
     const healthRecovery = state.recoveryEffects.health;
     const energyRecovery = state.recoveryEffects.energy;
+    const activeRecovery = healthRecovery || energyRecovery;
+    const activeRecoveryLocation = activeRecovery?.spotName || "másik helyszín";
     const healthUsage = getRecoveryUsageState("health");
     const energyUsage = getRecoveryUsageState("energy");
     const hideUsesLeft = Math.max(0, RECOVERY_USAGE_LIMIT - healthUsage.uses);
@@ -8626,9 +10032,9 @@ function showChoiceWheel(spot) {
     if (choiceWheelCoreLabel) choiceWheelCoreLabel.textContent = "Park";
     if (choiceWheelAction1) {
       choiceWheelAction1.textContent = healthRecovery
-        ? `Lapulás (${formatCountdown(healthRecovery.endsAt - Date.now())})`
+        ? `Lapulás: ${activeRecoveryLocation} (${formatCountdown(healthRecovery.endsAt - Date.now())})`
         : energyRecovery
-          ? "Lapulás (várakozik)"
+          ? `Foglalt: ${activeRecoveryLocation}`
           : hideUsesLeft <= 0
             ? `Lapulás (újra: ${formatCountdown(healthUsage.resetAt - Date.now())})`
             : `Lapulás (+50 HP, ${hideUsesLeft}/3)`;
@@ -8636,9 +10042,9 @@ function showChoiceWheel(spot) {
     }
     if (choiceWheelAction2) {
       choiceWheelAction2.textContent = energyRecovery
-        ? `Találkozó (${formatCountdown(energyRecovery.endsAt - Date.now())})`
+        ? `Találkozó: ${activeRecoveryLocation} (${formatCountdown(energyRecovery.endsAt - Date.now())})`
         : healthRecovery
-          ? "Találkozó (várakozik)"
+          ? `Foglalt: ${activeRecoveryLocation}`
           : meetingUsesLeft <= 0
             ? `Találkozó (újra: ${formatCountdown(energyUsage.resetAt - Date.now())})`
             : `Találkozó (+50 energia, ${meetingUsesLeft}/3)`;
@@ -8678,15 +10084,13 @@ function showChoiceWheel(spot) {
         if (choiceWheelTitle) choiceWheelTitle.textContent = spot.name;
         if (choiceWheelSubtitle) choiceWheelSubtitle.textContent = `Sajat haz - ${getLotIncome(spot)} $ / nap`;
         if (choiceWheelCoreLabel) choiceWheelCoreLabel.textContent = "Sajat haz";
-        if (choiceWheelAction2) choiceWheelAction2.textContent = "Vedelmi penz";
+        refreshChoiceWheelProtectionCountdown();
         if (choiceWheelAction3) choiceWheelAction3.textContent = "Telek info";
         if (choiceWheelAction4) choiceWheelAction4.textContent = "Bezaras";
         if (choiceWheelAction5) choiceWheelAction5.textContent = spotQuest ? "Kuldetes" : "";
         return;
       }
-      const robberyCost = spot.mode === "shop" ? 18 : 12;
       const protectionCost = 8;
-      const canRob = state.health > 0 && state.energy >= robberyCost;
       const cooldown = getProtectionCooldownRemaining(spot.id);
       const canProtect = state.health > 0 && state.energy >= protectionCost;
       setChoiceWheelButtons(["robbery", "protection", "lotInfo", "close", ...(spotQuest ? ["quest"] : [])]);
@@ -8694,8 +10098,7 @@ function showChoiceWheel(spot) {
       if (choiceWheelSubtitle) choiceWheelSubtitle.textContent = "Varosi haz - kirabolhato";
       if (choiceWheelCoreLabel) choiceWheelCoreLabel.textContent = "Varosi haz";
       if (choiceWheelAction1) {
-        choiceWheelAction1.textContent = canRob ? `Kirablas (-${robberyCost})` : `Kirablas (${robberyCost} energia kell)`;
-        choiceWheelAction1.disabled = !canRob;
+        setRobberyChoiceButton(choiceWheelAction1, spot);
       }
       if (choiceWheelAction2) {
         choiceWheelAction2.textContent = cooldown > 0
@@ -8712,10 +10115,11 @@ function showChoiceWheel(spot) {
     }
     const cost = getLotInvestmentCost(spot);
     const isMaxLevel = level >= getLotMaxLevel(spot);
+    const isPassiveIncomeOnlyLot = passiveIncomeOnlyLotIds.has(spot.id);
     setChoiceWheelButtons(level > 0
       ? [
           ...(isMaxLevel ? [] : ["robbery"]),
-          "protection",
+          ...(isPassiveIncomeOnlyLot ? [] : ["protection"]),
           "lotInfo",
           "close",
           ...(spotQuest ? ["quest"] : []),
@@ -8729,22 +10133,23 @@ function showChoiceWheel(spot) {
     }
     if (choiceWheelCoreLabel) choiceWheelCoreLabel.textContent = houseDef ? `Haz ${level}` : "Ures telek";
     if (choiceWheelAction1) choiceWheelAction1.textContent = level ? `Fejlesztes (${cost} $)` : `Vasarlas (${cost} $)`;
-    if (choiceWheelAction2) choiceWheelAction2.textContent = level ? "Vedelmi penz" : "Telek info";
+    if (choiceWheelAction2) {
+      choiceWheelAction2.textContent = level
+        ? (isPassiveIncomeOnlyLot ? "" : "Védelmi pénz")
+        : "Telek info";
+      if (level && !isPassiveIncomeOnlyLot) refreshChoiceWheelProtectionCountdown();
+    }
     if (choiceWheelAction3) {
       choiceWheelAction3.textContent = level ? "Telek info" : "";
     }
     if (choiceWheelAction4) choiceWheelAction4.textContent = "Bezaras";
-    if (choiceWheelAction5) {
-      choiceWheelAction5.textContent = spotQuest ? "Kuldetes" : level ? "Kirablas" : "";
-      choiceWheelAction5.dataset.choiceAction = spotQuest ? "quest" : "lotRobbery";
-    }
+    if (choiceWheelAction5) choiceWheelAction5.textContent = spotQuest ? "Kuldetes" : "";
     return;
   }
   const quest = spotQuest;
   const rival = getRivalEventAtSpot(spot.id);
   const difficulty = getBuildingDifficulty(spot);
   const difficultyInfo = getDifficultyInfo(difficulty);
-  const robberyCost = spot.mode === "shop" ? 18 : 12;
   const protectionCost = 8;
   const baseActionAvailable = !state.mainBaseSpotId || state.mainBaseSpotId === spot.id;
   const thirdAction = rival ? "rival" : (baseActionAvailable ? "baseRest" : null);
@@ -8760,9 +10165,7 @@ function showChoiceWheel(spot) {
   if (choiceWheelSubtitle) choiceWheelSubtitle.textContent = rival ? `Rivalis banda: ero ${rival.strength}` : "";
   if (choiceWheelCoreLabel) choiceWheelCoreLabel.textContent = spot.name;
   if (choiceWheelAction1) {
-    const canRob = state.health > 0 && state.energy >= robberyCost;
-    choiceWheelAction1.textContent = canRob ? `Kirablas (-${robberyCost})` : `Kirablas (${robberyCost} energia kell)`;
-    choiceWheelAction1.disabled = !canRob;
+    setRobberyChoiceButton(choiceWheelAction1, spot);
   }
   if (choiceWheelAction2) {
     const cooldown = getProtectionCooldownRemaining(spot.id);
@@ -8795,13 +10198,13 @@ async function runTerritoryAction(actionId, territory) {
   if (territory.kind === "park") {
     if (actionId === "robbery") {
       const previousHeat = state.heat;
-      const recoveryResult = await startRecovery("health", { layLow: true });
+      const recoveryResult = await startRecovery("health", { layLow: true, spotId: territory.id, spotName: territory.name });
       if (!recoveryResult) return;
       const heatLoss = Math.max(0, previousHeat - state.heat);
       sceneRef?.pushLog(`${territory.name}: lapulás, -${heatLoss}% körözés, -${recoveryResult.influenceLoss || 0}% befolyás.`);
       sceneRef?.setMessage("A Lapulás elindult: 20 perc alatt legfeljebb +50 életerő.");
     } else if (actionId === "protection") {
-      if (!await startRecovery("energy")) return;
+      if (!await startRecovery("energy", { spotId: territory.id, spotName: territory.name })) return;
       sceneRef?.pushLog(`${territory.name}: találkozó indult.`);
       sceneRef?.setMessage("A Találkozó elindult: 20 perc alatt legfeljebb +50 energia.");
     } else if (actionId === "baseRest") {
@@ -8906,6 +10309,10 @@ async function runTerritoryAction(actionId, territory) {
         : `${territory.name}: haz ${result.level}. szint, -${result.cost} $.`);
       sceneRef?.setMessage(`${territory.name}: ${getLotHouseDef(territory)?.name || "Haz"} - ${getLotIncome(territory)} $ napi bevetel.`);
     } else if (actionId === "protection") {
+      if (passiveIncomeOnlyLotIds.has(territory.id)) {
+        sceneRef?.setMessage("Az ures telek csak passziv napi bevetelt termel, vedelmi penz nem szedheto belole.");
+        return;
+      }
       if (level <= 0) {
         showLotInfoModal(territory);
         return;
@@ -8914,6 +10321,10 @@ async function runTerritoryAction(actionId, territory) {
     } else if (actionId === "lotInfo") {
       showLotInfoModal(territory);
     } else if (actionId === "lotRobbery") {
+      if (passiveIncomeOnlyLotIds.has(territory.id)) {
+        sceneRef?.setMessage("Az ures telek csak passziv napi bevetelt termel, nem rabolhato ki.");
+        return;
+      }
       if (level <= 0) {
         sceneRef?.setMessage("Ezt a telket elobb meg kell vasarolni.");
         return;
@@ -8954,6 +10365,8 @@ async function runChoiceAction(actionId) {
     sceneRef?.refreshScene();
     if (spot.kind !== "lot" || !["protection", "lotInfo", "lotRobbery"].includes(actionId)) {
       hideChoiceWheel();
+    } else if (actionId === "protection") {
+      showChoiceWheel(spot);
     }
     return;
   }
@@ -9062,6 +10475,7 @@ function createSaveSnapshot() {
     buildingDifficultyCycle: state.buildingDifficultyCycle,
     marketStock: state.marketStock,
     marketRefreshAt: state.marketRefreshAt,
+    marketCatalogVersion: state.marketCatalogVersion,
     activeQuest: state.activeQuest,
     offeredQuests: state.offeredQuests,
     activeQuests: state.activeQuests,
@@ -9075,6 +10489,7 @@ function createSaveSnapshot() {
     smuggledGoods: state.smuggledGoods,
     smugglerFame: state.smugglerFame,
     harborGarage: state.harborGarage,
+    harborBarUsage: state.harborBarUsage,
     rivalEvent: state.rivalEvent,
     rivalNextSpawnAt: state.rivalNextSpawnAt,
     mentorStep: state.mentorStep,
@@ -9091,6 +10506,8 @@ function createSaveSnapshot() {
     hideUsesToday: state.hideUsesToday,
     hideUsesDay: state.hideUsesDay,
     day: state.day,
+    lastDayEndedAt: state.lastDayEndedAt,
+    lastPassiveIncomeAt: state.lastPassiveIncomeAt,
     cityLevel: state.cityLevel,
     districts: state.districts,
     selectedDistrictIndex: state.selectedDistrictIndex,
@@ -9100,7 +10517,7 @@ function createSaveSnapshot() {
 
 function hydrateState(saved) {
   if (!saved || typeof saved !== "object") return false;
-  Object.assign(state, saved);
+  Object.assign(state, protectClientPersistentProgress(saved));
   ensureInfluenceState();
   state.profileStartedAt = Number.isFinite(Number(state.profileStartedAt)) ? Number(state.profileStartedAt) : Date.now();
   state.avatarId = normalizePlayerAvatarId(state.avatarId);
@@ -9110,6 +10527,8 @@ function hydrateState(saved) {
     state.districts = makeDistricts();
   }
   state.day = Number.isFinite(state.day) ? state.day : 1;
+  state.lastDayEndedAt = Number.isFinite(Number(state.lastDayEndedAt)) ? Number(state.lastDayEndedAt) : 0;
+  state.lastPassiveIncomeAt = Number.isFinite(Number(state.lastPassiveIncomeAt)) ? Number(state.lastPassiveIncomeAt) : 0;
   state.health = Number.isFinite(state.health) ? clamp(state.health, 0, 100) : 100;
   state.energy = Number.isFinite(state.energy) ? clamp(state.energy, 0, 100) : 100;
   state.gearPower = Number.isFinite(state.gearPower) ? Math.max(0, state.gearPower) : 0;
@@ -9125,6 +10544,7 @@ function hydrateState(saved) {
   state.buildingDifficulties = normalizeBuildingDifficulties(state.buildingDifficulties, state.buildingDifficultyCycle);
   state.marketStock = normalizeMarketStock(state.marketStock);
   state.marketRefreshAt = Number.isFinite(Number(state.marketRefreshAt)) ? Number(state.marketRefreshAt) : 0;
+  state.marketCatalogVersion = typeof state.marketCatalogVersion === "string" ? state.marketCatalogVersion : "";
   ensureMarketStock();
   state.mainBaseSpotId = typeof state.mainBaseSpotId === "string" ? state.mainBaseSpotId : null;
   state.worldBaseLotId = normalizeWorldBaseLotId(state.worldBaseLotId);
@@ -9140,6 +10560,9 @@ function hydrateState(saved) {
   }
   state.activeQuest = normalizeQuest(state.activeQuest);
   state.offeredQuests = normalizeOfferedQuestList(state.offeredQuests);
+  if (getRankLevel(state.fame) < getHarborRequiredLevel() && questRequiresHarbor(state.activeQuest)) {
+    state.activeQuest = null;
+  }
   if (state.activeQuest?.status === "offered" && !state.offeredQuests.some((quest) => quest.id === state.activeQuest.id)) {
     state.offeredQuests.unshift(state.activeQuest);
     state.offeredQuests = normalizeOfferedQuestList(state.offeredQuests);
@@ -9172,6 +10595,7 @@ function hydrateState(saved) {
   state.smuggledGoods = normalizeSmuggledGoods(state.smuggledGoods);
   state.smugglerFame = Math.max(0, Math.round(Number(state.smugglerFame) || 0));
   state.harborGarage = normalizeHarborGarage(state.harborGarage);
+  state.harborBarUsage = normalizeHarborBarUsage(state.harborBarUsage);
   state.rivalEvent = normalizeRivalEvent(state.rivalEvent);
   state.rivalNextSpawnAt = normalizeRivalNextSpawnAt(state.rivalNextSpawnAt);
   state.mentorStep = clamp(Math.round(Number(state.mentorStep) || 0), 0, mentorSteps.length);
@@ -9205,19 +10629,44 @@ async function requestSaveApi(method = "GET", body = null, keepalive = false) {
     body: body ? JSON.stringify(body) : undefined,
     keepalive,
   });
+  observeServerClock(response);
+  const payload = response.status === 204 ? null : await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(`Save API error: ${response.status}`);
+    const error = new Error(payload?.message || payload?.error || `Save API error: ${response.status}`);
+    error.status = response.status;
+    error.payload = payload;
+    throw error;
   }
-  if (response.status === 204) return null;
-  return response.json();
+  return payload;
 }
 
 async function flushQueuedSave(forceKeepalive = false) {
   if (saveRequestInFlight || !latestQueuedSave?.profileName) return saveRequestInFlight;
   const snapshot = latestQueuedSave;
   latestQueuedSave = null;
-  saveRequestInFlight = requestSaveApi("PUT", { state: snapshot }, forceKeepalive)
-    .catch(() => {
+  saveRequestInFlight = requestSaveApi("PUT", {
+    state: snapshot,
+    baseUpdatedAt: lastKnownServerUpdatedAt,
+  }, forceKeepalive)
+    .then((payload) => {
+      if (Number.isFinite(Number(payload?.updatedAt))) {
+        lastKnownServerUpdatedAt = Math.max(lastKnownServerUpdatedAt, Number(payload.updatedAt));
+      }
+      if (payload?.state && typeof payload.state === "object") {
+        applyServerRobberyState(payload.state);
+        sceneRef?.refreshHUD();
+      }
+    })
+    .catch((error) => {
+      if (error?.status === 409 && error.payload?.state && typeof error.payload.state === "object") {
+        const previousTerritories = JSON.stringify(state.territories);
+        hydrateState(error.payload.state);
+        lastKnownServerUpdatedAt = Math.max(0, Number(error.payload.updatedAt) || 0);
+        sceneRef?.refreshHUD();
+        if (previousTerritories !== JSON.stringify(state.territories)) sceneRef?.refreshMap();
+        sceneRef?.setMessage("A szerver frissebb allapotot kuldott, a jatek szinkronizalva lett.");
+        return;
+      }
       // The live game continues even if the remote save endpoint is temporarily unavailable.
     })
     .finally(async () => {
@@ -9237,13 +10686,13 @@ function queueSaveSnapshot(snapshot, immediate = false) {
     pendingSaveTimer = null;
   }
   if (immediate) {
-    void flushQueuedSave();
-    return;
+    return flushQueuedSave();
   }
   pendingSaveTimer = window.setTimeout(() => {
     pendingSaveTimer = null;
     void flushQueuedSave();
   }, 180);
+  return null;
 }
 
 async function deleteRemoteSave(profileName) {
@@ -9260,14 +10709,20 @@ async function loadGame(profileName = "") {
   const normalizedProfileName = profileName.trim().slice(0, 18);
   if (!normalizedProfileName) return false;
   try {
+    if (state.registered && state.profileName && state.profileName !== normalizedProfileName) {
+      await saveGame(true);
+    }
+    lastKnownServerUpdatedAt = 0;
     await setActiveProfileSession(normalizedProfileName);
     const response = await fetch(PROFILE_API_BASE, {
       headers: { Accept: "application/json" },
     });
+    observeServerClock(response);
     const remoteSave = response.ok ? await response.json() : { found: false };
     if (remoteSave?.found && hydrateState(remoteSave.state)) {
+      lastKnownServerUpdatedAt = Math.max(0, Number(remoteSave.updatedAt) || 0);
+      handleServerRivalEvents(remoteSave.rivalEvents);
       rememberLastProfileName(state.profileName);
-      queueSaveSnapshot(createSaveSnapshot(), true);
       return true;
     }
   } catch {
@@ -9277,8 +10732,78 @@ async function loadGame(profileName = "") {
 }
 
 function saveGame(immediate = false) {
-  if (!state.registered || !state.profileName) return;
-  queueSaveSnapshot(createSaveSnapshot(), immediate);
+  if (!state.registered || !state.profileName) return null;
+  return queueSaveSnapshot(createSaveSnapshot(), immediate);
+}
+
+function observeServerClock(response, explicitServerTime = 0) {
+  const receivedAt = Date.now();
+  const headerTime = Number(response?.headers?.get?.("X-Server-Time")) || 0;
+  const serverTime = Number(explicitServerTime) || headerTime;
+  if (serverTime > 0) {
+    const measuredOffset = serverTime - receivedAt;
+    serverClockOffsetMs = Math.round(serverClockOffsetMs * 0.75 + measuredOffset * 0.25);
+  }
+  return serverTime;
+}
+
+function getSynchronizedNow() {
+  return Date.now() + serverClockOffsetMs;
+}
+
+function markServerMutation(response, payload = {}) {
+  const serverTime = observeServerClock(response, payload.serverTime || payload.serverNow);
+  const revision = Number(payload.updatedAt) || serverTime;
+  if (revision > 0) lastKnownServerUpdatedAt = Math.max(lastKnownServerUpdatedAt, revision);
+}
+
+async function syncCurrentServerState(force = false) {
+  if (!state.registered || !state.profileName || serverStateSyncInFlight) return false;
+  if (!force && document.hidden) return false;
+  if (activeRobberyGame?.turnLocked) return false;
+  serverStateSyncInFlight = true;
+  try {
+    if (latestQueuedSave?.profileName || saveRequestInFlight) await flushQueuedSave();
+    const response = await fetch(`/api/sync/current?since=${encodeURIComponent(lastKnownServerUpdatedAt)}`, {
+      headers: { Accept: "application/json" },
+      cache: "no-store",
+    });
+    observeServerClock(response);
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || "A szinkronizalas sikertelen.");
+    if (Number.isFinite(Number(payload.updatedAt))) {
+      lastKnownServerUpdatedAt = Math.max(lastKnownServerUpdatedAt, Number(payload.updatedAt));
+    }
+    if (!payload.changed || !payload.state || typeof payload.state !== "object") return false;
+    const previousMapState = JSON.stringify({
+      territories: state.territories,
+      mainBaseSpotId: state.mainBaseSpotId,
+      rivalEvent: state.rivalEvent,
+      offeredQuests: state.offeredQuests,
+      activeQuests: state.activeQuests,
+    });
+    hydrateState(payload.state);
+    handleServerRivalEvents(payload.rivalEvents);
+    const nextMapState = JSON.stringify({
+      territories: state.territories,
+      mainBaseSpotId: state.mainBaseSpotId,
+      rivalEvent: state.rivalEvent,
+      offeredQuests: state.offeredQuests,
+      activeQuests: state.activeQuests,
+    });
+    sceneRef?.refreshHUD();
+    if (previousMapState !== nextMapState) sceneRef?.refreshMap();
+    return true;
+  } catch {
+    return false;
+  } finally {
+    serverStateSyncInFlight = false;
+  }
+}
+
+function startServerStateSync() {
+  if (serverStateSyncTimer) window.clearInterval(serverStateSyncTimer);
+  serverStateSyncTimer = window.setInterval(() => void syncCurrentServerState(), SERVER_STATE_SYNC_INTERVAL_MS);
 }
 
 function rankForFame(fame) {
@@ -9364,44 +10889,34 @@ function formatInfluencePoints(rate) {
   return formatInfluenceRate(rate).replace("%", "");
 }
 
+function formatInfluenceCurrentRate(rate, prefix = "+") {
+  const formattedRate = formatInfluenceRate(rate);
+  return formattedRate === "0%" ? "0%" : `${prefix}${formattedRate}`;
+}
+
 function renderInfluenceInfo() {
   if (!hudInfluenceInfo) return;
   const benefits = getInfluenceBenefits();
+  const currentBenefits = [
+    ["Feketepiaci kedvezmény", `${formatInfluenceRate(benefits.marketDiscountRate)} olcsóbb`],
+    ["Napi ház- és kerületbevétel", formatInfluenceCurrentRate(benefits.dailyIncomeRate)],
+    ["Védelmipénz-sikeresély", `${formatInfluenceCurrentRate(benefits.protectionChanceBonus).replace("%", "")} százalékpont`],
+    ["Világtérképes sarcbevétel", formatInfluenceCurrentRate(benefits.worldTributeRate)],
+    ["Kikötői büntetés", `${formatInfluenceRate(benefits.harborPenaltyReductionRate)} kevesebb`],
+    ["Sárga / piros piaci esély", `${formatInfluenceCurrentRate(benefits.marketYellowChanceBonus)} / ${formatInfluenceCurrentRate(benefits.marketRedChanceBonus)}`],
+  ];
   hudInfluenceInfo.innerHTML = `
     <div class="hud-influence-info__head">
       <div><span>Jelenlegi befolyás</span><strong>${benefits.influence}%</strong></div>
-      <small>A befolyás csak gazdasági és kapcsolati előnyöket ad. A harci erőt közvetlenül nem növeli.</small>
     </div>
     <section class="hud-influence-info__section">
-      <strong>Aktív előnyök</strong>
+      <strong>Most aktív előnyök</strong>
       <div class="hud-influence-info__benefits">
-        <div><span>Feketepiaci kedvezmény</span><b>${formatInfluenceRate(benefits.marketDiscountRate)}</b></div>
-        <div><span>Napi ház- és kerületbevétel</span><b>+${formatInfluenceRate(benefits.dailyIncomeRate)}</b></div>
-        <div><span>Védelmipénz-sikeresély</span><b>+${formatInfluencePoints(benefits.protectionChanceBonus)} százalékpont</b></div>
-        <div><span>Világtérképes sarcbevétel</span><b>+${formatInfluenceRate(benefits.worldTributeRate)}</b></div>
-        <div><span>Kisebb kikötői büntetés</span><b>-${formatInfluenceRate(benefits.harborPenaltyReductionRate)}</b></div>
-        <div><span>Sárga / piros piaci esély</span><b>+${formatInfluenceRate(benefits.marketYellowChanceBonus)} / +${formatInfluenceRate(benefits.marketRedChanceBonus)}</b></div>
+        ${currentBenefits.map(([label, value]) => `
+          <div><span>${label}</span><b>${value}</b></div>
+        `).join("")}
       </div>
     </section>
-    <section class="hud-influence-info__section">
-      <strong>Hogyan változik?</strong>
-      <div class="hud-influence-info__events">
-        <div><span>Kezdő játékos</span><b>10%</b></div>
-        <div><span>Védelmi pénz sikeresen</span><b>+1%</b></div>
-        <div><span>Kirablás: könnyű / kockázatos / veszélyes</span><b>+1 / +2 / +3%</b></div>
-        <div><span>Rivális banda legyőzése</span><b>+3%</b></div>
-        <div><span>PvP-győzelem</span><b>+2%</b></div>
-        <div><span>Világtérképes épület legyőzése</span><b>+2%</b></div>
-        <div><span>Rivális város elfoglalása</span><b>+5%</b></div>
-        <div><span>Kerület átvétele</span><b>+3%</b></div>
-        <div><span>Sikeres csempészmunka</span><b>+1%</b></div>
-        <div><span>Sikeres garázsfuvar</span><b>+1–2%</b></div>
-        <div><span>Lapulás</span><b>−2%</b></div>
-        <div><span>Kudarc: kirablás / rivális / PvP</span><b>−1–4%</b></div>
-        <div><span>Rivális város ostroma elbukik</span><b>−4%</b></div>
-      </div>
-    </section>
-    <p class="hud-influence-info__note">A rendszer 0–100% között marad. A kezdőérték 10%, ezért az új játékos nem kap hátrányt; a bónuszok 10% fölött fokozatosan nőnek.</p>
   `;
 }
 
@@ -9410,6 +10925,7 @@ function setInfluenceInfoOpen(open) {
   const shouldOpen = Boolean(open);
   if (shouldOpen) renderInfluenceInfo();
   hudInfluenceInfo.classList.toggle("hidden", !shouldOpen);
+  hudInfluenceInfo.classList.toggle("is-open", shouldOpen);
   hudInfluenceInfo.setAttribute("aria-hidden", shouldOpen ? "false" : "true");
   hudInfluencePill.setAttribute("aria-expanded", shouldOpen ? "true" : "false");
 }
@@ -9585,6 +11101,10 @@ async function collectProtectionMoney(targetDistrict, buildingName = "Haz", targ
     sceneRef?.setMessage("Elobb regisztralj.");
     return false;
   }
+  if (targetSpot && passiveIncomeOnlyLotIds.has(targetSpot.id)) {
+    sceneRef?.setMessage("Az ures telek csak passziv napi bevetelt termel, vedelmi penz nem szedheto belole.");
+    return false;
+  }
   if (!canStartCombat("A vedelmi penz beszedest")) return false;
   if (targetSpot && getProtectionCooldownRemaining(targetSpot.id) > 0) {
     sceneRef?.setMessage(`Innen meg nem szedhetsz vedelmi penzt. Hatralevo ido: ${formatCountdown(getProtectionCooldownRemaining(targetSpot.id))}.`);
@@ -9668,7 +11188,8 @@ function resolveRivalBattle(spot, options = {}) {
     state.money = Math.max(0, state.money - loss);
     const heatGain = applyHeat(6);
     const influenceLoss = applyInfluenceLoss(3);
-    state.rivalEvent = { ...rival, expiresAt: Date.now() + Math.max(2 * 60 * 1000, Math.round((rival.expiresAt - Date.now()) * 0.55)) };
+    const now = getSynchronizedNow();
+    state.rivalEvent = { ...rival, expiresAt: now + Math.max(2 * 60 * 1000, Math.round((rival.expiresAt - now) * 0.55)) };
     sceneRef?.pushLog(`${spot.name}: a rivalis banda visszavert. -${loss} $, -${healthLoss} eletero, -${influenceLoss}% befolyas.`);
     sceneRef?.setMessage(`A rivalis banda tul eros volt. -${loss} $, -${healthLoss} eletero, -${influenceLoss}% befolyas.`);
     queueRewardModal({
@@ -9705,21 +11226,26 @@ function advanceDistrictLoyalty() {
 function triggerBust() {
   const heatBefore = clamp(state.heat, 0, 100);
   const { loss, lossRate } = getPoliceMoneyLoss(state.money, heatBefore, true);
+  const cargoLoss = confiscatePoliceCargo(heatBefore, true);
+  const cargoLossText = formatCargoLoss(cargoLoss);
   const lossPercent = Math.round(lossRate * 100);
   state.money = Math.max(0, state.money - loss);
   state.crew = getHiredCrewMembers().length;
   state.heat = clamp(heatBefore - 15, 0, 100);
-  sceneRef?.pushLog(`Rajtaütés történt. -${loss} $ (${lossPercent}%), -15% körözés.`);
-  sceneRef?.setMessage(`A rendőrök elkaptak és a kasszád ${lossPercent}%-át elvitték.`);
+  sceneRef?.pushLog(`Rajtaütés történt. -${loss} $ (${lossPercent}%)${cargoLossText ? `, elkobzott áru: ${cargoLossText}` : ""}, -15% körözés.`);
+  sceneRef?.setMessage(cargoLossText
+    ? `A rendőrök elkaptak: -${loss} $, elkobzott áru: ${cargoLossText}.`
+    : `A rendőrök elkaptak és a kasszád ${lossPercent}%-át elvitték.`);
   showPoliceRaidPanel(
     loss,
-    `A ${heatBefore}%-os körözés miatt elkaptak. A rendőrök a kasszád ${lossPercent}%-át vitték el.`,
+    `A ${heatBefore}%-os körözés miatt elkaptak. A rendőrök a kasszád ${lossPercent}%-át vitték el.${cargoLossText ? ` Csempészárut is elkoboztak: ${cargoLossText}.` : ""}`,
+    cargoLoss,
   );
   postGameEvent(
     "police_bust",
     "Elkapott a rendőrség",
-    `A rendőrök ${loss} $-t, a kasszád ${lossPercent}%-át vitték el. A körözésed 15%-kal csökkent.`,
-    { loss, lossPercent, heatBefore, heat: state.heat },
+    `A rendőrök ${loss} $-t, a kasszád ${lossPercent}%-át vitték el.${cargoLossText ? ` Elkobzott csempészáru: ${cargoLossText}.` : ""} A körözésed 15%-kal csökkent.`,
+    { loss, lossPercent, cargoLoss, heatBefore, heat: state.heat },
   );
   saveGame();
 }
@@ -9779,7 +11305,8 @@ async function handleExpand() {
     const result = response.result;
     sceneRef?.pushLog(`${target.name} a birodalom resze lett. +${result.influenceGain || 0}% befolyas, -${result.healthLoss} eletero.`);
     if (result.bust) {
-      sceneRef?.pushLog(`Rendőrségi rajtaütés: -${result.bust.moneyLoss} $ (${result.bust.moneyLossPercent}%), -${result.bust.heatLoss}% körözés.`);
+      const cargoLossText = formatCargoLoss(result.bust.cargoLoss);
+      sceneRef?.pushLog(`Rendőrségi rajtaütés: -${result.bust.moneyLoss} $ (${result.bust.moneyLossPercent}%)${cargoLossText ? `, elkobzott áru: ${cargoLossText}` : ""}, -${result.bust.heatLoss}% körözés.`);
     }
     sceneRef?.setMessage(`Atvetted ezt a teruletet: ${target.name}. Serules: -${result.healthLoss} eletero.`);
     return true;
@@ -9821,25 +11348,6 @@ async function handleLayLow() {
   if (!response) return;
   sceneRef?.pushLog(`A banda lapulni kezdett. -${response.heatLoss || 0}% körözés, -${response.influenceLoss || 0}% befolyás.`);
   sceneRef?.setMessage("A Lapulás elindult: 20 perc alatt legfeljebb +50 életerő.");
-}
-
-async function endDay() {
-  if (empireCommandInFlight) return false;
-  empireCommandInFlight = true;
-  try {
-    const response = await requestServerProgression("empire", { operation: "end-day" });
-    const result = response.result;
-    sceneRef?.pushLog(`Nap vege: +${result.income} $ (${result.territoryIncome} $ hazbevetel${result.influenceIncomeBonus ? `, +${result.influenceIncomeBonus} $ befolyasbonusz` : ""}), +${result.fameGain} hirnev.`);
-    sceneRef?.refreshHUD();
-    sceneRef?.refreshMap();
-    sceneRef?.setMessage(`Uj nap kezdodik. A birodalom most mar ${result.controlledCount} keruletet tart.`);
-    return true;
-  } catch (error) {
-    sceneRef?.setMessage(error.message || "A napot nem sikerult lezarni.");
-    return false;
-  } finally {
-    empireCommandInFlight = false;
-  }
 }
 
 function startNewGame(name) {
@@ -9884,6 +11392,7 @@ function startNewGame(name) {
   state.smuggledGoods = normalizeSmuggledGoods();
   state.smugglerFame = 0;
   state.harborGarage = normalizeHarborGarage();
+  state.harborBarUsage = normalizeHarborBarUsage();
   state.rivalEvent = null;
   state.rivalNextSpawnAt = Date.now() + randomInt(RIVAL_SPAWN_MIN_MS, RIVAL_SPAWN_MAX_MS);
   state.mentorStep = 0;
@@ -9900,6 +11409,8 @@ function startNewGame(name) {
   state.hideUsesToday = 0;
   state.hideUsesDay = 1;
   state.day = 1;
+  state.lastDayEndedAt = 0;
+  state.lastPassiveIncomeAt = 0;
   state.cityLevel = 1;
   state.districts = makeDistricts();
   state.selectedDistrictIndex = 0;
@@ -9987,6 +11498,7 @@ function resetGame() {
   state.smuggledGoods = normalizeSmuggledGoods();
   state.smugglerFame = 0;
   state.harborGarage = normalizeHarborGarage();
+  state.harborBarUsage = normalizeHarborBarUsage();
   state.rivalEvent = null;
   state.rivalNextSpawnAt = 0;
   state.mentorStep = 0;
@@ -10057,27 +11569,34 @@ function ensureCityEngine() {
   if (cityEnginePromise) return cityEnginePromise;
   window.MaffiaAssetRuntime?.loadImage?.(mapBackgroundLayer);
   const featureStyles = Promise.all([
-    loadStylesheet("./styles/combat.css?v=combat-progression-2026-07-30-02"),
-    loadStylesheet("./styles/features.css?v=harbor-market-sell-2026-07-30-1"),
-  ]).then(() => loadStylesheet("./styles/hud-redesign.css?v=influence-system-2026-07-30-07"));
+    loadStylesheet("./styles/combat.css?v=crew-portrait-uniform-2026-08-04-1"),
+    loadStylesheet("./styles/features.css?v=read-messages-gray-2026-08-04-1"),
+  ]).then(() => loadStylesheet("./styles/hud-redesign.css?v=help-interface-guide-2026-08-04-1"));
   const phaserEngine = loadClassicScript("https://cdn.jsdelivr.net/npm/phaser@3.90.0/dist/phaser.min.js");
   cityEnginePromise = Promise.all([featureStyles, phaserEngine])
-    .then(() => loadClassicScript("./js/city-scene.js?v=influence-system-2026-07-30-1"))
+    .then(() => loadClassicScript("./js/city-scene.js?v=passive-income-2026-08-01-1"))
     .catch((error) => { cityEnginePromise = null; throw error; });
   return cityEnginePromise;
 }
 
-createRobberyDefenders = function createThreeDefenders(spot, difficulty, count = 3) {
-  const names = ["Salvatore", "Vincent", "Tommy"];
-  const types = ["watcher", "boss", "bodyguard"];
-  const defenderCount = clamp(Math.round(Number(count) || 3), 1, names.length);
+createRobberyDefenders = function createTwoOrThreeDefenders(spot, difficulty, count = null) {
+  const roles = [
+    { name: "Vincent", type: "boss" },
+    { name: "Salvatore", type: "watcher" },
+    { name: "Tommy", type: "bodyguard" },
+  ];
+  const defenderCount = clamp(
+    Number.isFinite(Number(count)) ? Math.round(Number(count)) : getRobberyEnemyCountForSpot(spot, difficulty),
+    2,
+    roles.length,
+  );
   const defenderLevel = clamp(Math.round(difficulty / 12), 1, 18);
-  return names.slice(0, defenderCount).map((name, index) => {
+  return roles.slice(0, defenderCount).map((role, index) => {
     const maxHealth = Math.round(34 + defenderLevel * 4 + difficulty * 0.06 + index * 4);
     return {
       id: `${spot.id}-guard-${index}`,
-      name,
-      type: types[index],
+      name: role.name,
+      type: role.type,
       level: defenderLevel + index,
       maxHealth,
       health: maxHealth,
@@ -10181,6 +11700,7 @@ function getRobberyCombatPreview(encounter) {
   const currentTeamPower = getRobberyTeamPower(allies, true);
   const selectedProfile = getRobberyCombatProfile(allies);
   const referenceProfile = encounter.referenceCombatProfile || selectedProfile;
+  const fixedEnemyPower = Math.max(0, Math.round(Number(encounter.enemyPowerTarget) || Number(encounter.enemyPower) || 0));
   const actionPower = Math.max(
     1,
     Number(encounter.difficultyInfo?.actionPower) || getPlayerPower(),
@@ -10191,19 +11711,17 @@ function getRobberyCombatPreview(encounter) {
     0.45,
     1.65,
   );
-  const blend = (referenceValue, selectedValue) => (
-    referenceValue * storedRatio * 0.7 + selectedValue * 0.3
-  );
+  const scaleReference = (referenceValue) => referenceValue * storedRatio;
   const averageAttack = Math.max(5, Math.min(
-    blend(referenceProfile.averageAttack, selectedProfile.averageAttack),
+    scaleReference(referenceProfile.averageAttack),
     referenceProfile.averageAttack * tier.maximumTeamRatio,
   ));
   const averageDefense = Math.max(4, Math.min(
-    blend(referenceProfile.averageDefense, selectedProfile.averageDefense),
+    scaleReference(referenceProfile.averageDefense),
     referenceProfile.averageDefense * tier.maximumTeamRatio,
   ));
   const averageLevel = clamp(
-    blend(referenceProfile.averageLevel, selectedProfile.averageLevel),
+    scaleReference(referenceProfile.averageLevel),
     1,
     30,
   );
@@ -10213,13 +11731,13 @@ function getRobberyCombatPreview(encounter) {
       ? 1.02
       : 1;
   const totalHealth = Math.max(40, Math.min(
-    blend(referenceProfile.totalHealth, selectedProfile.totalHealth) * healthScale,
+    scaleReference(referenceProfile.totalHealth) * healthScale,
     referenceProfile.totalHealth * tier.maximumTeamRatio,
   ));
-  const enemyCount = Math.max(1, Math.round(Number(encounter.enemyCount) || 1));
+  const enemyCount = clamp(Math.round(Number(encounter.enemyCount) || 2), 2, 3);
   const roleProfiles = [
-    { attack: 1.04, defense: 0.92, health: 0.9, level: 0 },
     { attack: 1.08, defense: 1.02, health: 1.05, level: 1 },
+    { attack: 1.04, defense: 0.92, health: 0.9, level: 0 },
     { attack: 0.9, defense: 1.1, health: 1.05, level: 0 },
   ].slice(0, enemyCount);
   const healthWeightTotal = roleProfiles.reduce((sum, profile) => sum + profile.health, 0);
@@ -10231,8 +11749,8 @@ function getRobberyCombatPreview(encounter) {
     health: totalHealth * (profile.health / healthWeightTotal),
   }));
   const calculatedEnemyPower = getRobberyTeamPower(estimatedEnemies, false);
-  const enemyPower = encounter.battleStarted && Number(encounter.enemyPower) > 0
-    ? Number(encounter.enemyPower)
+  const enemyPower = fixedEnemyPower > 0
+    ? fixedEnemyPower
     : calculatedEnemyPower;
   const passiveBonus = Math.min(
     0.1,
@@ -10586,7 +12104,9 @@ function scheduleEnemyCounterattack(encounter) {
 function getBattleBackground(encounter) {
   const defenders = encounter?.defenders || [];
   if (encounter?.battleMode === "lone") return "./assets/battle/solo-raid.webp";
-  if (encounter?.battleMode === "solo") return "./assets/battle/battle-duo.webp";
+  // The scene must follow the visible enemy health bars. A one-crew attack can
+  // still face three defenders, so battleMode alone cannot select the duo art.
+  if (defenders.length <= 2) return "./assets/battle/battle-duo.webp";
   const defeatedKey = defenders.map((defender) => defender.health <= 0 ? "1" : "0").join("");
   const backgroundsByDefeatedEnemy = {
     "000": "./assets/battle/battle.webp",
@@ -10771,7 +12291,7 @@ refreshRobberyGame = function refreshThreeVsThreeBattle() {
     button.disabled = locked;
     button.innerHTML = `
       <div class="robbery-team-choice__portrait">
-        <img src="./assets/character/gangster-character.webp" alt="${member.name}">
+        <img src="${getCrewPortraitAsset(member)}" alt="${member.name}">
         <div class="robbery-team-choice__level">${member.level}. szint</div>
         <div class="robbery-team-choice__selected">KIVALASZTVA</div>
       </div>
@@ -10855,20 +12375,42 @@ function applyServerRobberyState(serverState = {}) {
   if (Number.isFinite(Number(serverState.influenceSystemVersion))) {
     state.influenceSystemVersion = Number(serverState.influenceSystemVersion);
   }
+  if (Number.isFinite(Number(serverState.pvpNextAttackAt))) {
+    state.pvpNextAttackAt = Math.max(0, Number(serverState.pvpNextAttackAt));
+  }
   ensureInfluenceState();
-  if (Array.isArray(serverState.crewMembers)) state.crewMembers = serverState.crewMembers;
-  if (Array.isArray(serverState.activeQuests)) state.activeQuests = serverState.activeQuests;
-  if (Array.isArray(serverState.offeredQuests)) state.offeredQuests = serverState.offeredQuests;
-  if (Object.prototype.hasOwnProperty.call(serverState, "activeQuest")) state.activeQuest = serverState.activeQuest;
+  if (Array.isArray(serverState.crewMembers)) {
+    state.crewMembers = mergeProtectedClientCrewMembers(
+      state.crewMembers,
+      serverState.crewMembers,
+      state.crew,
+      serverState.crew,
+    );
+  }
+  if (Array.isArray(serverState.activeQuests)) state.activeQuests = normalizeQuestList(serverState.activeQuests);
+  if (Array.isArray(serverState.offeredQuests)) state.offeredQuests = normalizeOfferedQuestList(serverState.offeredQuests);
+  if (Object.prototype.hasOwnProperty.call(serverState, "activeQuest")) {
+    state.activeQuest = normalizeQuest(serverState.activeQuest);
+    if (getRankLevel(state.fame) < getHarborRequiredLevel() && questRequiresHarbor(state.activeQuest)) state.activeQuest = null;
+  }
   if (Array.isArray(serverState.districts)) state.districts = serverState.districts;
-  if (serverState.territories && typeof serverState.territories === "object") state.territories = normalizeTerritories(serverState.territories);
+  if (serverState.territories && typeof serverState.territories === "object") {
+    state.territories = mergeProtectedClientTerritories(state.territories, serverState.territories);
+  }
   if (serverState.equipment && typeof serverState.equipment === "object") state.equipment = normalizeEquipment(serverState.equipment);
   if (serverState.itemInventory && typeof serverState.itemInventory === "object") {
     state.itemInventory = normalizeItemInventory(serverState.itemInventory, state.equipment);
   }
-  if (Array.isArray(serverState.marketStock)) state.marketStock = serverState.marketStock;
+  if (Array.isArray(serverState.marketStock)) state.marketStock = normalizeMarketStock(serverState.marketStock);
   if (Number.isFinite(Number(serverState.marketRefreshAt))) state.marketRefreshAt = Number(serverState.marketRefreshAt);
-  if (Number.isFinite(Number(serverState.crew))) state.crew = Number(serverState.crew);
+  if (typeof serverState.marketCatalogVersion === "string") state.marketCatalogVersion = serverState.marketCatalogVersion;
+  ensureMarketStock();
+  if (Number.isFinite(Number(serverState.crew))) {
+    state.crew = Math.max(
+      Number(serverState.crew),
+      (Array.isArray(state.crewMembers) ? state.crewMembers : []).filter((member) => member.hired).length,
+    );
+  }
   if (Object.prototype.hasOwnProperty.call(serverState, "activeCrewMemberId")) state.activeCrewMemberId = serverState.activeCrewMemberId;
   if (serverState.mentorFlags && typeof serverState.mentorFlags === "object") state.mentorFlags = serverState.mentorFlags;
   if (serverState.recoveryEffects && typeof serverState.recoveryEffects === "object") {
@@ -10888,6 +12430,7 @@ function applyServerRobberyState(serverState = {}) {
   if (Number.isFinite(Number(serverState.day))) state.day = Number(serverState.day);
   if (Number.isFinite(Number(serverState.cityLevel))) state.cityLevel = Number(serverState.cityLevel);
   if (Number.isFinite(Number(serverState.lastDayEndedAt))) state.lastDayEndedAt = Number(serverState.lastDayEndedAt);
+  if (Number.isFinite(Number(serverState.lastPassiveIncomeAt))) state.lastPassiveIncomeAt = Number(serverState.lastPassiveIncomeAt);
   if (Number.isFinite(Number(serverState.selectedQuestSlot))) state.selectedQuestSlot = Number(serverState.selectedQuestSlot);
   if (Number.isFinite(Number(serverState.questNextSpawnAt))) state.questNextSpawnAt = Number(serverState.questNextSpawnAt);
   if (Array.isArray(serverState.questHistory)) state.questHistory = serverState.questHistory.slice(-40);
@@ -10903,8 +12446,17 @@ function applyServerRobberyState(serverState = {}) {
   if (serverState.harborGarage && typeof serverState.harborGarage === "object") {
     state.harborGarage = normalizeHarborGarage(serverState.harborGarage);
   }
+  if (serverState.harborBarUsage && typeof serverState.harborBarUsage === "object") {
+    state.harborBarUsage = normalizeHarborBarUsage(serverState.harborBarUsage);
+  }
   if (serverState.naturalRecoveryAt && typeof serverState.naturalRecoveryAt === "object") {
     state.naturalRecoveryAt = serverState.naturalRecoveryAt;
+  }
+  if (Object.prototype.hasOwnProperty.call(serverState, "rivalEvent")) {
+    state.rivalEvent = normalizeRivalEvent(serverState.rivalEvent, getSynchronizedNow());
+  }
+  if (Number.isFinite(Number(serverState.rivalNextSpawnAt))) {
+    state.rivalNextSpawnAt = Math.max(0, Number(serverState.rivalNextSpawnAt));
   }
   recalculateGearPower();
   crewPanelRenderKey = "";
@@ -10924,6 +12476,7 @@ async function requestServerEconomy(command, payload = {}) {
     if (Number.isFinite(Number(data.cooldownAt))) error.cooldownAt = Number(data.cooldownAt);
     throw error;
   }
+  markServerMutation(response, data);
   applyServerRobberyState(data.state || {});
   return data;
 }
@@ -10941,7 +12494,9 @@ async function requestServerProgression(command, payload = {}) {
     if (Number.isFinite(Number(data.cooldownAt))) error.cooldownAt = Number(data.cooldownAt);
     throw error;
   }
+  markServerMutation(response, data);
   applyServerRobberyState(data.state || {});
+  if (command === "rival") handleServerRivalEvents(data.events);
   return data;
 }
 
@@ -11052,6 +12607,7 @@ function updateFullscreenSettingLabel() {
 
 function openSettingsDialog() {
   if (!settingsDialog) return;
+  closeHelpDialog();
   const trigger = document.querySelector('[data-hud-top-action="settings"]');
   const triggerRect = trigger?.getBoundingClientRect();
   if (triggerRect) {
@@ -11071,6 +12627,27 @@ function closeSettingsDialog() {
   document.body.classList.remove("is-settings-open");
 }
 
+function openHelpDialog() {
+  if (!helpDialog) return;
+  closeSettingsDialog();
+  closeQuestOverview();
+  const trigger = document.querySelector('[data-hud-top-action="help"]');
+  const triggerRect = trigger?.getBoundingClientRect();
+  if (triggerRect) {
+    helpDialog.style.setProperty("--settings-anchor-right", `${Math.max(8, window.innerWidth - triggerRect.right)}px`);
+    helpDialog.style.setProperty("--settings-anchor-top", `${Math.min(window.innerHeight - 16, triggerRect.bottom + 8)}px`);
+  }
+  helpDialog.classList.remove("hidden");
+  helpDialog.setAttribute("aria-hidden", "false");
+  helpDialog.querySelector(".help-dialog__panel")?.scrollTo({ top: 0 });
+}
+
+function closeHelpDialog() {
+  if (!helpDialog) return;
+  helpDialog.classList.add("hidden");
+  helpDialog.setAttribute("aria-hidden", "true");
+}
+
 async function toggleGameFullscreen() {
   try {
     if (document.fullscreenElement) await document.exitFullscreen();
@@ -11084,7 +12661,7 @@ async function toggleGameFullscreen() {
 async function logoutCurrentProfile() {
   if (settingsLogout) settingsLogout.disabled = true;
   try {
-    saveGame(true);
+    await saveGame(true);
     await clearActiveProfileSession();
     try {
       window.localStorage.removeItem(LAST_PROFILE_KEY);
@@ -11106,6 +12683,7 @@ async function requestServerHarbor(payload = {}) {
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data.error || "A szerver nem tudta vegrehajtani a kikotoi muveletet.");
+  markServerMutation(response, data);
   applyServerRobberyState(data.state || {});
   return data;
 }
@@ -11118,6 +12696,7 @@ async function requestServerGarage(payload = {}) {
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data.error || "A szerver nem tudta vegrehajtani a garazsmuveletet.");
+  markServerMutation(response, data);
   applyServerRobberyState(data.state || {});
   return data;
 }
@@ -11155,6 +12734,7 @@ async function requestServerRobbery(path, payload = {}) {
     error.serverAction = data.action || null;
     throw error;
   }
+  markServerMutation(response, data);
   return data;
 }
 
@@ -11196,10 +12776,15 @@ function mergeServerRobberyAction(action, spot = null) {
       || getRobberyDifficultyRewardMultiplier(difficultyInfo.label),
     difficultyFameMultiplier: Number(action.difficultyFameMultiplier)
       || getRobberyDifficultyFameMultiplier(difficultyInfo.label),
-    enemyCount: Math.max(1, Math.round(Number(action.enemyCount) || defenders.length || 1)),
+    enemyCount: clamp(Math.round(Number(action.enemyCount) || defenders.length || 2), 2, 3),
     teamPower: Math.max(0, Math.round(Number(action.teamPower) || 0)),
     enemyPower: Math.max(0, Math.round(Number(action.enemyPower) || 0)),
-    enemyPowerTarget: Math.max(0, Math.round(Number(action.enemyPowerTarget) || 0)),
+    enemyPowerTarget: Math.max(0, Math.round(
+      Number(action.enemyPowerTarget)
+      || Number(existing.enemyPowerTarget)
+      || Number(action.enemyPower)
+      || 0,
+    )),
     referenceTeamPower: Math.max(0, Math.round(Number(action.referenceTeamPower) || 0)),
     referenceCombatProfile: action.referenceCombatProfile || existing.referenceCombatProfile || null,
     estimatedWinChance: clamp(Number(action.estimatedWinChance) || 0, 0, 1),
@@ -11225,25 +12810,35 @@ function showServerRobberyResult(action) {
   if (!result || !activeRobberyGame) return;
   applyServerRobberyState(action.state || {});
   const success = Boolean(result.success);
+  const lootItem = result.lootItem && typeof result.lootItem === "object" ? result.lootItem : null;
+  const lootText = lootItem?.name
+    ? ` · Targy: ${lootItem.name} (${getEquipmentRarityLabel(lootItem.rarity)})`
+    : "";
+  const lootSentence = lootItem?.name
+    ? ` Targy: ${lootItem.name} (${getEquipmentRarityLabel(lootItem.rarity)}).`
+    : "";
   const healthText = success
     ? `Eletero: valtozatlan (${result.healthAfter ?? state.health}/100)`
     : `Eletero: -${result.healthLoss || 0}% (${result.healthAfter ?? state.health}/100)`;
+  const crewRetreatText = !success && Number(result.retreatCrewHealthLoss) > 0
+    ? ` · Bandatag sérülés: -${result.retreatCrewHealthLoss} HP (${result.retreatInjuredCrew || 0} ember)`
+    : "";
   const text = success
-    ? `Zsakmany: +${result.moneyGain || 0} $ · Hirnev: +${result.fameGain || 0} · Befolyas: +${result.influenceGain || 0}% · ${healthText} · Korozes: +${result.heatGain || 0}%`
-    : `${result.reason || "A rajtautes kudarcba fulladt."} ${healthText} · Befolyas: -${result.influenceLoss || 0}% · Korozes: +${result.heatGain || 0}%`;
+    ? `Zsakmany: +${result.moneyGain || 0} $ · Hirnev: +${result.fameGain || 0} · Befolyas: +${result.influenceGain || 0}%${lootText} · ${healthText} · Korozes: +${result.heatGain || 0}%`
+    : `${result.reason || "A rajtautes kudarcba fulladt."} ${healthText}${crewRetreatText} · Befolyas: -${result.influenceLoss || 0}% · Korozes: +${result.heatGain || 0}%`;
   if (success) {
     completeMentorStep("robbery");
     queueRewardModal({
       title: "Akcio vege",
-      text: `${activeRobberyGame.spot?.name || "Kirablas"} · Eletero valtozatlan`,
+      text: `${activeRobberyGame.spot?.name || "Kirablas"} · Eletero valtozatlan${lootText}`,
       money: result.moneyGain || 0,
       xp: result.fameGain || 0,
       fame: result.fameGain || 0,
     });
   }
   sceneRef?.pushLog(success
-    ? `${activeRobberyGame.spot?.name || "A celpont"} kirabolva. +${result.influenceGain || 0}% befolyas, az eleterod valtozatlan.`
-    : `${result.reason || "A kirablas kudarcba fulladt."} Eletero: -${result.healthLoss || 0}%, befolyas: -${result.influenceLoss || 0}%.`);
+    ? `${activeRobberyGame.spot?.name || "A celpont"} kirabolva. +${result.influenceGain || 0}% befolyas, az eleterod valtozatlan.${lootSentence}`
+    : `${result.reason || "A kirablas kudarcba fulladt."} Eletero: -${result.healthLoss || 0}%${crewRetreatText ? `, bandatag serules: -${result.retreatCrewHealthLoss || 0} HP` : ""}, befolyas: -${result.influenceLoss || 0}%.`);
   sceneRef?.setMessage(result.reason || (success ? "A kirablas sikerult." : "A kirablas nem sikerult."));
   sceneRef?.refreshHUD();
   sceneRef?.refreshMap();
@@ -11392,11 +12987,6 @@ function bindHudActions() {
     });
   });
 
-  hudEndDayInline?.addEventListener("click", async () => {
-    if (!state.registered) return;
-    await endDay();
-  });
-
   hudReset?.addEventListener("click", () => {
     resetGame();
   });
@@ -11543,6 +13133,11 @@ function bindHudActions() {
     if (hudMentorCard) delete hudMentorCard.dataset.userClosed;
     updateMentorPanel();
   });
+  hudMentorInfo?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    mentorDetailsOpen = !mentorDetailsOpen;
+    updateMentorPanel();
+  });
   hudMentorClose?.addEventListener("click", (event) => {
     event.stopPropagation();
     hideMentorPanel(true);
@@ -11568,7 +13163,7 @@ function bindHudActions() {
     if (slot) {
       const slotId = slot.dataset.slot;
       if (activeEquipmentSlot === slotId) hideEquipmentPicker();
-      else showEquipmentPicker(slotId);
+      else showEquipmentPicker(slotId, slot);
       return;
     }
     if (!event.target.closest(".equipment-picker, .item-craft-panel")) hideEquipmentPicker();
@@ -11580,7 +13175,7 @@ function bindHudActions() {
       event.preventDefault();
       const slotId = slot.dataset.slot;
       if (activeEquipmentSlot === slotId) hideEquipmentPicker();
-      else showEquipmentPicker(slotId);
+      else showEquipmentPicker(slotId, slot);
     }
   });
   crewCards?.addEventListener("click", async (event) => {
@@ -11624,7 +13219,7 @@ function bindHudActions() {
     if (!slot) return;
     const slotId = slot.dataset.crewSlot;
     if (activeCrewEquipmentSlot === slotId) hideCrewEquipmentPicker();
-    else showCrewEquipmentPicker(slotId);
+    else showCrewEquipmentPicker(slotId, slot);
   });
   crewEquipmentPickerClose?.addEventListener("click", hideCrewEquipmentPicker);
   crewEquipmentPickerList?.addEventListener("click", (event) => {
@@ -11691,8 +13286,41 @@ function bindHudActions() {
       else if (action === "rank") openAuxPanel("rank");
       else if (action === "quests") openQuestOverview();
       else if (action === "settings") openSettingsDialog();
+      else if (action === "help") openHelpDialog();
     });
   });
+  let influenceInfoHoverCloseTimer = null;
+  const clearInfluenceInfoHoverClose = () => {
+    if (influenceInfoHoverCloseTimer) {
+      window.clearTimeout(influenceInfoHoverCloseTimer);
+      influenceInfoHoverCloseTimer = null;
+    }
+  };
+  const openInfluenceInfoFromHover = () => {
+    clearInfluenceInfoHoverClose();
+    setInfluenceInfoOpen(true);
+  };
+  const queueInfluenceInfoHoverClose = () => {
+    clearInfluenceInfoHoverClose();
+    influenceInfoHoverCloseTimer = window.setTimeout(() => {
+      influenceInfoHoverCloseTimer = null;
+      const hovered = Boolean(
+        hudInfluencePill?.matches(":hover")
+        || hudInfluenceInfo?.matches(":hover"),
+      );
+      const focused = Boolean(
+        hudInfluencePill?.contains(document.activeElement)
+        || hudInfluenceInfo?.contains(document.activeElement),
+      );
+      if (!hovered && !focused) setInfluenceInfoOpen(false);
+    }, 170);
+  };
+  hudInfluencePill?.addEventListener("pointerenter", openInfluenceInfoFromHover);
+  hudInfluencePill?.addEventListener("pointerleave", queueInfluenceInfoHoverClose);
+  hudInfluencePill?.addEventListener("focus", openInfluenceInfoFromHover);
+  hudInfluencePill?.addEventListener("blur", queueInfluenceInfoHoverClose);
+  hudInfluenceInfo?.addEventListener("pointerenter", clearInfluenceInfoHoverClose);
+  hudInfluenceInfo?.addEventListener("pointerleave", queueInfluenceInfoHoverClose);
   hudInfluencePill?.addEventListener("click", (event) => {
     event.stopPropagation();
     setInfluenceInfoOpen(hudInfluencePill.getAttribute("aria-expanded") !== "true");
@@ -11707,6 +13335,7 @@ function bindHudActions() {
   settingsBackdrop?.addEventListener("click", closeSettingsDialog);
   questOverviewClose?.addEventListener("click", closeQuestOverview);
   settingsClose?.addEventListener("click", closeSettingsDialog);
+  helpClose?.addEventListener("click", closeHelpDialog);
   settingsAnimations?.addEventListener("change", () => applyAnimationSetting(settingsAnimations.checked));
   settingsFullscreen?.addEventListener("click", toggleGameFullscreen);
   settingsLogout?.addEventListener("click", logoutCurrentProfile);
@@ -11724,6 +13353,12 @@ function bindHudActions() {
     if (!trigger && panel && !panel.contains(event.target)) closeQuestOverview();
   });
   document.addEventListener("pointerdown", (event) => {
+    if (!helpDialog || helpDialog.classList.contains("hidden")) return;
+    const panel = helpDialog.querySelector(".help-dialog__panel");
+    const trigger = event.target.closest?.('[data-hud-top-action="help"]');
+    if (!trigger && panel && !panel.contains(event.target)) closeHelpDialog();
+  });
+  document.addEventListener("pointerdown", (event) => {
     if (!hudInfluenceInfo || hudInfluenceInfo.classList.contains("hidden")) return;
     if (!hudInfluenceInfo.contains(event.target) && !hudInfluencePill?.contains(event.target)) {
       setInfluenceInfoOpen(false);
@@ -11734,6 +13369,7 @@ function bindHudActions() {
 window.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
     setInfluenceInfoOpen(false);
+    closeHelpDialog();
     closeQuestOverview();
     closeSettingsDialog();
     hideLotInfoModal();
@@ -11758,9 +13394,14 @@ window.addEventListener("click", suppressClickAfterMapDrag, true);
 document.documentElement.dataset.gameReady = "true";
 loadInterfaceSettings();
 startWorldChatPolling();
+startServerStateSync();
 document.addEventListener("visibilitychange", () => {
-  if (!document.hidden) void refreshWorldChat(true);
+  if (!document.hidden) {
+    void refreshWorldChat(true);
+    void syncCurrentServerState(true);
+  }
 });
+window.addEventListener("online", () => void syncCurrentServerState(true));
 
 registerForm.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -11843,33 +13484,60 @@ window.addEventListener("beforeunload", () => {
     saveGame(true);
   }
 });
-function addDevButton() {
-  const btn = document.createElement("button");
-  btn.textContent = "DEV: Élet + Energia";
-  btn.style.position = "fixed";
-  btn.style.right = "20px";
-  btn.style.bottom = "20px";
-  btn.style.zIndex = "99999";
-  btn.style.padding = "12px";
-  btn.style.background = "red";
-  btn.style.color = "white";
 
- btn.onclick = () => {
-  state.health = 100;
-  state.energy = 100;
+function addDevRefillButton() {
+  const isLocalGame = ["127.0.0.1", "localhost", "::1"].includes(window.location.hostname);
+  if (!isLocalGame || devRefillButton) return;
 
-  if (Array.isArray(state.crewMembers)) {
-    state.crewMembers.forEach(member => {
-      member.health = member.baseHealth;
-    });
-  }
+  const button = document.createElement("button");
+  button.type = "button";
+  button.textContent = "DEV: Élet + Energia";
+  button.setAttribute("aria-label", "Életerő, energia és a teljes banda feltöltése");
+  button.className = "hidden";
+  button.style.position = "fixed";
+  button.style.right = "20px";
+  button.style.bottom = "20px";
+  button.style.zIndex = "99999";
+  button.style.padding = "12px";
+  button.style.border = "1px solid #ffb2a8";
+  button.style.background = "#d71919";
+  button.style.color = "white";
+  button.style.fontWeight = "700";
+  button.style.cursor = "pointer";
 
-    saveGame();
-    sceneRef?.refreshHUD();
-    sceneRef?.setMessage("DEV: teljes gyógyítás.");
-  };
+  button.addEventListener("click", async () => {
+    if (!state.registered) return;
+    if (activeRobberyGame && !activeRobberyGame.ended) {
+      sceneRef?.setMessage("A teljes feltöltést a folyamatban lévő harc lezárása után használd.");
+      return;
+    }
+    button.disabled = true;
+    try {
+      const response = await fetch("/api/dev/refill", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || "A szerver nem tudta feltolteni a bandat.");
+      markServerMutation(response, data);
+      applyServerRobberyState(data.state || {});
+      crewPanelRenderKey = "";
+      sceneRef?.refreshHUD();
+      sceneRef?.refreshMap();
+      renderCrewPanel();
+      if (activeCrewSheetMemberId) refreshCrewMemberPanel();
+      sceneRef?.setMessage("DEV: az életerő, az energia és a teljes banda tartósan feltöltve.");
+    } catch (error) {
+      sceneRef?.setMessage(error.message || "A DEV feltoltes nem sikerult.");
+    } finally {
+      button.disabled = false;
+    }
+  });
 
-  document.body.appendChild(btn);
+  document.body.appendChild(button);
+  devRefillButton = button;
+  setHudVisible(Boolean(state.registered && !state.needsAvatarSelection));
 }
 
-addDevButton();
+addDevRefillButton();
