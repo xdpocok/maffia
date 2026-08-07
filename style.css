@@ -101,8 +101,9 @@ body::after {
 .auth-field__icon { width: 1.3em; color: #a7895d; text-align: center; font-size: 1.15em; }
 .auth-field input { width: 100%; min-width: 0; padding: .72em 0; border: 0; outline: 0; color: #ead9b5; background: transparent; font: 1em Georgia, serif; }
 .auth-field input::placeholder { color: #876f4e; opacity: 1; }
-.password-toggle { flex: 0 0 auto; padding: .3em; border: 0; color: #9b7d4e; background: transparent; font-size: 1.1em; cursor: pointer; }
+.password-toggle { position: relative; z-index: 2; flex: 0 0 2.5em; width: 2.5em; min-height: 2.5em; display: grid; place-items: center; padding: 0; border: 0; color: #9b7d4e; background: transparent; font-size: 1.1em; line-height: 1; cursor: pointer; pointer-events: auto; touch-action: manipulation; }
 .password-toggle:hover, .password-toggle.is-active { color: #e0bd7b; }
+.password-toggle:focus-visible { outline: 1px solid #d0a65d; outline-offset: 1px; }
 .login-options { display: flex; justify-content: space-between; align-items: center; gap: .75em; min-height: 2.8em; color: #b79a6b; font-size: .85em; }
 .remember-option { display: flex; align-items: center; gap: 8px; cursor: pointer; }
 .remember-option input { position: absolute; opacity: 0; }
@@ -4456,8 +4457,10 @@ body.is-harbor-map-open .hud-harbor-shortcut {
     radial-gradient(circle at 50% 18%, rgba(255, 230, 170, 0.24), rgba(255, 230, 170, 0) 44%),
     linear-gradient(180deg, rgba(62, 41, 24, 0.96), rgba(17, 11, 8, 0.98));
   box-shadow:
-    inset 0 0 0 1px rgba(255, 231, 186, 0.08),
-    inset 0 14px 20px rgba(255, 211, 134, 0.06);
+    0 0 0 1px rgba(225, 165, 62, 0.72),
+    0 0 12px rgba(218, 139, 36, 0.28),
+    inset 0 0 0 1px rgba(255, 231, 186, 0.22),
+    inset 0 14px 20px rgba(255, 211, 134, 0.1);
   transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease;
 }
 
@@ -4480,7 +4483,8 @@ body.is-harbor-map-open .hud-harbor-shortcut {
   height: 100%;
   object-fit: cover;
   display: block;
-  opacity: 0.94;
+  opacity: 1;
+  filter: saturate(1.55) brightness(1.38) contrast(1.08);
 }
 
 .hud-harbor-button::after {
@@ -4488,8 +4492,9 @@ body.is-harbor-map-open .hud-harbor-shortcut {
   position: absolute;
   inset: 0;
   background:
-    linear-gradient(180deg, rgba(0, 0, 0, 0) 34%, rgba(0, 0, 0, 0.74) 100%),
-    radial-gradient(circle at 50% 50%, rgba(0, 0, 0, 0) 62%, rgba(0, 0, 0, 0.42) 100%);
+    linear-gradient(180deg, rgba(255, 190, 78, 0.08) 0%, rgba(0, 0, 0, 0) 48%, rgba(0, 0, 0, 0.24) 100%),
+    radial-gradient(circle at 50% 50%, rgba(0, 0, 0, 0) 72%, rgba(0, 0, 0, 0.14) 100%);
+  pointer-events: none;
 }
 
 .hud-harbor-button__label {

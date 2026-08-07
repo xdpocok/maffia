@@ -7,43 +7,43 @@
     <link rel="preload" as="image" href="./register-960.webp" media="(max-width: 1199px)" fetchpriority="high" />
     <link rel="preload" as="image" href="./register-1440.webp" media="(min-width: 1200px) and (max-width: 1799px)" fetchpriority="high" />
     <link rel="preload" as="image" href="./register.webp" media="(min-width: 1800px)" fetchpriority="high" />
-    <link rel="stylesheet" href="./style.css?v=harbor-bar-limit-2026-08-05-1" />
+    <link rel="stylesheet" href="./style.css?v=harbor-button-color-2026-08-07-1" />
   </head>
   <body>
     <div id="bootOverlay" class="boot-overlay">
       <section class="boot-card" aria-label="Bejelentkezés és regisztráció">
         <div class="login-deck">
-          <form id="registerForm" class="login-panel login-panel--signin">
+          <form id="registerForm" class="login-panel login-panel--signin" novalidate>
             <h2>Bejelentkezés</h2>
             <label class="auth-field">
               <span class="auth-field__icon" aria-hidden="true">♟</span>
               <span class="sr-only">Felhasználónév</span>
-              <input id="playerName" type="text" maxlength="18" placeholder="Felhasználónév" autocomplete="nickname" required />
+              <input id="playerName" name="login" type="text" minlength="3" maxlength="254" placeholder="Felhasználónév vagy e-mail" autocomplete="username" required />
             </label>
             <label class="auth-field">
               <span class="auth-field__icon" aria-hidden="true">🔒</span>
               <span class="sr-only">Jelszó</span>
-              <input id="loginPassword" type="password" placeholder="Jelszó" autocomplete="current-password" />
-              <button class="password-toggle" type="button" data-password-target="loginPassword" aria-label="Jelszó megjelenítése">◉</button>
+              <input id="loginPassword" name="password" type="password" maxlength="128" placeholder="Jelszó" autocomplete="current-password" required />
+              <button class="password-toggle" type="button" data-password-target="loginPassword" aria-label="Jelszó megjelenítése" aria-pressed="false" title="Jelszó megjelenítése">👁</button>
             </label>
             <div class="login-options">
               <label class="remember-option"><input type="checkbox" id="rememberLogin" checked /><span></span>Emlékezz rám</label>
               <button class="text-action" id="forgotPasswordButton" type="button">Elfelejtetted a jelszavad?</button>
             </div>
             <button class="auth-submit" type="submit">Belépés</button>
-            <p class="auth-note" id="loginStatus" aria-live="polite">Jelenleg csak a felhasználónevet kell megadnod.</p>
+            <p class="auth-note" id="loginStatus" aria-live="polite">Lépj be a felhasználóneveddel vagy e-mail címeddel.</p>
           </form>
 
           <div class="login-seal" aria-hidden="true"><strong>M</strong></div>
 
-          <form id="previewRegistrationForm" class="login-panel login-panel--register">
+          <form id="previewRegistrationForm" class="login-panel login-panel--register" novalidate>
             <h2>Regisztráció</h2>
-            <label class="auth-field"><span class="auth-field__icon" aria-hidden="true">♟</span><span class="sr-only">Felhasználónév</span><input type="text" maxlength="18" placeholder="Felhasználónév" autocomplete="off" /></label>
-            <label class="auth-field"><span class="auth-field__icon" aria-hidden="true">✉</span><span class="sr-only">E-mail cím</span><input type="email" placeholder="E-mail cím" autocomplete="off" /></label>
-            <label class="auth-field"><span class="auth-field__icon" aria-hidden="true">🔒</span><span class="sr-only">Jelszó</span><input id="registrationPassword" type="password" placeholder="Jelszó" autocomplete="new-password" /><button class="password-toggle" type="button" data-password-target="registrationPassword" aria-label="Jelszó megjelenítése">◉</button></label>
-            <label class="auth-field"><span class="auth-field__icon" aria-hidden="true">🔒</span><span class="sr-only">Jelszó megerősítése</span><input id="registrationPasswordAgain" type="password" placeholder="Jelszó megerősítése" autocomplete="new-password" /><button class="password-toggle" type="button" data-password-target="registrationPasswordAgain" aria-label="Jelszó megjelenítése">◉</button></label>
+            <label class="auth-field"><span class="auth-field__icon" aria-hidden="true">♟</span><span class="sr-only">Felhasználónév</span><input id="registrationName" name="username" type="text" minlength="3" maxlength="18" placeholder="Felhasználónév" autocomplete="username" required /></label>
+            <label class="auth-field"><span class="auth-field__icon" aria-hidden="true">✉</span><span class="sr-only">E-mail cím</span><input id="registrationEmail" name="email" type="email" maxlength="254" placeholder="E-mail cím" autocomplete="email" required /></label>
+            <label class="auth-field"><span class="auth-field__icon" aria-hidden="true">🔒</span><span class="sr-only">Jelszó</span><input id="registrationPassword" name="password" type="password" minlength="8" maxlength="128" placeholder="Jelszó" autocomplete="new-password" required /><button class="password-toggle" type="button" data-password-target="registrationPassword" aria-label="Jelszó megjelenítése" aria-pressed="false" title="Jelszó megjelenítése">👁</button></label>
+            <label class="auth-field"><span class="auth-field__icon" aria-hidden="true">🔒</span><span class="sr-only">Jelszó megerősítése</span><input id="registrationPasswordAgain" name="password-confirmation" type="password" minlength="8" maxlength="128" placeholder="Jelszó megerősítése" autocomplete="new-password" required /><button class="password-toggle" type="button" data-password-target="registrationPasswordAgain" aria-label="Jelszó megjelenítése" aria-pressed="false" title="Jelszó megjelenítése">👁</button></label>
             <button class="auth-submit" type="submit">Regisztráció</button>
-            <p class="auth-note" id="registrationStatus" aria-live="polite">A teljes regisztráció hamarosan elérhető.</p>
+            <p class="auth-note" id="registrationStatus" aria-live="polite">A jelszó legalább 8 karakter, benne betű és szám legyen.</p>
           </form>
         </div>
       </section>
@@ -634,7 +634,7 @@
 
       <section class="hud-harbor-shortcut hud-panel" aria-label="Kikoto negyed">
         <button class="hud-harbor-button" id="hudQuickDock" type="button">
-          <img data-src="./assets/world/harbor-button.webp" alt="Kikoto" loading="lazy" decoding="async" />
+          <img data-src="./assets/world/harbor-button-anchor-bright-v3.png" alt="Kikoto" loading="lazy" decoding="async" />
           <span id="hudQuickDockLabel" class="hud-harbor-button__label"></span>
         </button>
         <button class="hud-main-map-button hidden" id="hudMainMapButton" type="button" aria-label="Vissza a varosba">
@@ -774,7 +774,7 @@
     <script src="./assets-inline.js"></script>
     <script src="./js/world-map.js?v=influence-system-2026-07-30-1"></script>
     <script src="./js/equipment-catalog-data.js?v=item-catalog-2026-08-01-1"></script>
-    <script src="./game.js?v=dock-mission-min-five-2026-08-05-1"></script>
+    <script src="./game.js?v=npc-city-half-size-2026-08-07-1"></script>
     <script src="./js/app-shell.js?v=cache-refresh-2026-08-01-1"></script>
   </body>
 </html>

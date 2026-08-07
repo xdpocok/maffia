@@ -45,6 +45,27 @@ const config = {
 };
 
 const schema = `
+  CREATE TABLE IF NOT EXISTS user_accounts (
+    profile_name VARCHAR(18) PRIMARY KEY,
+    email VARCHAR(254) NOT NULL UNIQUE,
+    password_hash VARCHAR(128) NOT NULL,
+    password_salt VARCHAR(64) NOT NULL,
+    created_at BIGINT NOT NULL,
+    updated_at BIGINT NOT NULL,
+    last_login_at BIGINT,
+    INDEX idx_user_accounts_email (email)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_hungarian_ci;
+
+  CREATE TABLE IF NOT EXISTS auth_sessions (
+    session_id CHAR(36) PRIMARY KEY,
+    profile_name VARCHAR(18) NOT NULL,
+    expires_at BIGINT NOT NULL,
+    created_at BIGINT NOT NULL,
+    last_seen_at BIGINT NOT NULL,
+    INDEX idx_auth_sessions_profile (profile_name),
+    INDEX idx_auth_sessions_expiry (expires_at)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_hungarian_ci;
+
   CREATE TABLE IF NOT EXISTS player_saves (
     profile_name VARCHAR(18) PRIMARY KEY,
     state_json LONGTEXT NOT NULL,

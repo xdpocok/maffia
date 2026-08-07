@@ -207,7 +207,7 @@ const cityBuildingDefs = [
   { id: "west-tenement", number: "04", districtIndex: 0, name: "Belvarosi berhaz", mode: "street", polygon: mapPolygon([[133,256],[155,239],[171,241],[171,225],[198,230],[207,242],[239,249],[254,265],[254,316],[235,335],[188,346],[158,333],[135,313]]), plot: mapPolygon([[57,289],[184,226],[316,289],[307,356],[180,400],[79,352]]) },
   { id: "northwest-block", number: "05", districtIndex: 0, name: "Szurke sarokhaz", mode: "street", polygon: mapPolygon([[312,185],[342,159],[367,162],[369,145],[416,151],[425,164],[466,173],[482,190],[489,249],[465,272],[405,282],[363,269],[324,254]]), plot: mapPolygon([[287,192],[431,128],[573,192],[551,282],[419,328],[311,275]]) },
   { id: "dome-hall", number: "05", districtIndex: 1, name: "Kupolas csarnok", mode: "shop", polygon: mapPolygon([[464,252],[496,208],[519,203],[519,187],[570,170],[603,180],[608,195],[647,207],[663,230],[665,282],[646,317],[620,339],[568,362],[526,351],[487,328],[468,297]]), plot: mapPolygon([[430,273],[590,179],[732,246],[704,371],[566,430],[459,356]]) },
-  { id: "market-row", number: "06", districtIndex: 1, name: "Piac sori uzlethaz", mode: "shop", polygon: mapPolygon([[837,281],[861,253],[875,253],[876,237],[915,229],[930,240],[967,247],[984,266],[984,321],[965,341],[921,357],[878,345],[845,326]]), plot: mapPolygon([[806,286],[950,217],[1080,278],[1052,373],[924,416],[832,357]]) },
+  { id: "market-row", number: "06", districtIndex: 1, name: "Piac sori uzlethaz", mode: "shop", polygon: mapPolygon([[837,281],[861,253],[875,253],[876,237],[915,229],[930,240],[967,247],[984,266],[984,321],[965,341],[921,357],[878,345],[845,326]]), plot: mapPolygon([[806,286],[920,230],[965,280],[1020,350],[930,400],[832,357]]) },
   { id: "sale-block", number: "07", districtIndex: 4, name: "Villanegyedi tomb", mode: "shop", polygon: mapPolygon([[963,185],[990,164],[1005,165],[1006,146],[1050,151],[1060,164],[1097,173],[1110,191],[1110,253],[1093,274],[1045,289],[1000,277],[969,257]]), plot: mapPolygon([[944,213],[1070,146],[1194,208],[1170,291],[1051,336],[968,277]]) },
   { id: "east-small-block", number: "08", districtIndex: 1, name: "Keleti kis uzlethaz", mode: "shop", polygon: mapPolygon([[1116,259],[1138,242],[1150,244],[1150,229],[1173,232],[1180,241],[1195,248],[1205,260],[1205,314],[1190,330],[1161,341],[1133,332],[1119,315]]), plot: mapPolygon([[1083,276],[1160,238],[1230,275],[1215,335],[1148,360],[1095,325]]) },
   { id: "billboard-tower", number: "09", districtIndex: 2, name: "Luchese torony", mode: "shop", polygon: mapPolygon([[1228,204],[1254,178],[1270,180],[1271,154],[1310,142],[1331,151],[1334,165],[1368,177],[1385,197],[1398,285],[1391,359],[1371,401],[1335,428],[1292,414],[1253,389],[1235,350]]), plot: mapPolygon([[1172,260],[1330,157],[1470,226],[1433,454],[1301,497],[1201,414]]) },
@@ -216,9 +216,9 @@ const cityBuildingDefs = [
   { id: "east-office", number: "13", districtIndex: 2, name: "Keleti uzlethaz", mode: "shop", polygon: mapPolygon([[982,405],[1011,375],[1027,376],[1028,357],[1072,363],[1084,375],[1124,383],[1142,403],[1143,463],[1122,485],[1074,500],[1030,487],[991,468]]), plot: mapPolygon([[947,426],[1080,341],[1215,410],[1190,517],[1062,562],[978,492]]) },
   { id: "central-bank", number: "16", districtIndex: 5, name: "Perem bankhaz", mode: "street", polygon: mapPolygon([[680,574],[711,536],[729,535],[730,512],[785,493],[813,501],[817,518],[855,529],[878,554],[886,629],[866,658],[813,681],[760,669],[716,642],[690,614]]), plot: mapPolygon([[697,578],[815,493],[947,561],[925,700],[800,739],[724,672]]) },
   { id: "southeast-block", number: "19", districtIndex: 2, name: "Delkeleti berhaz", mode: "shop", polygon: mapPolygon([[1359,574],[1387,541],[1404,542],[1405,522],[1448,512],[1464,523],[1501,531],[1519,551],[1521,634],[1500,657],[1454,674],[1410,661],[1370,640]]), plot: mapPolygon([[1265,626],[1397,525],[1534,592],[1501,752],[1403,787],[1298,721]]) },
-  { id: "moretti-import", number: "20", districtIndex: 3, name: "Moretti import", mode: "street", polygon: mapPolygon([[96,615],[125,576],[147,575],[148,552],[215,531],[246,541],[249,558],[293,572],[325,604],[346,693],[334,743],[302,777],[239,800],[174,782],[123,751],[102,705]]), plot: mapPolygon([[82,646],[242,533],[396,614],[375,793],[219,841],[111,765]]) },
+  { id: "moretti-import", number: "20", districtIndex: 3, name: "Moretti import", mode: "street", polygon: mapPolygon([[96,615],[125,576],[147,575],[148,552],[215,531],[246,541],[249,558],[293,572],[325,604],[346,693],[334,743],[302,777],[239,800],[174,782],[123,751],[102,705]]), plot: mapPolygon([[82,646],[242,533],[396,614],[335,740],[225,820],[111,765]]) },
   { id: "southwest-tenement", number: "21", districtIndex: 3, name: "Gyarnegyedi haz", mode: "street", polygon: mapPolygon([[302,742],[329,713],[344,714],[345,696],[388,686],[403,697],[439,704],[456,724],[459,811],[438,833],[392,850],[349,838],[311,817]]), plot: mapPolygon([[239,820],[388,705],[532,778],[510,930],[358,971],[266,899]]) },
-  { id: "courthouse", number: "23", districtIndex: 5, name: "Feher portikusz", mode: "street", polygon: mapPolygon([[997,665],[1026,632],[1043,633],[1044,615],[1086,606],[1102,617],[1138,624],[1156,644],[1158,709],[1137,731],[1091,748],[1048,736],[1008,716]]), plot: mapPolygon([[962,683],[1091,591],[1237,666],[1210,805],[1081,846],[990,776]]) },
+  { id: "courthouse", number: "23", districtIndex: 5, name: "Feher portikusz", mode: "street", polygon: mapPolygon([[997,665],[1026,632],[1043,633],[1044,615],[1086,606],[1102,617],[1138,624],[1156,644],[1158,709],[1137,731],[1091,748],[1048,736],[1008,716]]), plot: mapPolygon([[962,683],[1091,591],[1237,666],[1164,756],[1081,820],[990,776]]) },
 ];
 
 const purchasableBuildingNumbers = new Set(["06", "11", "13", "16", "21", "23"]);
@@ -234,7 +234,7 @@ const purchasableBuildingRestoreDefs = {
 
 const clickableParkDefs = [
   { id: "northwest-park", number: "01", name: "Eszaknyugati park", kind: "park", polygon: mapPolygon([[557,116],[743,15],[897,94],[863,188],[710,231],[586,174]]) },
-  { id: "northeast-park", number: "03", name: "Eszakkeleti park", kind: "park", polygon: mapPolygon([[1026,149],[1208,52],[1370,130],[1341,223],[1180,270],[1054,207]]) },
+  { id: "northeast-park", number: "03", name: "Eszakkeleti park", kind: "park", polygon: mapPolygon([[1026,149],[1208,52],[1350,130],[1320,150],[1180,240],[1054,207]]) },
   { id: "west-park", number: "10", name: "Nyugati kozkert", kind: "park", polygon: mapPolygon([[0,435],[104,371],[247,443],[222,553],[92,596],[0,542]]) },
   { id: "central-west-park", number: "15", name: "Moretti ter", kind: "park", polygon: mapPolygon([[350,519],[506,431],[657,509],[624,606],[478,651],[379,587]]) },
   { id: "central-east-park", number: "17", name: "Kozponti diszkert", kind: "park", polygon: mapPolygon([[821,509],[971,422],[1125,500],[1092,600],[946,645],[847,579]]) },
@@ -246,7 +246,7 @@ const clickableParkDefs = [
 const clickableLotDefs = [
   { id: "east-empty-lot", number: "14", name: "Keleti ures telek", kind: "lot", polygon: mapPolygon([[1162,554],[1250,488],[1340,540],[1315,616],[1232,641],[1175,603]]) },
   { id: "central-empty-lot", number: "22", name: "Kozponti ures telek", kind: "lot", polygon: mapPolygon([[477,675],[626,578],[776,659],[745,769],[607,812],[507,744]]) },
-  { id: "southeast-empty-lot", number: "27", name: "Delkeleti ures telek", kind: "lot", polygon: mapPolygon([[1116,803],[1252,702],[1393,781],[1363,884],[1237,925],[1145,865]]) },
+  { id: "southeast-empty-lot", number: "27", name: "Delkeleti ures telek", kind: "lot", polygon: mapPolygon([[1110,800],[1252,702],[1393,781],[1363,884],[1237,925],[1145,865]]) },
   ...cityBuildingDefs
     .filter((building) => purchasableBuildingNumbers.has(building.number))
     .map((building) => ({
@@ -327,6 +327,8 @@ const crewHireCosts = {
   marco: 700,
   enzo: 1500,
 };
+const CREW_UPGRADE_COST_MULTIPLIER = 0.65;
+const CREW_HEAL_COST_MULTIPLIER = 0.8;
 
 function getCrewMaxHealth(template, level = 1, defenseLevel = 1) {
   const attackSteps = Math.max(0, Math.round(Number(level) || 1) - 1);
@@ -504,6 +506,13 @@ let mapDragState = {
 const overlay = document.getElementById("bootOverlay");
 const registerForm = document.getElementById("registerForm");
 const playerNameInput = document.getElementById("playerName");
+const loginPasswordInput = document.getElementById("loginPassword");
+const rememberLoginInput = document.getElementById("rememberLogin");
+const previewRegistrationForm = document.getElementById("previewRegistrationForm");
+const registrationNameInput = document.getElementById("registrationName");
+const registrationEmailInput = document.getElementById("registrationEmail");
+const registrationPasswordInput = document.getElementById("registrationPassword");
+const registrationPasswordAgainInput = document.getElementById("registrationPasswordAgain");
 const avatarSelection = document.getElementById("avatarSelection");
 const hudRoot = document.getElementById("hudRoot");
 const mapBackgroundLayer = document.getElementById("mapBackgroundLayer");
@@ -4462,34 +4471,6 @@ function normalizeSmuggledGoods(goods) {
   ]));
 }
 
-function getPoliceCargoLossRate(heat, severe = false) {
-  const normalizedHeat = clamp(Number(heat) || 0, 0, 100);
-  if (normalizedHeat <= 85) return 0;
-  const overheat = normalizedHeat - 85;
-  return severe
-    ? clamp(0.22 + overheat * 0.006, 0.22, 0.32)
-    : clamp(0.1 + overheat * 0.005, 0.1, 0.18);
-}
-
-function confiscatePoliceCargo(heat, severe = false) {
-  const lossRate = getPoliceCargoLossRate(heat, severe);
-  const goods = normalizeSmuggledGoods(state.smuggledGoods);
-  const lost = normalizeSmuggledGoods();
-  if (lossRate <= 0) {
-    state.smuggledGoods = goods;
-    return lost;
-  }
-  Object.keys(harborCargoDefs).forEach((key) => {
-    const amount = Math.max(0, Math.round(Number(goods[key]) || 0));
-    if (!amount) return;
-    const loss = Math.min(amount, Math.max(1, Math.floor(amount * lossRate)));
-    goods[key] = Math.max(0, amount - loss);
-    lost[key] = loss;
-  });
-  state.smuggledGoods = goods;
-  return lost;
-}
-
 function formatCargoLoss(cargo = {}) {
   return Object.entries(normalizeSmuggledGoods(cargo))
     .filter(([, amount]) => amount > 0)
@@ -7271,78 +7252,52 @@ function normalizeTimedActions() {
   state.hideUsesDay = Number.isFinite(Number(state.hideUsesDay)) ? Math.floor(Number(state.hideUsesDay)) : state.day;
 }
 
-function getPolicePressureInterval(heat = state.heat) {
-  if (heat >= 90) return 75 * 1000;
-  if (heat >= 75) return 2 * 60 * 1000;
-  if (heat >= 60) return 3.5 * 60 * 1000;
-  if (heat >= 45) return 8 * 60 * 1000;
-  if (heat >= 25) return 14 * 60 * 1000;
-  return 0;
+let policeRaidSyncInFlight = false;
+
+function processPolicePressure() {
+  if (state.registered) void syncPoliceRaidFromServer();
+  return false;
 }
 
-function getPoliceMoneyLoss(money, heat, severe = false) {
-  const availableMoney = Math.max(0, Math.floor(Number(money) || 0));
-  const normalizedHeat = clamp(Number(heat) || 0, 0, 100);
-  const lossRate = severe
-    ? clamp(0.25 + Math.max(0, normalizedHeat - 75) * 0.004, 0.25, 0.35)
-    : clamp(0.05 + Math.max(0, normalizedHeat - 25) * (0.1 / 75), 0.05, 0.15);
-  const loss = availableMoney > 0
-    ? Math.min(availableMoney, Math.max(1, Math.floor(availableMoney * lossRate)))
-    : 0;
-  return { loss, lossRate };
-}
-
-function processPolicePressure(now = Date.now()) {
-  if (!state.registered) return false;
-  const baseInterval = getPolicePressureInterval(state.heat);
-  if (!baseInterval) {
-    state.nextPolicePressureAt = 0;
+async function syncPoliceRaidFromServer() {
+  if (!state.registered || policeRaidSyncInFlight) return false;
+  policeRaidSyncInFlight = true;
+  try {
+    const response = await fetch("/api/actions/police-raid", {
+      method: "POST",
+      headers: { Accept: "application/json" },
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || "A razzia mentese sikertelen.");
+    markServerMutation(response, payload);
+    if (payload.state && typeof payload.state === "object") {
+      if (Number.isFinite(Number(payload.state.money))) state.money = Number(payload.state.money);
+      if (Number.isFinite(Number(payload.state.heat))) state.heat = Number(payload.state.heat);
+      if (payload.state.smuggledGoods) state.smuggledGoods = normalizeSmuggledGoods(payload.state.smuggledGoods);
+      if (Number.isFinite(Number(payload.state.nextPolicePressureAt))) {
+        state.nextPolicePressureAt = Number(payload.state.nextPolicePressureAt);
+      }
+      sceneRef?.refreshHUD();
+    }
+    if (payload.triggered) {
+      const cargoLoss = normalizeSmuggledGoods(payload.cargoLoss);
+      const cargoLossText = formatCargoLoss(cargoLoss);
+      const loss = Math.max(0, Number(payload.moneyLoss) || 0);
+      const lossPercent = Math.max(0, Number(payload.moneyLossPercent) || 0);
+      const heatBefore = Math.max(0, Number(payload.heatBefore) || 0);
+      const heatLoss = Math.max(0, Number(payload.heatLoss) || 0);
+      const summaryText = `A ${heatBefore}%-os körözés miatt a nyomozók a kasszád ${lossPercent}%-át vitték el.${cargoLossText ? ` Csempészárut is elkoboztak: ${cargoLossText}.` : ""}`;
+      sceneRef?.pushLog(`Rendőri razzia: -${loss} $${cargoLossText ? `, elkobzott áru: ${cargoLossText}` : ""}, -${heatLoss}% körözés.`);
+      sceneRef?.setMessage(cargoLossText ? `Razzia: -${loss} $, elkobzott áru: ${cargoLossText}.` : `Razzia: -${loss} $.`);
+      showPoliceRaidPanel(loss, summaryText, cargoLoss);
+    }
+    return Boolean(payload.triggered);
+  } catch (error) {
+    sceneRef?.setMessage(error.message || "A razzia szerveres mentese nem sikerult.");
     return false;
+  } finally {
+    policeRaidSyncInFlight = false;
   }
-  const interval = Math.max(baseInterval, 15 * 60 * 1000);
-  if (!state.nextPolicePressureAt) {
-    state.nextPolicePressureAt = now + interval;
-    return false;
-  }
-  if (now < state.nextPolicePressureAt) return false;
-
-  let shouldStrike = true;
-  if (state.heat < 60) {
-    const pressureRoll = Math.abs(Math.sin((state.day + now / 60000) * 12.9898));
-    shouldStrike = pressureRoll < (state.heat >= 45 ? 0.58 : 0.28);
-  }
-
-  state.nextPolicePressureAt = now + interval;
-  if (!shouldStrike) {
-    return false;
-  }
-
-  const heatBefore = clamp(state.heat, 0, 100);
-  const { loss, lossRate } = getPoliceMoneyLoss(state.money, heatBefore);
-  const cargoLoss = confiscatePoliceCargo(heatBefore, false);
-  const cargoLossText = formatCargoLoss(cargoLoss);
-  const lossPercent = Math.round(lossRate * 100);
-  state.money = Math.max(0, state.money - loss);
-  state.heat = clamp(heatBefore - 13, 0, 100);
-  sceneRef?.pushLog(`A rendorok razziat tartottak. -${loss} $ (${lossPercent}%) sarc${cargoLossText ? `, elkobzott aru: ${cargoLossText}` : ""} a ${heatBefore}% korozes miatt.`);
-  const summaryText = heatBefore >= 60
-    ? `A ${heatBefore}%-os korozes miatt a nyomozok a kasszad ${lossPercent}%-at vittek el.${cargoLossText ? ` Csempesz arut is elkoboztak: ${cargoLossText}.` : ""}`
-    : `A korzet jarorei kiszurtak a mozgasodat, es a kasszad ${lossPercent}%-aval tomted be a szajukat.`;
-  sceneRef?.setMessage(
-    cargoLossText
-      ? `Magas korozes: -${loss} $, elkobzott aru: ${cargoLossText}.`
-      : heatBefore >= 60
-        ? `Magas korozes: a rendorok ${lossPercent}%-ot vittek el a kasszabol.`
-      : "A rendorok gyanut fogtak, es egy kisebb sarcot vittek el.",
-  );
-  showPoliceRaidPanel(loss, summaryText, cargoLoss);
-  postGameEvent(
-    "police_raid",
-    "Rendőri razzia",
-    `A rendőrök ${loss} $-t, a kasszád ${lossPercent}%-át vitték el.${cargoLossText ? ` Elkobzott csempészáru: ${cargoLossText}.` : ""} A körözésed 13%-kal csökkent.`,
-    { loss, lossPercent, cargoLoss, heatBefore, heat: state.heat },
-  );
-  return true;
 }
 
 function syncNaturalRecovery(now = Date.now()) {
@@ -8913,13 +8868,13 @@ function getCrewMemberDefense(member) {
 function getCrewMemberUpgradeCost(member) {
   if (!member) return 0;
   const level = clamp(Math.round(Number(member.level) || 1), 1, 20);
-  return 115 + level * 58 + level ** 2 * 7;
+  return Math.round((115 + level * 58 + level ** 2 * 7) * CREW_UPGRADE_COST_MULTIPLIER);
 }
 
 function getCrewMemberDefenseUpgradeCost(member) {
   if (!member) return 0;
   const level = clamp(Math.round(Number(member.defenseLevel) || 1), 1, 20);
-  return 95 + level * 52 + level ** 2 * 6;
+  return Math.round((95 + level * 52 + level ** 2 * 6) * CREW_UPGRADE_COST_MULTIPLIER);
 }
 
 function getCrewMemberHealCost(member) {
@@ -8931,8 +8886,8 @@ function getCrewMemberHealCost(member) {
   const combatStrength = getCrewMemberAttack(member) + getCrewMemberDefense(member);
   const treatmentFee = (60 + levelWeight * 12 + levelWeight ** 2 * 0.22) * missingRatio ** 0.75;
   const healthPointPrice = 2.2 + levelWeight * 0.09 + combatStrength * 0.012;
-  return Math.max(25, Math.ceil(
-    (treatmentFee + missingHealth * healthPointPrice) * 0.5,
+  return Math.max(20, Math.ceil(
+    (treatmentFee + missingHealth * healthPointPrice) * 0.5 * CREW_HEAL_COST_MULTIPLIER,
   ));
 }
 
@@ -10148,6 +10103,23 @@ function showChoiceWheel(spot) {
   }
   const quest = spotQuest;
   const rival = getRivalEventAtSpot(spot.id);
+  if (state.mainBaseSpotId === spot.id) {
+    const baseRestRemaining = Math.max(0, Number(state.baseRestAvailableAt) - Date.now());
+    const baseRestUsed = baseRestRemaining > 0;
+    setChoiceWheelButtons(["baseRest", "close", ...(quest ? ["quest"] : [])]);
+    if (choiceWheelTitle) choiceWheelTitle.textContent = spot.name;
+    if (choiceWheelSubtitle) choiceWheelSubtitle.textContent = "Saját fő bázis";
+    if (choiceWheelCoreLabel) choiceWheelCoreLabel.textContent = "Fő bázis";
+    if (choiceWheelAction3) {
+      choiceWheelAction3.textContent = baseRestUsed
+        ? `Pihenés (${formatCountdown(baseRestRemaining)})`
+        : "Pihenés (ingyen)";
+      choiceWheelAction3.disabled = baseRestUsed;
+    }
+    if (choiceWheelAction4) choiceWheelAction4.textContent = "Bezárás";
+    if (choiceWheelAction5) choiceWheelAction5.textContent = quest ? "Küldetés" : "";
+    return;
+  }
   const difficulty = getBuildingDifficulty(spot);
   const difficultyInfo = getDifficultyInfo(difficulty);
   const protectionCost = 8;
@@ -10412,18 +10384,28 @@ function rememberLastProfileName(name) {
   }
 }
 
-async function setActiveProfileSession(profileName) {
-  const normalizedProfileName = String(profileName || "").trim().slice(0, 18);
-  if (!normalizedProfileName) throw new Error("missing_profile");
+async function readAuthResponse(response) {
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload.error || `Szerverhiba (${response.status})`);
+  return payload;
+}
+
+async function loginAccount(login, password) {
   const response = await fetch("/api/session", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ profileName: normalizedProfileName }),
+    body: JSON.stringify({ login: String(login || "").trim(), password }),
   });
-  if (!response.ok) {
-    throw new Error(`Session API error: ${response.status}`);
-  }
-  return response.json();
+  return readAuthResponse(response);
+}
+
+async function registerAccount(profileName, email, password) {
+  const response = await fetch("/api/register", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ profileName: String(profileName || "").trim(), email: String(email || "").trim(), password }),
+  });
+  return readAuthResponse(response);
 }
 
 async function clearActiveProfileSession() {
@@ -10698,7 +10680,6 @@ function queueSaveSnapshot(snapshot, immediate = false) {
 async function deleteRemoteSave(profileName) {
   if (!profileName) return;
   try {
-    await setActiveProfileSession(profileName);
     await requestSaveApi("DELETE");
   } catch {
     // Ignore delete failures so the UI reset can still complete locally.
@@ -10713,7 +10694,6 @@ async function loadGame(profileName = "") {
       await saveGame(true);
     }
     lastKnownServerUpdatedAt = 0;
-    await setActiveProfileSession(normalizedProfileName);
     const response = await fetch(PROFILE_API_BASE, {
       headers: { Accept: "application/json" },
     });
@@ -10803,7 +10783,11 @@ async function syncCurrentServerState(force = false) {
 
 function startServerStateSync() {
   if (serverStateSyncTimer) window.clearInterval(serverStateSyncTimer);
-  serverStateSyncTimer = window.setInterval(() => void syncCurrentServerState(), SERVER_STATE_SYNC_INTERVAL_MS);
+  serverStateSyncTimer = window.setInterval(() => {
+    void syncCurrentServerState();
+    void syncPoliceRaidFromServer();
+  }, SERVER_STATE_SYNC_INTERVAL_MS);
+  void syncPoliceRaidFromServer();
 }
 
 function rankForFame(fame) {
@@ -11224,30 +11208,7 @@ function advanceDistrictLoyalty() {
 }
 
 function triggerBust() {
-  const heatBefore = clamp(state.heat, 0, 100);
-  const { loss, lossRate } = getPoliceMoneyLoss(state.money, heatBefore, true);
-  const cargoLoss = confiscatePoliceCargo(heatBefore, true);
-  const cargoLossText = formatCargoLoss(cargoLoss);
-  const lossPercent = Math.round(lossRate * 100);
-  state.money = Math.max(0, state.money - loss);
-  state.crew = getHiredCrewMembers().length;
-  state.heat = clamp(heatBefore - 15, 0, 100);
-  sceneRef?.pushLog(`Rajtaütés történt. -${loss} $ (${lossPercent}%)${cargoLossText ? `, elkobzott áru: ${cargoLossText}` : ""}, -15% körözés.`);
-  sceneRef?.setMessage(cargoLossText
-    ? `A rendőrök elkaptak: -${loss} $, elkobzott áru: ${cargoLossText}.`
-    : `A rendőrök elkaptak és a kasszád ${lossPercent}%-át elvitték.`);
-  showPoliceRaidPanel(
-    loss,
-    `A ${heatBefore}%-os körözés miatt elkaptak. A rendőrök a kasszád ${lossPercent}%-át vitték el.${cargoLossText ? ` Csempészárut is elkoboztak: ${cargoLossText}.` : ""}`,
-    cargoLoss,
-  );
-  postGameEvent(
-    "police_bust",
-    "Elkapott a rendőrség",
-    `A rendőrök ${loss} $-t, a kasszád ${lossPercent}%-át vitték el.${cargoLossText ? ` Elkobzott csempészáru: ${cargoLossText}.` : ""} A körözésed 15%-kal csökkent.`,
-    { loss, lossPercent, cargoLoss, heatBefore, heat: state.heat },
-  );
-  saveGame();
+  void syncPoliceRaidFromServer();
 }
 
 function handleStreetRobbery() {
@@ -11570,7 +11531,7 @@ function ensureCityEngine() {
   window.MaffiaAssetRuntime?.loadImage?.(mapBackgroundLayer);
   const featureStyles = Promise.all([
     loadStylesheet("./styles/combat.css?v=crew-portrait-uniform-2026-08-04-1"),
-    loadStylesheet("./styles/features.css?v=read-messages-gray-2026-08-04-1"),
+    loadStylesheet("./styles/features.css?v=npc-city-half-size-2026-08-07-1"),
   ]).then(() => loadStylesheet("./styles/hud-redesign.css?v=help-interface-guide-2026-08-04-1"));
   const phaserEngine = loadClassicScript("https://cdn.jsdelivr.net/npm/phaser@3.90.0/dist/phaser.min.js");
   cityEnginePromise = Promise.all([featureStyles, phaserEngine])
@@ -13405,16 +13366,27 @@ window.addEventListener("online", () => void syncCurrentServerState(true));
 
 registerForm.addEventListener("submit", async (event) => {
   event.preventDefault();
-  const name = playerNameInput.value.trim();
-  if (!name) {
+  const login = playerNameInput.value.trim();
+  const password = loginPasswordInput?.value || "";
+  const loginStatus = document.getElementById("loginStatus");
+  if (!login) {
+    if (loginStatus) loginStatus.textContent = "Írd be a felhasználónevedet vagy az e-mail címedet.";
     playerNameInput.focus();
+    return;
+  }
+  if (!password) {
+    if (loginStatus) loginStatus.textContent = "Írd be a jelszavadat.";
+    loginPasswordInput?.focus();
     return;
   }
 
   registerForm.querySelector('button[type="submit"]')?.setAttribute("disabled", "disabled");
   try {
     await ensureCityEngine();
-    await setActiveProfileSession(name);
+    const session = await loginAccount(login, password);
+    const name = session.profileName;
+    if (rememberLoginInput?.checked) rememberLastProfileName(name);
+    else rememberLastProfileName("");
     const saved = await loadGame(name);
     if (saved && state.profileName === name) {
       overlay.classList.add("hidden");
@@ -13435,7 +13407,6 @@ registerForm.addEventListener("submit", async (event) => {
     }
     startNewGame(name);
   } catch (error) {
-    const loginStatus = document.getElementById("loginStatus");
     if (loginStatus) loginStatus.textContent = `Betoltesi hiba: ${error?.message || "ismeretlen hiba"}`;
     console.error("A jatek betoltese sikertelen.", error);
     sceneRef?.setMessage("A szerver most nem elérhető. Próbáld meg újra.");
@@ -13451,20 +13422,65 @@ document.querySelectorAll("[data-password-target]").forEach((button) => {
     if (!input) return;
     const reveal = input.type === "password";
     input.type = reveal ? "text" : "password";
-    button.setAttribute("aria-label", reveal ? "Jelszó elrejtése" : "Jelszó megjelenítése");
+    const label = reveal ? "Jelszó elrejtése" : "Jelszó megjelenítése";
+    button.setAttribute("aria-label", label);
+    button.setAttribute("title", label);
+    button.setAttribute("aria-pressed", String(reveal));
+    button.textContent = reveal ? "🙈" : "👁";
     button.classList.toggle("is-active", reveal);
   });
 });
 
-document.getElementById("previewRegistrationForm")?.addEventListener("submit", (event) => {
+previewRegistrationForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
   const status = document.getElementById("registrationStatus");
-  if (status) status.textContent = "A regisztráció még nincs bekapcsolva. A bal oldalon egy névvel már beléphetsz.";
+  const name = registrationNameInput?.value.trim() || "";
+  const email = registrationEmailInput?.value.trim() || "";
+  const password = registrationPasswordInput?.value || "";
+  if (!/^[\p{L}\p{N}_-]{3,18}$/u.test(name)) {
+    if (status) status.textContent = "A felhasználónév 3–18 karakter legyen; betűt, számot, _ vagy - jelet használhatsz.";
+    registrationNameInput?.focus();
+    return;
+  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    if (status) status.textContent = "Adj meg egy érvényes e-mail címet.";
+    registrationEmailInput?.focus();
+    return;
+  }
+  if (password.length < 8 || password.length > 128) {
+    if (status) status.textContent = "A jelszó legalább 8 karakter hosszú legyen.";
+    registrationPasswordInput?.focus();
+    return;
+  }
+  if (!/[A-Za-z\p{L}]/u.test(password) || !/\d/.test(password)) {
+    if (status) status.textContent = "A jelszóban legyen legalább egy betű és egy szám.";
+    registrationPasswordInput?.focus();
+    return;
+  }
+  if (password !== (registrationPasswordAgainInput?.value || "")) {
+    if (status) status.textContent = "A két jelszó nem egyezik.";
+    registrationPasswordAgainInput?.focus();
+    return;
+  }
+  const submit = previewRegistrationForm.querySelector('button[type="submit"]');
+  submit?.setAttribute("disabled", "disabled");
+  if (status) status.textContent = "A fiók létrehozása folyamatban…";
+  try {
+    await ensureCityEngine();
+    const session = await registerAccount(name, email, password);
+    const saved = session.exists ? await loadGame(session.profileName) : false;
+    if (!saved) startNewGame(session.profileName);
+    rememberLastProfileName(session.profileName);
+    if (status) status.textContent = "A regisztráció sikerült.";
+  } catch (error) {
+    if (status) status.textContent = error?.message || "A regisztráció nem sikerült.";
+    submit?.removeAttribute("disabled");
+  }
 });
 
 document.getElementById("forgotPasswordButton")?.addEventListener("click", () => {
   const status = document.getElementById("loginStatus");
-  if (status) status.textContent = "Még nincs szükség jelszóra: írj be egy nevet, majd kattints a Belépés gombra.";
+  if (status) status.textContent = "A jelszó-visszaállítás még készül. Egyelőre kérd az üzemeltető segítségét.";
   playerNameInput.focus();
 });
 

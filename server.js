@@ -3,7 +3,8 @@ const path = require("node:path");
 const fs = require("node:fs");
 const fsp = require("node:fs/promises");
 const zlib = require("node:zlib");
-const { randomUUID } = require("node:crypto");
+const { createHmac, randomBytes, randomUUID, scrypt: scryptCallback, timingSafeEqual } = require("node:crypto");
+const { promisify } = require("node:util");
 const { createMysqlDatabase } = require("./mysql-database");
 const sharedEquipmentCatalog = require("./js/equipment-catalog-data.js");
 
@@ -21,6 +22,9 @@ function readIntegerEnv(name, fallback, min = 0, max = Number.MAX_SAFE_INTEGER) 
 
 const APP_ENV = process.env.APP_ENV || process.env.NODE_ENV || "development";
 const IS_PRODUCTION = /^(production|prod)$/i.test(APP_ENV);
+const scrypt = promisify(scryptCallback);
+const SESSION_SECRET = String(process.env.SESSION_SECRET || (IS_PRODUCTION ? "" : "maffia-local-development-session-secret-change-me"));
+if (!SESSION_SECRET) throw new Error("SESSION_SECRET kotelezo production kornyezetben.");
 const HOST = process.env.HOST || process.env.SERVER_HOST || "127.0.0.1";
 const PORT = readIntegerEnv("PORT", 8766, 1, 65535);
 const COOKIE_SAME_SITE = ["Strict", "Lax", "None"].includes(process.env.COOKIE_SAME_SITE)
@@ -54,6 +58,7 @@ const SERVER_PASSIVE_TERRITORY_INCOME_MS = 24 * 60 * 60 * 1000;
 const SERVER_POLICE_CARGO_CONFISCATION_HEAT = 85;
 const SERVER_CARGO_KEYS = ["counterfeitMoney", "drugs", "weapons", "papers"];
 const SERVER_ROBBERY_LOOT_MAX_DROP_CHANCE = 0.03;
+const PROFILE_BASELINE = Symbol("profileBaseline");
 const SERVER_MAINTENANCE_INTERVAL_MS = readIntegerEnv("SERVER_MAINTENANCE_INTERVAL_MS", 5_000, 1_000, 60_000);
 const SERVER_RIVAL_SPAWN_MIN_MS = 3 * 60 * 60 * 1000;
 const SERVER_RIVAL_SPAWN_MAX_MS = 5 * 60 * 60 * 1000;
@@ -117,6 +122,15 @@ function configureServerLog() {
 configureServerLog();
 async function main() {
   const db = await createMysqlDatabase();
+
+const selectAccountByProfileStmt = db.prepare(`SELECT profile_name, email, password_hash, password_salt FROM user_accounts WHERE profile_name = ?`);
+const selectAccountByEmailStmt = db.prepare(`SELECT profile_name, email, password_hash, password_salt FROM user_accounts WHERE email = ?`);
+const insertAccountStmt = db.prepare(`INSERT INTO user_accounts (profile_name, email, password_hash, password_salt, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`);
+const updateAccountLoginStmt = db.prepare(`UPDATE user_accounts SET last_login_at = ?, updated_at = ? WHERE profile_name = ?`);
+const insertAuthSessionStmt = db.prepare(`INSERT INTO auth_sessions (session_id, profile_name, expires_at, created_at, last_seen_at) VALUES (?, ?, ?, ?, ?)`);
+const selectAuthSessionStmt = db.prepare(`SELECT session_id, profile_name, expires_at FROM auth_sessions WHERE session_id = ?`);
+const deleteAuthSessionStmt = db.prepare(`DELETE FROM auth_sessions WHERE session_id = ?`);
+const deleteExpiredAuthSessionsStmt = db.prepare(`DELETE FROM auth_sessions WHERE expires_at <= ?`);
 
 const selectSaveStmt = db.prepare(`
   SELECT profile_name, state_json, created_at, updated_at
@@ -1314,6 +1328,40 @@ function normalizeProfileName(rawValue = "") {
   return String(rawValue).trim().slice(0, 18);
 }
 
+function normalizeEmail(rawValue = "") {
+  return String(rawValue).trim().toLowerCase().slice(0, 254);
+}
+
+function validateRegistrationFields(profileName, email, password) {
+  if (!/^[\p{L}\p{N}_-]{3,18}$/u.test(profileName)) {
+    return "A felhasznalonev 3-18 karakter lehet, es csak betut, szamot, _ vagy - jelet tartalmazhat.";
+  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) {
+    return "Adj meg egy ervenyes e-mail cimet.";
+  }
+  if (typeof password !== "string" || password.length < 8 || password.length > 128) {
+    return "A jelszo 8-128 karakter hosszu legyen.";
+  }
+  if (!/[A-Za-z\p{L}]/u.test(password) || !/\d/.test(password)) {
+    return "A jelszo tartalmazzon legalabb egy betut es egy szamot.";
+  }
+  return "";
+}
+
+async function createPasswordRecord(password) {
+  const salt = randomBytes(16).toString("hex");
+  const hash = await scrypt(password, salt, 64);
+  return { salt, hash: hash.toString("hex") };
+}
+
+async function verifyPassword(password, salt, expectedHex) {
+  if (typeof password !== "string" || password.length > 128) return false;
+  const expected = Buffer.from(String(expectedHex || ""), "hex");
+  if (expected.length !== 64) return false;
+  const actual = await scrypt(password, String(salt || ""), expected.length);
+  return timingSafeEqual(actual, expected);
+}
+
 const ACTIVE_PROFILE_COOKIE = "maffia_active_profile";
 
 function applySecurityHeaders(response) {
@@ -1405,9 +1453,38 @@ function checkApiRateLimit(request, pathname, now = Date.now()) {
   };
 }
 
-function getActiveProfileFromRequest(request) {
+function signSessionPayload(payload) {
+  return createHmac("sha256", SESSION_SECRET).update(payload).digest("base64url");
+}
+
+function createSessionToken(profileName, sessionId, expiresAt) {
+  const payload = Buffer.from(JSON.stringify({ p: profileName, s: sessionId, e: expiresAt })).toString("base64url");
+  return `${payload}.${signSessionPayload(payload)}`;
+}
+
+function getSessionIdentityFromRequest(request) {
   const cookies = parseCookieHeader(request.headers.cookie || "");
-  return normalizeProfileName(cookies[ACTIVE_PROFILE_COOKIE] || "");
+  const [payload, signature, extra] = String(cookies[ACTIVE_PROFILE_COOKIE] || "").split(".");
+  if (!payload || !signature || extra) return null;
+  const expected = Buffer.from(signSessionPayload(payload));
+  const received = Buffer.from(signature);
+  if (expected.length !== received.length || !timingSafeEqual(expected, received)) return null;
+  try {
+    const data = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
+    const profileName = normalizeProfileName(data.p);
+    const expiresAt = Number(data.e) || 0;
+    if (!profileName || !data.s || expiresAt <= Date.now()) return null;
+    return { profileName, sessionId: String(data.s), expiresAt };
+  } catch {
+    return null;
+  }
+}
+
+function getActiveProfileFromRequest(request) {
+  if (Object.prototype.hasOwnProperty.call(request, "authenticatedProfileName")) {
+    return request.authenticatedProfileName || "";
+  }
+  return getSessionIdentityFromRequest(request)?.profileName || "";
 }
 
 function appendResponseHeader(response, headerName, headerValue) {
@@ -1420,13 +1497,14 @@ function appendResponseHeader(response, headerName, headerValue) {
   response.setHeader(headerName, [...values, headerValue]);
 }
 
-function setActiveProfileCookie(response, profileName) {
+function setActiveProfileCookie(response, profileName, sessionId, expiresAt) {
   const normalized = normalizeProfileName(profileName);
-  if (!normalized) return;
+  if (!normalized || !sessionId || !expiresAt) return;
+  const maxAgeSeconds = Math.max(1, Math.floor((expiresAt - Date.now()) / 1000));
   appendResponseHeader(
     response,
     "Set-Cookie",
-    `${ACTIVE_PROFILE_COOKIE}=${encodeURIComponent(normalized)}; ${getSessionCookieAttributes()}`,
+    `${ACTIVE_PROFILE_COOKIE}=${encodeURIComponent(createSessionToken(normalized, sessionId, expiresAt))}; ${getSessionCookieAttributes(maxAgeSeconds)}`,
   );
 }
 
@@ -2396,6 +2474,31 @@ async function buildProfileState(profileName) {
     merged.worldBaseLevel = ownedLot.base_level;
   }
 
+  // Server commands usually create their mutable state with object spread.
+  // Keeping this non-JSON baseline on the state lets persistence reuse the
+  // already loaded database snapshot instead of reading every profile table
+  // a second time in the same transaction.
+  const baselineSnapshot = { ...merged };
+  const baselineCloneKeys = [
+    "territories", "crewMembers", "equipment", "itemInventory",
+    "processTasks", "harborProcessTasks", "activeQuest", "activeQuests", "offeredQuests",
+    "localNotifications", "districts", "buildingDifficulties", "worldRivalCities",
+    "harborGarage", "marketStock",
+  ];
+  for (const key of baselineCloneKeys) {
+    try {
+      baselineSnapshot[key] = JSON.parse(JSON.stringify(merged[key]));
+    } catch {
+      baselineSnapshot[key] = merged[key];
+    }
+  }
+  Object.defineProperty(merged, PROFILE_BASELINE, {
+    value: baselineSnapshot,
+    enumerable: true,
+    configurable: false,
+    writable: false,
+  });
+
   return {
     profileName,
     state: merged,
@@ -2417,8 +2520,10 @@ async function buildProfileState(profileName) {
   };
 }
 
-async function writePlayerSnapshot(profileName, state, now, existingSaveRow = null) {
-  const existingPlayer = await selectPlayerStmt.get(profileName);
+async function writePlayerSnapshot(profileName, state, now, existingSaveRow = null, existingProfileState = null) {
+  const existingPlayer = existingProfileState
+    ? { fame: existingProfileState.fame, registered_at: existingProfileState.registeredAt }
+    : await selectPlayerStmt.get(profileName);
   const preservedFame = Math.max(
     0,
     toSafeInt(state?.fame, 0, 0),
@@ -2454,8 +2559,8 @@ async function writePlayerSnapshot(profileName, state, now, existingSaveRow = nu
   return { summary, existed: Boolean(existingPlayer || existingSaveRow) };
 }
 
-async function writePlayerState(profileName, state, now) {
-  const existingPlayer = await selectPlayerStmt.get(profileName);
+async function writePlayerState(profileName, state, now, existingProfileState = null) {
+  const existingPlayer = existingProfileState ? { fame: existingProfileState.fame } : await selectPlayerStmt.get(profileName);
   const preservedFame = Math.max(
     0,
     toSafeInt(state?.fame, 0, 0),
@@ -2886,19 +2991,26 @@ async function writeClanData(profileName, state, now) {
   await insertClanMemberStmt.run(clanId, profileName, "fonok", 0, now);
 }
 
-async function syncStructuredTables(profileName, state, now, existingSaveRow = null) {
+async function syncStructuredTables(profileName, state, now, existingSaveRow = null, existingProfileState = null) {
   const normalizedState = { ...state };
   sanitizePreHarborQuestState(normalizedState);
-  const [existingTerritoryRows, existingCrewRows] = await Promise.all([
-    listPlayerTerritoriesStmt.all(profileName),
-    listPlayerCrewMembersStmt.all(profileName),
-  ]);
+  const hasTrustedBaseline = existingProfileState && typeof existingProfileState === "object";
+  const [existingTerritoryRows, existingCrewRows] = hasTrustedBaseline
+    ? [null, null]
+    : await Promise.all([
+      listPlayerTerritoriesStmt.all(profileName),
+      listPlayerCrewMembersStmt.all(profileName),
+    ]);
   normalizedState.territories = mergeProtectedTerritories(
-    buildTerritoriesFromRows(existingTerritoryRows),
+    hasTrustedBaseline
+      ? existingProfileState.territories
+      : buildTerritoriesFromRows(existingTerritoryRows),
     normalizedState.territories,
   );
   normalizedState.crewMembers = mergeProtectedCrewMembers(
-    buildCrewMembersFromRows(existingCrewRows),
+    hasTrustedBaseline
+      ? existingProfileState.crewMembers
+      : buildCrewMembersFromRows(existingCrewRows),
     normalizedState.crewMembers,
   );
   normalizedState.crew = Math.max(
@@ -2906,26 +3018,31 @@ async function syncStructuredTables(profileName, state, now, existingSaveRow = n
     normalizedState.crewMembers.filter((member) => member?.hired).length,
   );
   ensureServerInfluenceState(normalizedState);
-  const { summary, existed } = await writePlayerSnapshot(profileName, normalizedState, now, existingSaveRow);
-  await Promise.all([
-    writePlayerState(profileName, normalizedState, now),
+  const { summary, existed } = await writePlayerSnapshot(profileName, normalizedState, now, existingSaveRow, existingProfileState);
+  const changed = (...keys) => {
+    if (!hasTrustedBaseline) return true;
+    return keys.some((key) => JSON.stringify(existingProfileState[key]) !== JSON.stringify(normalizedState[key]));
+  };
+  const writes = [
+    writePlayerState(profileName, normalizedState, now, existingProfileState),
     writePlayerRuntimeState(profileName, normalizedState, now),
-    writePlayerProcessTasks(profileName, normalizedState, now),
-    writePlayerTerritories(profileName, normalizedState, now),
-    writePlayerEquipment(profileName, normalizedState, now),
-    writePlayerInventory(profileName, normalizedState, now),
-    writePlayerCrewMembers(profileName, normalizedState, now),
-    writePlayerQuests(profileName, normalizedState, now),
-    writePlayerNotifications(profileName, normalizedState, now),
-    writePlayerDistricts(profileName, normalizedState, now),
-    writePlayerBuildingDifficulties(profileName, normalizedState, now),
-    writePlayerWorldRivals(profileName, normalizedState, now),
-    writePlayerHarborGarage(profileName, normalizedState, now),
-    writeWorldLotOwnership(profileName, normalizedState, now),
     writeLeaderboardEntry(summary, now),
-    writeMarketStock(profileName, normalizedState, now),
-    writeClanData(profileName, normalizedState, now),
-  ]);
+  ];
+  if (changed("processTasks", "harborProcessTasks")) writes.push(writePlayerProcessTasks(profileName, normalizedState, now));
+  if (changed("territories")) writes.push(writePlayerTerritories(profileName, normalizedState, now));
+  if (changed("equipment", "crewMembers")) writes.push(writePlayerEquipment(profileName, normalizedState, now));
+  if (changed("itemInventory")) writes.push(writePlayerInventory(profileName, normalizedState, now));
+  if (changed("crewMembers")) writes.push(writePlayerCrewMembers(profileName, normalizedState, now));
+  if (changed("activeQuest", "activeQuests", "offeredQuests")) writes.push(writePlayerQuests(profileName, normalizedState, now));
+  if (changed("localNotifications")) writes.push(writePlayerNotifications(profileName, normalizedState, now));
+  if (changed("districts", "selectedDistrictIndex")) writes.push(writePlayerDistricts(profileName, normalizedState, now));
+  if (changed("buildingDifficulties", "buildingDifficultyCycle")) writes.push(writePlayerBuildingDifficulties(profileName, normalizedState, now));
+  if (changed("worldRivalCities")) writes.push(writePlayerWorldRivals(profileName, normalizedState, now));
+  if (changed("harborGarage")) writes.push(writePlayerHarborGarage(profileName, normalizedState, now));
+  if (changed("worldBaseLotId", "worldBaseLevel")) writes.push(writeWorldLotOwnership(profileName, normalizedState, now));
+  if (changed("marketStock")) writes.push(writeMarketStock(profileName, normalizedState, now));
+  if (changed("clanName", "clanDescription", "clanTreasury")) writes.push(writeClanData(profileName, normalizedState, now));
+  await Promise.all(writes);
   return { summary, existed };
 }
 
@@ -4221,6 +4338,8 @@ const SERVER_CREW_TEMPLATES = [
   { id: "marco", name: "Marco Bellini", role: "Fegyveres", baseAttack: 15, baseDefense: 8, baseHealth: 88, hireCost: 700 },
   { id: "enzo", name: "Enzo Romano", role: "Megfigyelo", baseAttack: 10, baseDefense: 12, baseHealth: 112, hireCost: 1500 },
 ];
+const SERVER_CREW_UPGRADE_COST_MULTIPLIER = 0.65;
+const SERVER_CREW_HEAL_COST_MULTIPLIER = 0.8;
 
 function getServerCrewMaxHealth(template, level = 1, defenseLevel = 1) {
   const attackSteps = Math.max(0, toSafeInt(level, 1, 1) - 1);
@@ -4231,12 +4350,12 @@ function getServerCrewMaxHealth(template, level = 1, defenseLevel = 1) {
 
 function getServerCrewUpgradeCost(member = {}) {
   const level = clampServer(toSafeInt(member.level, 1, 1), 1, 20);
-  return 115 + level * 58 + level ** 2 * 7;
+  return Math.round((115 + level * 58 + level ** 2 * 7) * SERVER_CREW_UPGRADE_COST_MULTIPLIER);
 }
 
 function getServerCrewDefenseUpgradeCost(member = {}) {
   const level = clampServer(toSafeInt(member.defenseLevel, 1, 1), 1, 20);
-  return 95 + level * 52 + level ** 2 * 6;
+  return Math.round((95 + level * 52 + level ** 2 * 6) * SERVER_CREW_UPGRADE_COST_MULTIPLIER);
 }
 
 function getServerCrewHealCost(member = {}) {
@@ -4249,8 +4368,8 @@ function getServerCrewHealCost(member = {}) {
   const combatStrength = combat.attack + combat.defense;
   const treatmentFee = (60 + levelWeight * 12 + levelWeight ** 2 * 0.22) * missingRatio ** 0.75;
   const healthPointPrice = 2.2 + levelWeight * 0.09 + combatStrength * 0.012;
-  return Math.max(25, Math.ceil(
-    (treatmentFee + missingHealth * healthPointPrice) * 0.5,
+  return Math.max(20, Math.ceil(
+    (treatmentFee + missingHealth * healthPointPrice) * 0.5 * SERVER_CREW_HEAL_COST_MULTIPLIER,
   ));
 }
 
@@ -5355,6 +5474,74 @@ function applyServerPoliceBust(state) {
   };
 }
 
+async function runPoliceRaidCommand(profileName) {
+  return db.transaction(async () => {
+    await lockPlayerStmt.get(profileName);
+    const profile = await buildProfileState(profileName);
+    if (!profile) return { statusCode: 404, error: "A jatekosprofil nem talalhato." };
+    const now = Date.now();
+    const state = { ...profile.state, smuggledGoods: normalizeServerCargo(profile.state.smuggledGoods) };
+    const heatBefore = clampServer(state.heat, 0, 100);
+    if (heatBefore < 25) {
+      if (Number(state.nextPolicePressureAt) > 0) {
+        state.nextPolicePressureAt = 0;
+        await persistPvpState(profileName, state, now);
+      }
+      return { statusCode: 200, payload: { ok: true, triggered: false, state: { heat: heatBefore, nextPolicePressureAt: 0 }, updatedAt: now } };
+    }
+    const baseInterval = heatBefore >= 90
+      ? 75 * 1000
+      : heatBefore >= 75
+        ? 2 * 60 * 1000
+        : heatBefore >= 60
+          ? 3.5 * 60 * 1000
+          : heatBefore >= 45
+            ? 8 * 60 * 1000
+            : 14 * 60 * 1000;
+    const interval = Math.max(baseInterval, 15 * 60 * 1000);
+    const isLegacyClientRaidState = toSafeInt(state.policeRaidServerVersion, 0, 0) < 1;
+    state.policeRaidServerVersion = 1;
+    let nextRaidAt = Math.max(0, Number(state.nextPolicePressureAt) || 0);
+    if (isLegacyClientRaidState && heatBefore >= SERVER_POLICE_CARGO_CONFISCATION_HEAT) nextRaidAt = now;
+    if (!nextRaidAt) {
+      state.nextPolicePressureAt = now + interval;
+      await persistPvpState(profileName, state, now);
+      return { statusCode: 200, payload: { ok: true, triggered: false, state: { heat: heatBefore, nextPolicePressureAt: state.nextPolicePressureAt }, updatedAt: now } };
+    }
+    if (nextRaidAt > now) {
+      return { statusCode: 200, payload: { ok: true, triggered: false, state: { heat: heatBefore, nextPolicePressureAt: nextRaidAt }, updatedAt: profile.updatedAt } };
+    }
+    const severe = heatBefore >= 100;
+    const heatLoss = severe ? 15 : 13;
+    const { moneyLoss, lossRate } = getServerPoliceMoneyLoss(state.money, heatBefore, severe);
+    const cargoLoss = applyServerPoliceCargoConfiscation(state, heatBefore, severe);
+    state.money = Math.max(0, toSafeInt(state.money, 0, 0) - moneyLoss);
+    state.heat = clampServer(heatBefore - heatLoss, 0, 100);
+    state.nextPolicePressureAt = now + interval;
+    await persistPvpState(profileName, state, now);
+    await logEvent(profileName, "police_raid", "Rendori razzia", { moneyLoss, cargoLoss, heatBefore, heat: state.heat }, now);
+    return {
+      statusCode: 200,
+      payload: {
+        ok: true,
+        triggered: true,
+        moneyLoss,
+        moneyLossPercent: Math.round(lossRate * 100),
+        cargoLoss,
+        heatBefore,
+        heatLoss,
+        state: {
+          money: state.money,
+          heat: state.heat,
+          smuggledGoods: state.smuggledGoods,
+          nextPolicePressureAt: state.nextPolicePressureAt,
+        },
+        updatedAt: now,
+      },
+    };
+  });
+}
+
 function buildEmpireClientState(state) {
   return {
     ...buildQuestClientState(state),
@@ -6248,10 +6435,13 @@ async function buildPublicProfile(profileName) {
 }
 
 async function persistPvpState(profileName, state, now, options = {}) {
-  const existingProfile = await buildProfileState(profileName);
-  const progressProtectedState = protectPersistentProfileProgress(existingProfile?.state, state);
-  const protectedState = protectServerItemState(existingProfile?.state, progressProtectedState, options);
-  await syncStructuredTables(profileName, protectedState, now, null);
+  const baselineState = state?.[PROFILE_BASELINE] && typeof state[PROFILE_BASELINE] === "object"
+    ? state[PROFILE_BASELINE]
+    : null;
+  const existingState = baselineState || (await buildProfileState(profileName))?.state;
+  const progressProtectedState = protectPersistentProfileProgress(existingState, state);
+  const protectedState = protectServerItemState(existingState, progressProtectedState, options);
+  await syncStructuredTables(profileName, protectedState, now, null, existingState);
 }
 
 async function backfillPlayersFromSaves() {
@@ -6865,6 +7055,18 @@ async function retreatServerRobbery(profileName, actionId) {
 }
 
 async function handleApiRequest(request, response, pathname) {
+  const presentedIdentity = getSessionIdentityFromRequest(request);
+  if (presentedIdentity) {
+    const storedSession = await selectAuthSessionStmt.get(presentedIdentity.sessionId);
+    const sessionValid = Boolean(storedSession
+      && storedSession.profile_name === presentedIdentity.profileName
+      && Number(storedSession.expires_at) > Date.now());
+    request.authenticatedProfileName = sessionValid ? presentedIdentity.profileName : "";
+    if (!sessionValid) clearActiveProfileCookie(response);
+  } else {
+    request.authenticatedProfileName = "";
+  }
+
   if (pathname === "/api/session" && request.method === "GET") {
     const profileName = getActiveProfileFromRequest(request);
     const player = profileName ? await selectPlayerStmt.get(profileName) : null;
@@ -6876,12 +7078,27 @@ async function handleApiRequest(request, response, pathname) {
     try {
       const rawBody = await readRequestBody(request);
       const body = rawBody ? JSON.parse(rawBody) : {};
-      const profileName = normalizeProfileName(body.profileName);
-      if (!profileName) {
-        sendJson(response, 400, { error: "Missing profile name" });
+      const login = String(body.login || body.profileName || "").trim();
+      const password = String(body.password || "");
+      if (!login || !password) {
+        sendJson(response, 400, { error: "Felhasznalonev/e-mail es jelszo szukseges." });
         return true;
       }
-      setActiveProfileCookie(response, profileName);
+      const account = login.includes("@")
+        ? await selectAccountByEmailStmt.get(normalizeEmail(login))
+        : await selectAccountByProfileStmt.get(normalizeProfileName(login));
+      if (!account || !(await verifyPassword(password, account.password_salt, account.password_hash))) {
+        sendJson(response, 401, { error: "Hibas felhasznalonev/e-mail vagy jelszo." });
+        return true;
+      }
+      const profileName = normalizeProfileName(account.profile_name);
+      const now = Date.now();
+      const expiresAt = now + SESSION_MAX_AGE_SECONDS * 1000;
+      const sessionId = randomUUID();
+      await deleteExpiredAuthSessionsStmt.run(now);
+      await insertAuthSessionStmt.run(sessionId, profileName, expiresAt, now, now);
+      await updateAccountLoginStmt.run(now, now, profileName);
+      setActiveProfileCookie(response, profileName, sessionId, expiresAt);
       const player = await selectPlayerStmt.get(profileName);
       sendJson(response, 200, { ok: true, profileName, exists: Boolean(player) });
       return true;
@@ -6892,9 +7109,62 @@ async function handleApiRequest(request, response, pathname) {
   }
 
   if (pathname === "/api/session" && request.method === "DELETE") {
+    const identity = getSessionIdentityFromRequest(request);
+    if (identity) await deleteAuthSessionStmt.run(identity.sessionId);
     clearActiveProfileCookie(response);
     sendEmpty(response);
     return true;
+  }
+
+  if (pathname === "/api/register" && request.method === "POST") {
+    try {
+      const rawBody = await readRequestBody(request);
+      const body = rawBody ? JSON.parse(rawBody) : {};
+      const profileName = normalizeProfileName(body.profileName);
+      const email = normalizeEmail(body.email);
+      const password = String(body.password || "");
+      const validationError = validateRegistrationFields(profileName, email, password);
+      if (validationError) {
+        sendJson(response, 400, { error: validationError });
+        return true;
+      }
+      const [existingAccount, existingEmail, existingPlayer] = await Promise.all([
+        selectAccountByProfileStmt.get(profileName),
+        selectAccountByEmailStmt.get(email),
+        selectPlayerStmt.get(profileName),
+      ]);
+      if (existingAccount) {
+        sendJson(response, 409, { error: "Ez a felhasznalonev mar foglalt." });
+        return true;
+      }
+      if (existingEmail) {
+        sendJson(response, 409, { error: "Ehhez az e-mail cimhez mar tartozik fiok." });
+        return true;
+      }
+      if (existingPlayer && !isLocalDevelopmentRequest(request)) {
+        sendJson(response, 409, { error: "Ehhez a regi profilhoz meg nincs fiok. Kerd az uzemelteto segitseget az atvetelhez." });
+        return true;
+      }
+      const now = Date.now();
+      const expiresAt = now + SESSION_MAX_AGE_SECONDS * 1000;
+      const sessionId = randomUUID();
+      const passwordRecord = await createPasswordRecord(password);
+      await db.transaction(async () => {
+        await insertAccountStmt.run(profileName, email, passwordRecord.hash, passwordRecord.salt, now, now);
+        await insertAuthSessionStmt.run(sessionId, profileName, expiresAt, now, now);
+      });
+      setActiveProfileCookie(response, profileName, sessionId, expiresAt);
+      sendJson(response, 201, { ok: true, profileName, exists: Boolean(existingPlayer) });
+      return true;
+    } catch (error) {
+      if (error?.code === "ER_DUP_ENTRY") {
+        sendJson(response, 409, { error: "A felhasznalonev vagy az e-mail cim mar foglalt." });
+      } else {
+        console.error("Registration failed", error);
+        sendJson(response, 500, { error: "A regisztracio most nem sikerult." });
+      }
+      return true;
+    }
   }
 
   if (pathname === "/api/health") {
@@ -7697,6 +7967,17 @@ async function handleApiRequest(request, response, pathname) {
     const limit = Math.min(200, Math.max(1, toSafeInt(url.searchParams.get("limit"), 40, 1)));
     const rows = await listEventsByProfileStmt.all(profileName, limit);
     sendJson(response, 200, { events: rows.map(mapEventRow) });
+    return true;
+  }
+
+  if (pathname === "/api/actions/police-raid" && request.method === "POST") {
+    const profileName = getActiveProfileFromRequest(request);
+    if (!profileName) {
+      sendJson(response, 401, { error: "Aktiv munkamenet szukseges." });
+      return true;
+    }
+    const result = await runPoliceRaidCommand(profileName);
+    sendJson(response, result.statusCode, result.payload || { error: result.error });
     return true;
   }
 

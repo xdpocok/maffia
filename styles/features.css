@@ -2781,7 +2781,7 @@
   position: absolute;
   left: 50%;
   bottom: 0;
-  width: 126px;
+  width: 63px;
   height: auto;
   transform: translateX(-50%);
   pointer-events: none;
@@ -2795,11 +2795,11 @@
 }
 
 .worldmap__rival-city-art--level-2 {
-  width: 138px;
+  width: 69px;
 }
 
 .worldmap__rival-city-art--level-3 {
-  width: 152px;
+  width: 76px;
 }
 
 .worldmap__rival-city--captured .worldmap__rival-city-art {

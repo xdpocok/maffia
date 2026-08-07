@@ -1,13 +1,13 @@
-const CACHE_VERSION = "maffia-assets-2026-08-05-56-dock-mission-min-five";
+const CACHE_VERSION = "maffia-assets-2026-08-07-72-harbor-button-color";
 const CORE_ASSETS = [
-  "./style.css?v=harbor-bar-limit-2026-08-05-1",
+  "./style.css?v=harbor-button-color-2026-08-07-1",
   "./styles/hud-redesign.css?v=help-interface-guide-2026-08-04-1",
   "./assets-inline.js",
   "./js/asset-runtime.js?v=cache-refresh-2026-08-01-1",
   "./js/world-map.js?v=influence-system-2026-07-30-1",
   "./js/equipment-catalog-data.js?v=item-catalog-2026-08-01-1",
   "./js/app-shell.js?v=cache-refresh-2026-08-01-1",
-  "./game.js?v=dock-mission-min-five-2026-08-05-1"
+  "./game.js?v=npc-city-half-size-2026-08-07-1"
 ];
 
 self.addEventListener("install", (event) => {
