@@ -1,13 +1,18 @@
-const CACHE_VERSION = "maffia-assets-2026-08-07-72-harbor-button-color";
+const CACHE_VERSION = "maffia-assets-2026-08-09-102-nexforge-topbar-join";
 const CORE_ASSETS = [
-  "./style.css?v=harbor-button-color-2026-08-07-1",
-  "./styles/hud-redesign.css?v=help-interface-guide-2026-08-04-1",
+  "./style.css?v=nexforge-hub-2026-08-09-12",
+  "./styles/hud-redesign.css?v=nexforge-topbar-join-2026-08-09-2",
   "./assets-inline.js",
   "./js/asset-runtime.js?v=cache-refresh-2026-08-01-1",
   "./js/world-map.js?v=influence-system-2026-07-30-1",
   "./js/equipment-catalog-data.js?v=item-catalog-2026-08-01-1",
+  "./js/map-config.js?v=map-module-2026-08-09-1",
+  "./js/save-sync.js?v=save-sync-module-2026-08-09-1",
+  "./js/quests.js?v=fast-quest-actions-2026-08-09-4",
+  "./js/ui-choice-wheel.js?v=choice-wheel-module-2026-08-09-1",
+  "./js/harbor.js?v=harbor-module-2026-08-09-1",
   "./js/app-shell.js?v=cache-refresh-2026-08-01-1",
-  "./game.js?v=npc-city-half-size-2026-08-07-1"
+  "./game.js?v=nexforge-topbar-join-2026-08-09-19"
 ];
 
 self.addEventListener("install", (event) => {

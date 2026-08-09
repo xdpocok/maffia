@@ -1,5 +1,0 @@
-﻿Backup: E:\maffia\maffia\backups\manual-code-20260801-124655.zip
-CreatedAt: 2026-08-01T12:48:33.1909165+02:00
-Workspace: E:\maffia\maffia
-ExcludedTopDirs: .git, node_modules, backups, logs, run, tmp, .chrome-check, performance
-SizeBytes: 71135572

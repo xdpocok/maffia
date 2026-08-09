@@ -553,6 +553,22 @@ button.battle-unit {
   color: rgba(245, 233, 203, 0.82);
   font-size: 0.82rem;
   line-height: 1.55;
+  scrollbar-width: thin;
+  scrollbar-color: #c89b4a #0b0907;
+}
+
+.hud-log::-webkit-scrollbar {
+  width: 10px;
+}
+
+.hud-log::-webkit-scrollbar-track {
+  background: linear-gradient(180deg, rgba(255, 226, 160, 0.04), rgba(0, 0, 0, 0.22)), #0b0907;
+}
+
+.hud-log::-webkit-scrollbar-thumb {
+  border: 2px solid #0b0907;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #dfc178 0%, #a5742b 55%, #6a4215 100%);
 }
 
 .hud-bottom-bar {

@@ -23,6 +23,7 @@ function readIntegerEnv(name, fallback, min = 0, max = Number.MAX_SAFE_INTEGER) 
 const APP_ENV = process.env.APP_ENV || process.env.NODE_ENV || "development";
 const IS_PRODUCTION = /^(production|prod)$/i.test(APP_ENV);
 const scrypt = promisify(scryptCallback);
+const brotliCompress = promisify(zlib.brotliCompress);
 const SESSION_SECRET = String(process.env.SESSION_SECRET || (IS_PRODUCTION ? "" : "maffia-local-development-session-secret-change-me"));
 if (!SESSION_SECRET) throw new Error("SESSION_SECRET kotelezo production kornyezetben.");
 const HOST = process.env.HOST || process.env.SERVER_HOST || "127.0.0.1";
@@ -5263,7 +5264,20 @@ async function runQuestProgressionCommand(profileName, body = {}) {
     let mentorReward = null;
 
     if (operation === "accept") {
-      const offeredIndex = state.offeredQuests.findIndex((entry) => entry.id === questId);
+      let offeredIndex = state.offeredQuests.findIndex((entry) => entry.id === questId);
+      if (offeredIndex < 0 && body.quest && typeof body.quest === "object") {
+        const restoredOffer = normalizeServerQuest(body.quest, ["offered"]);
+        const spotId = String(restoredOffer?.spotId || "").trim();
+        if (restoredOffer?.id === questId && spotId) {
+          const activeSpotAlreadyUsed = state.activeQuests.some((entry) => entry.spotId === spotId);
+          if (!activeSpotAlreadyUsed) {
+            state.offeredQuests = state.offeredQuests.filter((entry) => entry.spotId !== spotId);
+            if (state.offeredQuests.length >= 3) state.offeredQuests.pop();
+            state.offeredQuests.push(restoredOffer);
+            offeredIndex = state.offeredQuests.length - 1;
+          }
+        }
+      }
       if (offeredIndex < 0) {
         if (state.activeQuests.some((entry) => entry.id === questId)) return { statusCode: 409, error: "Ez a kuldetes mar el van fogadva." };
         return { statusCode: 404, error: "A felajanlott kuldetes nem talalhato." };
@@ -5347,7 +5361,6 @@ const SERVER_LOTS = {
   "east-office": { maxLevel: 1, restoredHouse: true, privateCost: 120, cityCost: 80, privateIncome: 24 },
   "central-bank": { maxLevel: 1, restoredHouse: true, privateCost: 120, cityCost: 80, privateIncome: 24 },
   "southwest-tenement": { maxLevel: 1, restoredHouse: true, privateCost: 120, cityCost: 80, privateIncome: 24 },
-  courthouse: { maxLevel: 1, restoredHouse: true, privateCost: 120, cityCost: 80, privateIncome: 24 },
 };
 const SERVER_LOT_LEVEL_COSTS = { 0: 80, 1: 180, 2: 320 };
 const SERVER_LOT_LEVEL_INCOME = { 1: 80, 2: 190, 3: 360 };
@@ -7016,7 +7029,10 @@ async function playServerRobberyTurn(profileName, actionId, body) {
     } else {
       syncRobberyHealthToState(state, action);
     }
-    await persistPvpState(profileName, state, now);
+    // A folyamatban levo harc teljes allapota az action sessionben van.
+    // Koztes korokben ne irjuk ujra a teljes profilt, inventoryt, questeket,
+    // ranglistat es strukturalt tablakat; erre csak a vegeredmenynel van szukseg.
+    if (result) await persistPvpState(profileName, state, now);
     await writeRobberyActionSession(profileName, action, now);
     if (result) {
       await logEvent(profileName, result.success ? "robbery_won" : "robbery_lost", result.reason, {
@@ -8710,6 +8726,27 @@ const PRIVATE_STATIC_FILES = new Set([
   "mysql-database.js", "package-lock.json", "package.json", "pnpm-lock.yaml",
   "server.js", "service-worker.js.map",
 ]);
+const STATIC_BROTLI_MAX_SOURCE_BYTES = 2_000_000;
+const staticBrotliCache = new Map();
+
+async function getCachedBrotliFile(filePath, stats) {
+  const cacheKey = `${stats.size}:${Math.floor(stats.mtimeMs)}`;
+  const cached = staticBrotliCache.get(filePath);
+  if (cached?.key === cacheKey) return cached.promise;
+  const promise = fsp.readFile(filePath).then((source) => brotliCompress(source, {
+    params: {
+      [zlib.constants.BROTLI_PARAM_QUALITY]: 5,
+      [zlib.constants.BROTLI_PARAM_SIZE_HINT]: source.length,
+    },
+  }));
+  staticBrotliCache.set(filePath, { key: cacheKey, promise });
+  try {
+    return await promise;
+  } catch (error) {
+    if (staticBrotliCache.get(filePath)?.promise === promise) staticBrotliCache.delete(filePath);
+    throw error;
+  }
+}
 
 function isPublicStaticPath(filePath) {
   const relativePath = path.relative(ROOT_DIR, filePath);
@@ -8766,9 +8803,22 @@ async function handleStaticRequest(request, response, pathname, searchParams) {
       return;
     }
     const acceptsBrotli = isText && /(?:^|,)\s*br\s*(?:;|,|$)/i.test(request.headers["accept-encoding"] || "");
+    if (acceptsBrotli && stats.size <= STATIC_BROTLI_MAX_SOURCE_BYTES) {
+      const compressed = await getCachedBrotliFile(filePath, stats);
+      response.writeHead(200, {
+        ...headers,
+        "Content-Encoding": "br",
+        "Content-Length": compressed.length,
+        Vary: "Accept-Encoding",
+      });
+      response.end(compressed);
+      return;
+    }
     if (acceptsBrotli) {
       response.writeHead(200, { ...headers, "Content-Encoding": "br", Vary: "Accept-Encoding" });
-      fs.createReadStream(filePath).pipe(zlib.createBrotliCompress()).pipe(response);
+      fs.createReadStream(filePath).pipe(zlib.createBrotliCompress({
+        params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 4 },
+      })).pipe(response);
       return;
     }
     response.writeHead(200, { ...headers, "Content-Length": stats.size });

@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="760" viewBox="0 0 1200 760">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#090705"/>
+      <stop offset="45%" stop-color="#13100b"/>
+      <stop offset="100%" stop-color="#231710"/>
+    </linearGradient>
+    <linearGradient id="track" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#7c5b2c"/>
+      <stop offset="50%" stop-color="#a9813e"/>
+      <stop offset="100%" stop-color="#4c381d"/>
+    </linearGradient>
+    <linearGradient id="coal" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#2e2116"/>
+      <stop offset="100%" stop-color="#18120c"/>
+    </linearGradient>
+    <radialGradient id="lampGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#ffd889" stop-opacity="0.45"/>
+      <stop offset="60%" stop-color="#ffd889" stop-opacity="0.12"/>
+      <stop offset="100%" stop-color="#ffd889" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="blur12"><feGaussianBlur stdDeviation="12"/></filter>
+    <filter id="blur18"><feGaussianBlur stdDeviation="18"/></filter>
+    <filter id="shadow"><feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#000" flood-opacity="0.55"/></filter>
+  </defs>
+  <rect width="1200" height="760" fill="url(#sky)"/>
+  <ellipse cx="180" cy="210" rx="240" ry="120" fill="url(#lampGlow)" filter="url(#blur18)"/>
+  <ellipse cx="760" cy="160" rx="260" ry="100" fill="url(#lampGlow)" filter="url(#blur18)" opacity="0.85"/>
+  <ellipse cx="980" cy="240" rx="200" ry="120" fill="url(#lampGlow)" filter="url(#blur18)" opacity="0.62"/>
+  <path d="M0,480 C170,470 260,450 390,420 C545,385 700,378 1200,420 L1200,760 L0,760 Z" fill="#120f0a"/>
+  <g opacity="0.95">
+    <g transform="translate(40 260)"><rect x="0" y="70" width="130" height="110" fill="#1b140f" stroke="#8f6930" stroke-width="3"/><rect x="18" y="20" width="92" height="160" fill="#201811" stroke="#8f6930" stroke-width="3"/></g>
+    <g transform="translate(240 230)"><rect x="0" y="85" width="160" height="102" fill="#1c140f" stroke="#8f6930" stroke-width="3"/><rect x="30" y="0" width="96" height="187" fill="#201811" stroke="#8f6930" stroke-width="3"/></g>
+    <g transform="translate(875 210)"><rect x="0" y="95" width="210" height="126" fill="#1a120d" stroke="#8f6930" stroke-width="3"/><rect x="34" y="18" width="128" height="203" fill="#221912" stroke="#8f6930" stroke-width="3"/></g>
+  </g>
+  <path d="M-20,250 C250,340 510,430 1260,650" fill="none" stroke="url(#track)" stroke-width="26" stroke-linecap="round"/>
+  <path d="M-20,258 C250,348 510,438 1260,658" fill="none" stroke="#2d2315" stroke-width="6" stroke-linecap="round"/>
+  <path d="M50,330 C290,390 500,460 1170,660" fill="none" stroke="url(#track)" stroke-width="16" stroke-linecap="round" opacity="0.78"/>
+  <path d="M50,336 C290,396 500,466 1170,666" fill="none" stroke="#2d2315" stroke-width="4" stroke-linecap="round" opacity="0.95"/>
+  <g stroke="#392917" stroke-width="3" opacity="0.96"><line x1="-20" y1="222.8" x2="2" y2="234.8"/><line x1="8" y1="232.9" x2="30" y2="244.9"/><line x1="36" y1="243.0" x2="58" y2="255.0"/><line x1="64" y1="253.0" x2="86" y2="265.0"/><line x1="92" y1="263.1" x2="114" y2="275.1"/><line x1="120" y1="273.2" x2="142" y2="285.2"/><line x1="148" y1="283.3" x2="170" y2="295.3"/><line x1="176" y1="293.4" x2="198" y2="305.4"/><line x1="204" y1="303.4" x2="226" y2="315.4"/><line x1="232" y1="313.5" x2="254" y2="325.5"/><line x1="260" y1="323.6" x2="282" y2="335.6"/><line x1="288" y1="333.7" x2="310" y2="345.7"/><line x1="316" y1="343.8" x2="338" y2="355.8"/><line x1="344" y1="353.8" x2="366" y2="365.8"/><line x1="372" y1="363.9" x2="394" y2="375.9"/><line x1="400" y1="374.0" x2="422" y2="386.0"/><line x1="428" y1="384.1" x2="450" y2="396.1"/><line x1="456" y1="394.2" x2="478" y2="406.2"/><line x1="484" y1="404.2" x2="506" y2="416.2"/><line x1="512" y1="414.3" x2="534" y2="426.3"/><line x1="540" y1="424.4" x2="562" y2="436.4"/><line x1="568" y1="434.5" x2="590" y2="446.5"/><line x1="596" y1="444.6" x2="618" y2="456.6"/><line x1="624" y1="454.6" x2="646" y2="466.6"/><line x1="652" y1="464.7" x2="674" y2="476.7"/><line x1="680" y1="474.8" x2="702" y2="486.8"/><line x1="708" y1="484.9" x2="730" y2="496.9"/><line x1="736" y1="495.0" x2="758" y2="507.0"/><line x1="764" y1="505.0" x2="786" y2="517.0"/><line x1="792" y1="515.1" x2="814" y2="527.1"/><line x1="820" y1="525.2" x2="842" y2="537.2"/><line x1="848" y1="535.3" x2="870" y2="547.3"/><line x1="876" y1="545.4" x2="898" y2="557.4"/><line x1="904" y1="555.4" x2="926" y2="567.4"/><line x1="932" y1="565.5" x2="954" y2="577.5"/><line x1="960" y1="575.6" x2="982" y2="587.6"/><line x1="988" y1="585.7" x2="1010" y2="597.7"/><line x1="1016" y1="595.8" x2="1038" y2="607.8"/><line x1="1044" y1="605.8" x2="1066" y2="617.8"/><line x1="1072" y1="615.9" x2="1094" y2="627.9"/><line x1="1100" y1="626.0" x2="1122" y2="638.0"/><line x1="1128" y1="636.1" x2="1150" y2="648.1"/><line x1="1156" y1="646.2" x2="1178" y2="658.2"/></g>
+  <g transform="translate(190 446)" filter="url(#shadow)">
+    <ellipse cx="100" cy="-16" rx="140" ry="45" fill="#f2d6ad" opacity="0.22" filter="url(#blur18)"/>
+    <path d="M0,56 L18,12 L62,4 L90,-22 L150,-22 L192,0 L218,0 L238,18 L238,58 Z" fill="url(#coal)" stroke="#8e682b" stroke-width="3"/>
+    <rect x="18" y="12" width="48" height="46" fill="#2f2217" stroke="#8e682b" stroke-width="3"/>
+    <rect x="66" y="-18" width="64" height="76" fill="#36271a" stroke="#8e682b" stroke-width="3"/>
+    <rect x="130" y="-18" width="32" height="76" fill="#271d13" stroke="#8e682b" stroke-width="3"/>
+    <rect x="162" y="12" width="52" height="46" fill="#20170f" stroke="#8e682b" stroke-width="3"/>
+    <g fill="#1a120c" stroke="#8e682b" stroke-width="2"><circle cx="28" cy="70" r="18"/><circle cx="68" cy="70" r="18"/><circle cx="116" cy="70" r="18"/><circle cx="166" cy="70" r="18"/><circle cx="214" cy="70" r="18"/></g>
+  </g>
+  <g transform="translate(440 485)" filter="url(#shadow)"><rect x="0" y="0" width="164" height="72" rx="8" fill="#251b11" stroke="#8e682b" stroke-width="3"/><g fill="#6b5127"><rect x="18" y="14" width="14" height="22"/><rect x="44" y="14" width="14" height="22"/><rect x="70" y="14" width="14" height="22"/><rect x="96" y="14" width="14" height="22"/><rect x="122" y="14" width="14" height="22"/></g></g>
+  <g transform="translate(615 512)" filter="url(#shadow)"><rect x="0" y="0" width="172" height="74" rx="8" fill="#251a10" stroke="#8e682b" stroke-width="3"/><g fill="#6b5127"><rect x="18" y="14" width="14" height="22"/><rect x="44" y="14" width="14" height="22"/><rect x="70" y="14" width="14" height="22"/><rect x="96" y="14" width="14" height="22"/><rect x="122" y="14" width="14" height="22"/></g></g>
+  <g transform="translate(790 540)" filter="url(#shadow)"><rect x="0" y="0" width="172" height="76" rx="8" fill="#241910" stroke="#8e682b" stroke-width="3"/><g fill="#6b5127"><rect x="18" y="14" width="14" height="22"/><rect x="44" y="14" width="14" height="22"/><rect x="70" y="14" width="14" height="22"/><rect x="96" y="14" width="14" height="22"/><rect x="122" y="14" width="14" height="22"/></g></g>
+  <path d="M110,625 L430,590 L520,748 L160,748 Z" fill="#1a130c" stroke="#8e682b" stroke-width="2"/>
+  <path d="M420,590 L870,560 L930,748 L520,748 Z" fill="#1f160f" stroke="#8e682b" stroke-width="2"/>
+  <path d="M840,565 L1140,620 L1125,748 L930,748 Z" fill="#18120c" stroke="#8e682b" stroke-width="2"/>
+  <g opacity="0.85" filter="url(#blur12)"><ellipse cx="310" cy="210" rx="130" ry="80" fill="#f2d6ad" opacity="0.24"/><ellipse cx="560" cy="180" rx="140" ry="90" fill="#f2d6ad" opacity="0.22"/><ellipse cx="880" cy="220" rx="150" ry="100" fill="#f2d6ad" opacity="0.22"/></g>
+  <g filter="url(#shadow)"><rect x="46" y="44" width="372" height="116" rx="8" fill="#231710" stroke="#b78639" stroke-width="3"/><rect x="56" y="54" width="352" height="96" rx="6" fill="none" stroke="#5f421f" stroke-width="1"/><text x="66" y="103" fill="#f1d7a3" font-size="56" font-family="Georgia, 'Times New Roman', serif" font-weight="700">Vasuti rakodo</text><text x="68" y="135" fill="#d0a862" font-size="24" font-family="Georgia, 'Times New Roman', serif">Nehez aru / 1930-as kikotoi logika</text></g>
+  <g filter="url(#shadow)"><rect x="878" y="646" width="260" height="74" rx="8" fill="#21160f" stroke="#b78639" stroke-width="2"/><text x="896" y="695" fill="#f2d7a4" font-size="30" font-family="Georgia, 'Times New Roman', serif">Rakodo csarnok</text></g>
+</svg>

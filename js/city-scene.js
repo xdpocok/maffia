@@ -51,20 +51,30 @@ class CityScene extends Phaser.Scene {
         if (activeChoiceSpot) showChoiceWheel(activeChoiceSpot);
       },
     });
-    this.assetsReady = false;
-    this.setMessage("A varos betoltese folyamatban...");
-    this.loadInlineAssets()
-      .catch(() => {
-        this.setMessage("Nehany regi modell nem toltodott be, a terkep tovabbra is hasznalhato.");
-      })
-      .finally(() => {
-        this.assetsReady = true;
-        this.refreshScene();
-        maybeSpawnQuest();
-        if (state.registered) {
-          this.setMessage("A mentett birodalom betoltve.");
-        }
-      });
+    // The SVG city map and its controls do not depend on the legacy Phaser
+    // textures. Make the city usable immediately instead of blocking on every
+    // building, road and decoration image.
+    this.assetsReady = true;
+    this.refreshScene();
+    maybeSpawnQuest();
+    this.setMessage(state.registered ? "A mentett birodalom betoltve." : "A varos keszen all.");
+
+    // Only fetch the old textures when a feature that actually renders them is
+    // enabled. They are intentionally kept outside the critical startup path.
+    if (this.showMapModels || LOT_HOUSE_VISUALS_ENABLED) {
+      const loadLegacyAssets = () => {
+        this.loadInlineAssets()
+          .then(() => this.refreshMap())
+          .catch(() => {
+            // The SVG map remains fully usable if an optional texture is absent.
+          });
+      };
+      if (typeof window.requestIdleCallback === "function") {
+        window.requestIdleCallback(loadLegacyAssets, { timeout: 2000 });
+      } else {
+        window.setTimeout(loadLegacyAssets, 250);
+      }
+    }
   }
 
   resetLogs() {
@@ -534,8 +544,11 @@ class CityScene extends Phaser.Scene {
   }
 
   refreshMap() {
-    const width = this.scale.width;
-    const height = this.scale.height;
+    const viewport = typeof getLayoutViewportSize === "function"
+      ? getLayoutViewportSize()
+      : { width: this.scale.width, height: this.scale.height };
+    const width = viewport.width;
+    const height = viewport.height;
     this.resetSceneObjects();
     this.mapGraphics.clear();
     lotHouseLayer?.classList.add("hidden");
@@ -624,8 +637,11 @@ class CityScene extends Phaser.Scene {
   }
 
   onResize(gameSize) {
-    const width = gameSize.width || this.scale.width;
-    const height = gameSize.height || this.scale.height;
+    const viewport = typeof getLayoutViewportSize === "function"
+      ? getLayoutViewportSize()
+      : { width: gameSize.width || this.scale.width, height: gameSize.height || this.scale.height };
+    const width = viewport.width;
+    const height = viewport.height;
     this.cameras.main.setViewport(0, 0, width, height);
     if (this.resizeRefreshTimer) {
       window.clearTimeout(this.resizeRefreshTimer);

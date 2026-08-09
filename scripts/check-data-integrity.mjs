@@ -1,4 +1,6 @@
 const baseUrl = String(process.env.QA_BASE_URL || "http://127.0.0.1:8766").replace(/\/$/, "");
+const qaLogin = String(process.env.QA_LOGIN || "").trim();
+const qaPassword = String(process.env.QA_PASSWORD || "");
 
 function fail(profileName, message) {
   throw new Error(`${profileName}: ${message}`);
@@ -55,13 +57,23 @@ const knownProfiles = new Set(profileNames);
 const baseOwners = new Map();
 const summaries = [];
 
+if (!qaLogin || !qaPassword) {
+  throw new Error("A jelenlegi regisztracios rendszerhez QA_LOGIN es QA_PASSWORD kornyezeti valtozo szukseges.");
+}
+
+const authenticatedSession = await request("/api/session", {
+  method: "POST",
+  body: JSON.stringify({ login: qaLogin, password: qaPassword }),
+});
+const authenticatedCookie = authenticatedSession.response.headers.get("set-cookie")?.split(";")[0] || "";
+if (!authenticatedSession.response.ok || !authenticatedCookie) {
+  throw new Error(`QA bejelentkezes sikertelen: HTTP ${authenticatedSession.response.status}`);
+}
+const authenticatedProfileName = String(authenticatedSession.payload?.profileName || "").trim();
+
 for (const profileName of profileNames) {
-  const session = await request("/api/session", {
-    method: "POST",
-    body: JSON.stringify({ profileName }),
-  });
-  const cookie = session.response.headers.get("set-cookie")?.split(";")[0] || "";
-  assertProfile(session.response.ok && session.payload?.exists === true && cookie, profileName, "ervenytelen munkamenet");
+  if (profileName !== authenticatedProfileName) continue;
+  const cookie = authenticatedCookie;
 
   const save = await request("/api/saves/current", { headers: { Cookie: cookie } });
   const state = save.payload?.state;
@@ -151,4 +163,4 @@ for (const lot of lotsResult.payload.lots) {
 }
 
 console.table(summaries);
-console.log(`Adatintegritasi ellenorzes: ${summaries.length}/${profileNames.length} profil rendben.`);
+console.log(`Adatintegritasi ellenorzes: a hitelesitett ${authenticatedProfileName} profil rendben (${profileNames.length} ismert profilbol).`);
