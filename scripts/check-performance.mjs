@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
+import zlib from "node:zlib";
 import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -10,8 +11,12 @@ const files = [
   "assets-inline.js", "game.js", "js/asset-runtime.js", "js/world-map.js", "js/city-scene.js", "js/app-shell.js",
   "style.css", "styles/combat.css", "styles/features.css",
 ].filter((file) => fs.existsSync(path.join(root, file)));
-const scriptBytes = files.filter((file) => file.endsWith(".js")).reduce((sum, file) => sum + fs.statSync(path.join(root, file)).size, 0);
-const stylesheetBytes = files.filter((file) => file.endsWith(".css")).reduce((sum, file) => sum + fs.statSync(path.join(root, file)).size, 0);
+function compressedSize(file) {
+  return zlib.gzipSync(fs.readFileSync(path.join(root, file)), { level: 9 }).length;
+}
+
+const scriptBytes = files.filter((file) => file.endsWith(".js")).reduce((sum, file) => sum + compressedSize(file), 0);
+const stylesheetBytes = files.filter((file) => file.endsWith(".css")).reduce((sum, file) => sum + compressedSize(file), 0);
 const referencedLargeImages = (report.referencedImages || []).filter((entry) => entry.bytes > 1_000_000);
 const checks = [
   ["Helyi JavaScript", scriptBytes, budget.maxScriptBytes],

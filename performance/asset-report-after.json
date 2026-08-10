@@ -1,9 +1,9 @@
 {
-  "projectBytes": 90155012,
-  "imageBytes": 53487905,
-  "imageCount": 718,
-  "imagesOver1MB": 1,
-  "referencedImageBytes": 13096612,
+  "projectBytes": 187009586,
+  "imageBytes": 148481924,
+  "imageCount": 781,
+  "imagesOver1MB": 44,
+  "referencedImageBytes": 19080835,
   "missingImageReferences": [],
   "referencedImages": [
     {
@@ -112,8 +112,36 @@
       "mode": "RGB"
     },
     {
+      "path": "assets/harbor/customs-office-detail-v1.webp",
+      "bytes": 335162,
+      "width": 1672,
+      "height": 941,
+      "mode": "RGB"
+    },
+    {
       "path": "assets/harbor/fish-market-harbor.webp",
       "bytes": 266228,
+      "width": 1774,
+      "height": 887,
+      "mode": "RGB"
+    },
+    {
+      "path": "assets/harbor/harbor-office-cards-v2.webp",
+      "bytes": 586790,
+      "width": 1772,
+      "height": 887,
+      "mode": "RGB"
+    },
+    {
+      "path": "assets/harbor/harbor-office-crest-v2.webp",
+      "bytes": 330596,
+      "width": 1254,
+      "height": 1254,
+      "mode": "RGB"
+    },
+    {
+      "path": "assets/harbor/rail-depot-detail-v3.webp",
+      "bytes": 193184,
       "width": 1774,
       "height": 887,
       "mode": "RGB"
@@ -124,6 +152,769 @@
       "width": 1701,
       "height": 925,
       "mode": "RGB"
+    },
+    {
+      "path": "assets/hud-la-cosa-city.webp",
+      "bytes": 54814,
+      "width": 760,
+      "height": 304,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/hats/bowler-black-gray.png",
+      "bytes": 18647,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/hats/bowler-black-red.png",
+      "bytes": 18667,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/hats/bowler-black-yellow.png",
+      "bytes": 18675,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/hats/fedora-burgundy-gray.png",
+      "bytes": 21109,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/hats/fedora-burgundy-red.png",
+      "bytes": 21126,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/hats/fedora-burgundy-yellow.png",
+      "bytes": 21137,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/hats/fedora-ivory-gray.png",
+      "bytes": 24081,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/hats/fedora-ivory-red.png",
+      "bytes": 24100,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/hats/fedora-ivory-yellow.png",
+      "bytes": 24098,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/hats/fedora-pinstripe-gray.png",
+      "bytes": 21506,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/hats/fedora-pinstripe-red.png",
+      "bytes": 21523,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/hats/fedora-pinstripe-yellow.png",
+      "bytes": 21533,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/hats/newsboy-charcoal-gray.png",
+      "bytes": 22752,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/hats/newsboy-charcoal-red.png",
+      "bytes": 22771,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/hats/newsboy-charcoal-yellow.png",
+      "bytes": 22783,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/hats/newsboy-tweed-gray.png",
+      "bytes": 25733,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/hats/newsboy-tweed-red.png",
+      "bytes": 25761,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/hats/newsboy-tweed-yellow.png",
+      "bytes": 25766,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/pants/pants-brown-gray.png",
+      "bytes": 21433,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/pants/pants-brown-red.png",
+      "bytes": 21419,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/pants/pants-brown-yellow.png",
+      "bytes": 21417,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/pants/pants-charcoal-gray.png",
+      "bytes": 20389,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/pants/pants-charcoal-red.png",
+      "bytes": 20417,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/pants/pants-charcoal-yellow.png",
+      "bytes": 20448,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/pants/pants-pinstripe-gray.png",
+      "bytes": 20610,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/pants/pants-pinstripe-red.png",
+      "bytes": 20638,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/pants/pants-pinstripe-yellow.png",
+      "bytes": 20632,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/pants/pants-sand-gray.png",
+      "bytes": 24726,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/pants/pants-sand-red.png",
+      "bytes": 24774,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/pants/pants-sand-yellow.png",
+      "bytes": 24749,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/pants/pants-wool-dark-gray.png",
+      "bytes": 28445,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/pants/pants-wool-dark-red.png",
+      "bytes": 28470,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/pants/pants-wool-dark-yellow.png",
+      "bytes": 28489,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/pants/pants-wool-light-gray.png",
+      "bytes": 26546,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/pants/pants-wool-light-red.png",
+      "bytes": 26572,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/pants/pants-wool-light-yellow.png",
+      "bytes": 26663,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/shirts/shirt-black-suspenders-gray.png",
+      "bytes": 25515,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/shirts/shirt-black-suspenders-red.png",
+      "bytes": 25514,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/shirts/shirt-black-suspenders-yellow.png",
+      "bytes": 25551,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/shirts/shirt-blue-gray.png",
+      "bytes": 32017,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/shirts/shirt-blue-red.png",
+      "bytes": 32001,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/shirts/shirt-blue-yellow.png",
+      "bytes": 32091,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/shirts/shirt-burgundy-gray.png",
+      "bytes": 28723,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/shirts/shirt-burgundy-red.png",
+      "bytes": 28773,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/shirts/shirt-burgundy-yellow.png",
+      "bytes": 28817,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/shirts/shirt-cream-suspenders-gray.png",
+      "bytes": 36273,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/shirts/shirt-cream-suspenders-red.png",
+      "bytes": 36257,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/shirts/shirt-cream-suspenders-yellow.png",
+      "bytes": 36290,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/shirts/shirt-gray-stripe-gray.png",
+      "bytes": 35132,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/shirts/shirt-gray-stripe-red.png",
+      "bytes": 35122,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/shirts/shirt-gray-stripe-yellow.png",
+      "bytes": 35216,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/shirts/shirt-white-gray.png",
+      "bytes": 34671,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/shirts/shirt-white-red.png",
+      "bytes": 34683,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/shirts/shirt-white-yellow.png",
+      "bytes": 34727,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/shoes/loafer-black-gray.png",
+      "bytes": 24371,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/shoes/loafer-black-red.png",
+      "bytes": 24363,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/shoes/loafer-black-yellow.png",
+      "bytes": 24451,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/shoes/loafer-tan-gray.png",
+      "bytes": 27200,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/shoes/loafer-tan-red.png",
+      "bytes": 27213,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/shoes/loafer-tan-yellow.png",
+      "bytes": 27295,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/shoes/oxford-black-gray.png",
+      "bytes": 24872,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/shoes/oxford-black-red.png",
+      "bytes": 24883,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/shoes/oxford-black-yellow.png",
+      "bytes": 24956,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/shoes/oxford-brown-gray.png",
+      "bytes": 26658,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/shoes/oxford-brown-red.png",
+      "bytes": 26649,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/shoes/oxford-brown-yellow.png",
+      "bytes": 26755,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/shoes/spectator-black-gray.png",
+      "bytes": 26812,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/shoes/spectator-black-red.png",
+      "bytes": 26781,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/shoes/spectator-black-yellow.png",
+      "bytes": 26835,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/shoes/spectator-brown-gray.png",
+      "bytes": 28447,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/shoes/spectator-brown-red.png",
+      "bytes": 28438,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/shoes/spectator-brown-yellow.png",
+      "bytes": 28520,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/watches/pocket-watch-classic-silver-gray.png",
+      "bytes": 35093,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/watches/pocket-watch-classic-silver-red.png",
+      "bytes": 35123,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/watches/pocket-watch-classic-silver-yellow.png",
+      "bytes": 35140,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/watches/pocket-watch-engraved-silver-gray.png",
+      "bytes": 37695,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/watches/pocket-watch-engraved-silver-red.png",
+      "bytes": 37722,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/watches/pocket-watch-engraved-silver-yellow.png",
+      "bytes": 37731,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/watches/pocket-watch-ivory-gold-gray.png",
+      "bytes": 30894,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/watches/pocket-watch-ivory-gold-red.png",
+      "bytes": 30918,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/watches/pocket-watch-ivory-gold-yellow.png",
+      "bytes": 30894,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/watches/pocket-watch-midnight-silver-gray.png",
+      "bytes": 34254,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/watches/pocket-watch-midnight-silver-red.png",
+      "bytes": 34318,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/watches/pocket-watch-midnight-silver-yellow.png",
+      "bytes": 34278,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/watches/pocket-watch-ornate-gold-gray.png",
+      "bytes": 36647,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/watches/pocket-watch-ornate-gold-red.png",
+      "bytes": 36616,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/watches/pocket-watch-ornate-gold-yellow.png",
+      "bytes": 36638,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/watches/pocket-watch-skeleton-gold-gray.png",
+      "bytes": 37298,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/watches/pocket-watch-skeleton-gold-red.png",
+      "bytes": 37304,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/watches/pocket-watch-skeleton-gold-yellow.png",
+      "bytes": 37334,
+      "width": 164,
+      "height": 186,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/weapons/long-shotgun-gray.png",
+      "bytes": 21441,
+      "width": 392,
+      "height": 255,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/weapons/long-shotgun-red.png",
+      "bytes": 21459,
+      "width": 392,
+      "height": 255,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/weapons/long-shotgun-yellow.png",
+      "bytes": 21467,
+      "width": 392,
+      "height": 255,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/weapons/patrol-revolver-gray.png",
+      "bytes": 23100,
+      "width": 392,
+      "height": 255,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/weapons/patrol-revolver-red.png",
+      "bytes": 23119,
+      "width": 392,
+      "height": 255,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/weapons/patrol-revolver-yellow.png",
+      "bytes": 23120,
+      "width": 392,
+      "height": 255,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/weapons/sawn-off-gray.png",
+      "bytes": 22862,
+      "width": 392,
+      "height": 255,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/weapons/sawn-off-red.png",
+      "bytes": 22877,
+      "width": 392,
+      "height": 255,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/weapons/sawn-off-yellow.png",
+      "bytes": 22880,
+      "width": 392,
+      "height": 255,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/weapons/smg-drum-gray.png",
+      "bytes": 22607,
+      "width": 392,
+      "height": 255,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/weapons/smg-drum-red.png",
+      "bytes": 22621,
+      "width": 392,
+      "height": 255,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/weapons/smg-drum-yellow.png",
+      "bytes": 22625,
+      "width": 392,
+      "height": 255,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/weapons/steel-pistol-gray.png",
+      "bytes": 23632,
+      "width": 392,
+      "height": 255,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/weapons/steel-pistol-red.png",
+      "bytes": 23649,
+      "width": 392,
+      "height": 255,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/weapons/steel-pistol-yellow.png",
+      "bytes": 23655,
+      "width": 392,
+      "height": 255,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/weapons/stiletto-knife-gray.png",
+      "bytes": 20089,
+      "width": 392,
+      "height": 255,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/weapons/stiletto-knife-red.png",
+      "bytes": 20105,
+      "width": 392,
+      "height": 255,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/items/adag2/weapons/stiletto-knife-yellow.png",
+      "bytes": 20104,
+      "width": 392,
+      "height": 255,
+      "mode": "RGBA"
     },
     {
       "path": "assets/items/item-hat-gray.png",
@@ -365,9 +1156,9 @@
     },
     {
       "path": "assets/map/purchasable-houses-v4/market-row.png",
-      "bytes": 140760,
-      "width": 281,
-      "height": 206,
+      "bytes": 86427,
+      "width": 226,
+      "height": 159,
       "mode": "RGBA"
     },
     {
@@ -383,6 +1174,34 @@
       "width": 261,
       "height": 220,
       "mode": "RGBA"
+    },
+    {
+      "path": "assets/map/underpass-interior-mafia-v2.webp",
+      "bytes": 420074,
+      "width": 1672,
+      "height": 941,
+      "mode": "RGB"
+    },
+    {
+      "path": "assets/map/underpass-mafia-green-lot27-hires-v11.webp",
+      "bytes": 616538,
+      "width": 1040,
+      "height": 764,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/nexforge-studios-logo.webp",
+      "bytes": 208998,
+      "width": 1024,
+      "height": 1535,
+      "mode": "RGB"
+    },
+    {
+      "path": "assets/world/harbor-button-anchor-bright-v3.webp",
+      "bytes": 373614,
+      "width": 1254,
+      "height": 1254,
+      "mode": "RGB"
     },
     {
       "path": "assets/world/harbor-button.webp",

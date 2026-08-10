@@ -48,7 +48,7 @@ const clickableParkDefs = [
 const clickableLotDefs = [
   { id: "east-empty-lot", number: "14", name: "Keleti ures telek", kind: "lot", polygon: mapPolygon([[1162,554],[1250,488],[1340,540],[1315,616],[1232,641],[1175,603]]) },
   { id: "central-empty-lot", number: "22", name: "Kozponti ures telek", kind: "lot", polygon: mapPolygon([[477,675],[626,578],[776,659],[745,769],[607,812],[507,744]]) },
-  { id: "southeast-underpass", number: "27", name: "Déli metró aluljáró", kind: "underground", landmarkAsset: "./assets/map/underpass-lot-27-user-cutout-trimmed-v2.png", landmarkWidthScale: 0.95, landmarkHeightScale: 0.85, landmarkOffsetY: 6, polygon: mapPolygon([[1110,800],[1252,702],[1393,781],[1363,884],[1237,925],[1145,865]]) },
+  { id: "southeast-underpass", number: "27", name: "Aluljáró", kind: "underground", landmarkAsset: "./assets/map/underpass-mafia-green-lot27-hires-v11.webp", landmarkWidthScale: 1, landmarkHeightScale: 1, landmarkOffsetX: 0, landmarkOffsetY: -6, landmarkStretch: true, polygon: mapPolygon([[1276,708],[1384,788],[1232,898],[1125,810]]) },
   ...cityBuildingDefs
     .filter((building) => purchasableBuildingNumbers.has(building.number))
     .map((building) => ({
@@ -130,5 +130,3 @@ buildingHoverAdjustments.courthouse = {
   scale: 0.97,
   clipScale: 0.99,
 };
-
-

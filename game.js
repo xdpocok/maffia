@@ -314,6 +314,7 @@ const state = {
   rivalNextSpawnAt: 0,
   mentorStep: 0,
   mentorCompleted: false,
+  mentorDismissedStep: "",
   mentorFlags: { equippedItem: false, sawWorld: false, enteredHarbor: false },
   protectionCooldowns: {},
   recoveryEffects: { health: null, energy: null },
@@ -1540,6 +1541,10 @@ function hideMentorPanel(markUserClosed = false) {
     if (markUserClosed) hudMentorCard.dataset.userClosed = "true";
     else delete hudMentorCard.dataset.userClosed;
   }
+  if (markUserClosed) {
+    state.mentorDismissedStep = getCurrentMentorStep()?.id || "";
+    saveGame();
+  }
   updateMentorPanel();
 }
 
@@ -1551,7 +1556,7 @@ function hideAuxPanel() {
   stopClanWarCountdownTimer();
   stopClanWarRefreshTimer();
   hideQuestCard();
-  hideMentorPanel(true);
+  hideMentorPanel(false);
   document.body.classList.remove("is-world-map-open");
   activeAuxPanelKind = null;
   auxPanel?.removeAttribute("data-kind");
@@ -5637,7 +5642,7 @@ function createMapLandmarkOverlay(area) {
   image.setAttribute("y", String((bounds.y + bounds.h * 0.03) * frameHeight - drawHeight * 0.5 + offsetY));
   image.setAttribute("width", String(drawWidth));
   image.setAttribute("height", String(drawHeight));
-  image.setAttribute("preserveAspectRatio", "xMidYMid meet");
+  image.setAttribute("preserveAspectRatio", area.landmarkStretch ? "none" : "xMidYMid meet");
   image.setAttribute("pointer-events", "none");
   image.setAttribute("aria-hidden", "true");
   image.classList.add("map-svg-landmark", "map-svg-landmark--underpass");
@@ -5732,6 +5737,8 @@ function renderSvgMapOverlay() {
   mapSvgOverlay.classList.toggle("hidden", !state.registered);
   mapSvgOverlay.replaceChildren();
   const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
+  const landmarkLayer = document.createElementNS("http://www.w3.org/2000/svg", "g");
+  landmarkLayer.classList.add("map-svg-landmark-layer");
   mapSvgOverlay.appendChild(defs);
   [...clickableParkDefs, ...clickableLotDefs].forEach((area, index) => {
     const group = document.createElementNS("http://www.w3.org/2000/svg", "g");
@@ -5756,7 +5763,7 @@ function renderSvgMapOverlay() {
     polygon.addEventListener("click", () => handleSvgMapAreaClick(area, frameLeft, frameTop, frameWidth, frameHeight));
     group.appendChild(polygon);
     group.appendChild(createTerritoryHoverOverlay(area, index, defs));
-    if (landmark) group.appendChild(landmark);
+    if (landmark) landmarkLayer.appendChild(landmark);
     if (numberMarker) group.appendChild(numberMarker);
     group.appendChild(createSvgAreaLabel(area));
     mapSvgOverlay.appendChild(group);
@@ -5803,6 +5810,9 @@ function renderSvgMapOverlay() {
     }
     mapSvgOverlay.appendChild(group);
   });
+  // A térképi landmarkok külön, legfelső vizuális rétegen maradnak.
+  // Így a később kirajzolt telek- és épület-overlayek nem sötétítik el őket.
+  if (landmarkLayer.childNodes.length) mapSvgOverlay.appendChild(landmarkLayer);
   applyMapPanTransform();
 }
 
@@ -9373,7 +9383,9 @@ function bindHudActions() {
   hudQuestClose?.addEventListener("click", hideQuestCard);
   hudMentorToggle?.addEventListener("click", () => {
     mentorCardOpen = true;
+    state.mentorDismissedStep = "";
     if (hudMentorCard) delete hudMentorCard.dataset.userClosed;
+    saveGame();
     updateMentorPanel();
   });
   hudMentorInfo?.addEventListener("click", (event) => {

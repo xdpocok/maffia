@@ -727,7 +727,7 @@ function renderHarborOrders(zone, kind = "mixed") {
 
           <aside class="customs-detail rail-detail" aria-label="Kiválasztott vasúti küldetés">
             <span class="customs-detail__eyebrow">Kiválasztott küldetés</span>
-          <img class="customs-detail__image rail-detail__image" src="./assets/harbor/rail-depot-detail-v3.png" alt="Vasúti rakodó éjszakai pályaudvarral és teherkocsikkal">
+          <img class="customs-detail__image rail-detail__image" src="./assets/harbor/rail-depot-detail-v3.webp" alt="Vasúti rakodó éjszakai pályaudvarral és teherkocsikkal">
             <div class="customs-detail__body">
               <h3>${escapeHtml(selectedMission.title)} <span>${"★".repeat(difficulty)}</span></h3>
               <p>A pályaudvari rakodóban a nehéz árut kocsiról kocsira mozgatják. A jutalom csak a folyamat végén érkezik meg.</p>
@@ -886,7 +886,7 @@ function renderHarborCustoms(zone) {
 
         <aside class="customs-detail" aria-label="Kiválasztott vámmegbízás">
           <span class="customs-detail__eyebrow">Kiválasztott megbízás</span>
-          <img class="customs-detail__image" src="./assets/harbor/customs-office-detail-v1.png" alt="Éjszakai vámhivatal iratokkal és kikötői rakománnyal">
+          <img class="customs-detail__image" src="./assets/harbor/customs-office-detail-v1.webp" alt="Éjszakai vámhivatal iratokkal és kikötői rakománnyal">
           <div class="customs-detail__body">
             <h3>${escapeHtml(selectedMission.title)} <span>${"★".repeat(difficulty)}</span></h3>
             <p>A hivatal emberei előkészítik a papírokat, az áru pedig ellenőrzött útvonalon jut át a kikötőn.</p>
@@ -1054,7 +1054,7 @@ function renderHarborOffice(zone, requestedTab = harborOfficeTab) {
   setHarborPanelContent(zone, `
     <section class="harbor-office-hub">
       <header class="harbor-office-hub__brand">
-        <span class="harbor-office-hub__crest" aria-hidden="true"><img src="./assets/harbor/harbor-office-crest-v2.png" alt=""></span>
+        <span class="harbor-office-hub__crest" aria-hidden="true"><img src="./assets/harbor/harbor-office-crest-v2.webp" alt=""></span>
         <div><strong>Kikötői iroda</strong><small>A kikötői műveletek központja</small></div>
       </header>
       <nav class="harbor-office-tabs" aria-label="Kikötői iroda menü">
@@ -1855,5 +1855,4 @@ async function requestServerGarage(payload = {}) {
   applyServerRobberyState(data.state || {});
   return data;
 }
-
 

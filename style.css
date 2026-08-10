@@ -2295,10 +2295,10 @@ body.is-harbor-map-open .lot-house-layer {
 
 .underpass-modal__panel {
   position: relative;
-  width: min(960px, calc(100vw - 36px));
-  max-height: min(800px, calc(100vh - 36px));
+  width: min(1500px, calc(100vw - 32px));
+  max-height: calc(100vh - 24px);
   overflow: auto;
-  padding: clamp(18px, 2vw, 28px);
+  padding: clamp(14px, 1.4vw, 22px);
   border: 1px solid rgba(220, 173, 85, 0.58);
   border-radius: 7px;
   background: linear-gradient(145deg, rgba(52, 35, 21, 0.98), rgba(12, 10, 8, 0.99));
@@ -2328,14 +2328,22 @@ body.is-harbor-map-open .lot-house-layer {
   line-height: 1.5;
 }
 
+.underpass-modal__scene {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1678 / 941;
+  overflow: hidden;
+  border: 1px solid rgba(224, 181, 93, 0.42);
+  border-radius: 3px;
+  background: #090705;
+  box-shadow: 0 12px 26px rgba(0, 0, 0, 0.5);
+}
+
 .underpass-modal__image {
   display: block;
   width: 100%;
-  max-height: min(56vh, 510px);
-  object-fit: cover;
-  border: 1px solid rgba(224, 181, 93, 0.42);
-  border-radius: 3px;
-  box-shadow: 0 12px 26px rgba(0, 0, 0, 0.5);
+  height: 100%;
+  object-fit: contain;
 }
 
 .underpass-modal__footer { margin-top: 14px; color: rgba(216, 173, 99, 0.78); }
@@ -2356,12 +2364,7 @@ body.is-harbor-map-open .lot-house-layer {
 
 .map-svg-landmark--underpass {
   opacity: 1;
-  filter:
-    brightness(0.92)
-    saturate(0.68)
-    contrast(1.2)
-    sepia(0.12)
-    drop-shadow(0 5px 4px rgba(0, 0, 0, 0.72));
+  filter: drop-shadow(0 14px 10px rgba(0, 0, 0, 0.28));
 }
 .map-svg-territory--underground { fill: rgba(139, 101, 43, 0.06); stroke: rgba(221, 169, 72, 0.68); }
 
@@ -5713,7 +5716,7 @@ body.is-harbor-map-open .studio-hub {
   width: 100%;
   height: 116px;
   border-bottom: 1px solid rgba(190, 134, 47, 0.42);
-  background-image: linear-gradient(180deg, rgba(255, 206, 111, 0.05), rgba(5, 4, 3, 0.1)), url("./assets/harbor/harbor-office-cards-v2.png");
+  background-image: linear-gradient(180deg, rgba(255, 206, 111, 0.05), rgba(5, 4, 3, 0.1)), url("./assets/harbor/harbor-office-cards-v2.webp");
   background-repeat: no-repeat;
   background-size: 200% 200%;
   filter: saturate(1.03) contrast(1.04) brightness(1.08);

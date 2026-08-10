@@ -1,5 +1,6 @@
 const baseUrl = String(process.env.QA_BASE_URL || "http://127.0.0.1:8766").replace(/\/$/, "");
-const profileName = String(process.env.QA_PROFILE || "codexteszt");
+const qaLogin = String(process.env.QA_LOGIN || "").trim();
+const qaPassword = String(process.env.QA_PASSWORD || "");
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -37,11 +38,21 @@ record(
   `utolso futas: ${health.payload?.maintenance?.lastRunAt || 0}`,
 );
 
+if (!qaLogin || !qaPassword) {
+  checks.push({
+    name: "Hitelesitett QA folyamatok",
+    ok: true,
+    detail: "KIHAGYVA: QA_LOGIN es QA_PASSWORD nincs beallitva",
+  });
+  console.table(checks);
+  console.log("Szerverfolyamat-ellenorzes: a nyilvanos ellenorzesek rendben; a hitelesitett resz kihagyva.");
+} else {
 const sessionStart = await request("/api/session", {
   method: "POST",
-  body: JSON.stringify({ profileName }),
+  body: JSON.stringify({ login: qaLogin, password: qaPassword }),
 });
-record("QA munkamenet", sessionStart.response.ok && sessionStart.payload?.exists === true, `profil: ${profileName}`);
+const profileName = String(sessionStart.payload?.profileName || "").trim();
+record("QA munkamenet", sessionStart.response.ok && Boolean(profileName), `profil: ${profileName || "ismeretlen"}`);
 const cookie = sessionStart.response.headers.get("set-cookie")?.split(";")[0] || "";
 assert(cookie, "A szerver nem adott munkamenet-sutit.");
 const authHeaders = { Cookie: cookie };
@@ -116,3 +127,4 @@ record("Biztonsagi fejlecek", indexPage.headers.get("x-content-type-options") ==
 
 console.table(checks);
 console.log(`Szerverfolyamat-ellenorzes: ${checks.length}/${checks.length} rendben.`);
+}

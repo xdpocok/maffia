@@ -358,7 +358,8 @@ function updateMentorPanel() {
     completeMentorStep("level5");
     return;
   }
-  if (visible && step && hudMentorCard?.dataset.userClosed !== "true") {
+  const dismissedForCurrentStep = Boolean(step && state.mentorDismissedStep === step.id);
+  if (visible && step && !dismissedForCurrentStep) {
     mentorCardOpen = true;
   }
   hudMentorToggle?.classList.toggle("hidden", !visible);
@@ -405,8 +406,10 @@ function completeMentorStep(stepId) {
   }
   if (state.mentorStep >= mentorSteps.length) {
     state.mentorCompleted = true;
+    state.mentorDismissedStep = "";
     mentorCardOpen = false;
   } else {
+    state.mentorDismissedStep = "";
     mentorCardOpen = true;
     if (hudMentorCard) delete hudMentorCard.dataset.userClosed;
   }

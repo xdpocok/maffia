@@ -104,6 +104,7 @@ function createSaveSnapshot() {
     rivalNextSpawnAt: state.rivalNextSpawnAt,
     mentorStep: state.mentorStep,
     mentorCompleted: state.mentorCompleted,
+    mentorDismissedStep: state.mentorDismissedStep,
     mentorFlags: state.mentorFlags,
     protectionCooldowns: state.protectionCooldowns,
     recoveryEffects: state.recoveryEffects,
@@ -248,6 +249,7 @@ function hydrateState(saved) {
   state.rivalNextSpawnAt = normalizeRivalNextSpawnAt(state.rivalNextSpawnAt);
   state.mentorStep = clamp(Math.round(Number(state.mentorStep) || 0), 0, mentorSteps.length);
   state.mentorCompleted = Boolean(state.mentorCompleted || state.mentorStep >= mentorSteps.length);
+  state.mentorDismissedStep = String(state.mentorDismissedStep || "").slice(0, 32);
   state.mentorFlags = {
     equippedItem: Boolean(state.mentorFlags?.equippedItem),
     sawWorld: Boolean(state.mentorFlags?.sawWorld),
@@ -265,8 +267,13 @@ function hydrateState(saved) {
   state.registered = Boolean(state.profileName);
   normalizeClientStateAfterServerUpdate(previousOfferedQuests);
   if (shouldShowMentorHud()) {
-    mentorCardOpen = true;
-    if (hudMentorCard) delete hudMentorCard.dataset.userClosed;
+    const currentMentorStep = getCurrentMentorStep();
+    const dismissedForCurrentStep = Boolean(currentMentorStep && state.mentorDismissedStep === currentMentorStep.id);
+    mentorCardOpen = !dismissedForCurrentStep;
+    if (hudMentorCard) {
+      if (dismissedForCurrentStep) hudMentorCard.dataset.userClosed = "true";
+      else delete hudMentorCard.dataset.userClosed;
+    }
   }
   return state.registered;
 }
@@ -458,5 +465,4 @@ function startServerStateSync() {
   }, SERVER_STATE_SYNC_INTERVAL_MS);
   void syncPoliceRaidFromServer();
 }
-
 

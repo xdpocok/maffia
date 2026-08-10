@@ -2373,6 +2373,9 @@ async function buildProfileState(profileName) {
     merged.mentorCompleted = typeof runtime.mentorCompleted === "boolean"
       ? runtime.mentorCompleted
       : Boolean(merged.mentorCompleted);
+    merged.mentorDismissedStep = typeof runtime.mentorDismissedStep === "string"
+      ? runtime.mentorDismissedStep.slice(0, 32)
+      : String(merged.mentorDismissedStep || "").slice(0, 32);
     merged.mentorFlags = runtime.mentorFlags && typeof runtime.mentorFlags === "object"
       ? runtime.mentorFlags
       : (merged.mentorFlags ?? {});
@@ -2608,6 +2611,7 @@ async function writePlayerState(profileName, state, now, existingProfileState = 
     rivalNextSpawnAt: state.rivalNextSpawnAt ?? 0,
     mentorStep: state.mentorStep ?? 0,
     mentorCompleted: Boolean(state.mentorCompleted),
+    mentorDismissedStep: String(state.mentorDismissedStep || "").slice(0, 32),
     mentorFlags: state.mentorFlags ?? {},
     protectionCooldowns: state.protectionCooldowns ?? {},
     pvpNextAttackAt: Math.max(0, Number(state.pvpNextAttackAt) || 0),
@@ -2657,6 +2661,7 @@ async function writePlayerRuntimeState(profileName, state, now) {
     rivalNextSpawnAt: state.rivalNextSpawnAt ?? 0,
     mentorStep: state.mentorStep ?? 0,
     mentorCompleted: Boolean(state.mentorCompleted),
+    mentorDismissedStep: String(state.mentorDismissedStep || "").slice(0, 32),
     mentorFlags: state.mentorFlags ?? {},
     protectionCooldowns: state.protectionCooldowns ?? {},
     pvpNextAttackAt: Math.max(0, Number(state.pvpNextAttackAt) || 0),
