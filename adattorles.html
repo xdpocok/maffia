@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="hu">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Adattörlés – Maffia: Birodalomépítő</title>
+  <link rel="stylesheet" href="./legal.css?v=1">
+</head>
+<body>
+  <main class="legal-shell">
+    <article class="legal-card">
+      <p class="legal-eyebrow">Maffia: Birodalomépítő</p>
+      <h1>Felhasználói adatok törlése</h1>
+      <p id="deletionStatus">A fiókhoz tartozó adatok törlése bármikor kérhető.</p>
+
+      <h2>Törlés Facebookon keresztül</h2>
+      <ol>
+        <li>Nyisd meg a Facebook Beállítások részét.</li>
+        <li>Keresd meg az Alkalmazások és webhelyek menüpontot.</li>
+        <li>Válaszd ki a Maffia: Birodalomépítő játékot.</li>
+        <li>Távolítsd el az alkalmazást, és válaszd az adatok törlésének lehetőségét.</li>
+      </ol>
+      <p>A Meta hitelesített törlési kérelmét a szerver automatikusan feldolgozza. A játékosprofil, a munkamenetek, a mentés és a kapcsolódó játékadatok törlésre kerülnek.</p>
+
+      <h2>Közvetlen kérés</h2>
+      <p>Ha nem férsz hozzá a Facebook-fiókodhoz, írj Kovács Dániel adatkezelőnek a <a href="mailto:kov.indian@gmail.com">kov.indian@gmail.com</a> címre. A kérés teljesítése előtt szükség lehet a fiók tulajdonjogának igazolására.</p>
+
+      <div class="legal-actions">
+        <a class="legal-button" href="./adatkezeles.html">Adatkezelési tájékoztató</a>
+        <a class="legal-button" href="./">Vissza a játékhoz</a>
+      </div>
+    </article>
+  </main>
+  <script>
+    const code = new URLSearchParams(location.search).get("code");
+    if (code) {
+      document.getElementById("deletionStatus").innerHTML = `A Meta által küldött törlési kérés teljesítve. Visszaigazolási kód: <code>${code.replace(/[^a-zA-Z0-9-]/g, "")}</code>`;
+    }
+  </script>
+</body>
+</html>

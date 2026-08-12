@@ -1297,3 +1297,1366 @@
   .quest-overview__header { padding:19px 18px 14px; }
   .quest-overview__list { padding:13px; }
 }
+
+/* Fekvo telefonok: a szelesseg tabletnek tunik, de a kis magassag mobil HUD-ot igenyel. */
+@media (max-width: 1000px) and (max-height: 600px) and (orientation: landscape) {
+  .hud-root::before,
+  .hud-corner-brand,
+  .studio-hub,
+  .crew-panel,
+  .hud-log-card {
+    display: none !important;
+  }
+
+  .hud-topbar {
+    top: max(0px, env(safe-area-inset-top));
+    left: max(6px, env(safe-area-inset-left));
+    right: max(6px, env(safe-area-inset-right));
+    width: auto;
+    height: 52px;
+    min-height: 52px;
+    padding: 4px 6px 6px;
+    transform: none;
+    border-radius: 0 0 9px 9px;
+  }
+
+  .hud-resources {
+    width: 100%;
+  }
+
+  .hud-process-tasks {
+    min-width: 0;
+    max-width: 190px;
+    display: flex;
+    flex: 0 1 auto;
+    gap: 3px;
+    margin-left: 2px;
+    padding: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+  }
+
+  .hud-process-tasks::-webkit-scrollbar {
+    display: none;
+  }
+
+  .hud-process-group {
+    flex: 0 0 auto;
+    gap: 3px;
+    padding-left: 3px;
+  }
+
+  .hud-process-group > b,
+  .hud-process-task em {
+    display: none;
+  }
+
+  .hud-process-group__bubbles {
+    gap: 3px;
+  }
+
+  .hud-process-task {
+    flex: 0 0 34px;
+    width: 34px;
+    height: 34px;
+  }
+
+  .hud-process-task > span {
+    font-size: 0.72rem;
+  }
+
+  .hud-process-task strong {
+    bottom: -4px;
+    min-width: 30px;
+    padding: 1px 3px;
+    font-size: 0.45rem;
+  }
+
+  .hud-pill {
+    flex: 1 1 120px;
+    min-width: 0;
+    height: 42px;
+    padding: 4px 6px 4px 34px;
+  }
+
+  .hud-pill__icon {
+    left: 5px;
+    width: 25px;
+    height: 25px;
+  }
+
+  .hud-pill strong {
+    font-size: 0.82rem;
+  }
+
+  .hud-utility-nav {
+    position: fixed;
+    top: calc(max(0px, env(safe-area-inset-top)) + 58px);
+    right: max(8px, env(safe-area-inset-right));
+    z-index: 80;
+    width: auto;
+    display: flex;
+    flex: 0 0 auto;
+    gap: 5px;
+    padding: 4px;
+    border: 1px solid rgba(181, 138, 61, 0.48);
+    background: rgba(9, 7, 5, 0.94);
+    pointer-events: auto;
+  }
+
+  .hud-utility-nav button {
+    position: relative;
+    flex: 0 0 42px;
+    width: 42px;
+    min-width: 42px;
+    height: 42px;
+    padding: 5px;
+  }
+
+  .hud-utility-nav button i {
+    margin: 0 auto;
+  }
+
+  .hud-utility-nav button span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+  }
+
+  .hud-profile-card,
+  .hud-avatar-card {
+    top: 62px;
+    left: max(8px, env(safe-area-inset-left));
+    width: 152px;
+    transform: scale(0.78);
+    transform-origin: top left;
+  }
+
+  .hud-quest-tabs {
+    top: auto;
+    bottom: calc(max(72px, env(safe-area-inset-bottom) + 72px));
+    left: max(8px, env(safe-area-inset-left));
+    width: 118px;
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .hud-quest-card {
+    top: 112px;
+    left: 140px;
+    width: min(250px, calc(100vw - 288px));
+    max-width: calc(100vw - 288px);
+    max-height: calc(100dvh - 190px);
+    overflow: auto;
+  }
+
+  .hud-harbor-shortcut {
+    top: auto;
+    bottom: calc(max(72px, env(safe-area-inset-bottom) + 72px));
+    left: 132px;
+    transform: scale(0.82);
+    transform-origin: bottom left;
+  }
+
+  .hud-mentor-envelope {
+    top: 68px;
+    left: 170px;
+    transform: scale(0.82);
+    transform-origin: top left;
+  }
+
+  .hud-mentor-card {
+    top: 112px;
+    left: 170px;
+    max-height: calc(100dvh - 190px);
+    overflow: auto;
+    animation: none;
+  }
+
+  .hud-bottom-bar {
+    left: max(8px, env(safe-area-inset-left));
+    right: max(8px, env(safe-area-inset-right));
+    bottom: max(6px, env(safe-area-inset-bottom));
+    width: auto;
+    min-width: 0;
+    min-height: 58px;
+    max-height: 64px;
+    padding: 6px 8px;
+    transform: none;
+    overflow: hidden;
+  }
+
+  .hud-bottom-bar::before,
+  .hud-bottom-bar::after {
+    display: none;
+  }
+
+  .hud-bottom-bar__quick-row {
+    gap: 5px;
+  }
+
+  .hud-quick-btn {
+    min-width: 0;
+    min-height: 46px;
+    padding: 5px;
+    font-size: 0.58rem;
+  }
+
+  .hud-quick-btn::before {
+    display: none;
+  }
+
+  .settings-dialog__panel,
+  .help-dialog__panel,
+  .quest-overview__panel,
+  .character-sheet,
+  .crew-member-sheet,
+  .harbor-operation-panel {
+    max-height: calc(100dvh - 12px) !important;
+  }
+}
+
+/* Gorgotes nelkuli, suritett kikotoi elrendezes fekvo telefonra. */
+@media (max-width: 0px) and (max-height: 600px) and (orientation: landscape) {
+  .harbor-operation-panel,
+  .harbor-operation-panel--office,
+  .harbor-operation-panel--customs,
+  .harbor-operation-panel--rail,
+  .harbor-operation-panel:has(.rail-hub) {
+    width: min(720px, calc(100vw - 90px)) !important;
+    height: min(420px, calc(100dvh - 24px)) !important;
+    max-width: calc(100vw - 90px) !important;
+    max-height: calc(100dvh - 24px) !important;
+    overflow: hidden !important;
+    padding: 6px 8px !important;
+    font-size: 0.82em;
+  }
+
+  .harbor-operation-panel:has(.harbor-place),
+  .harbor-operation-panel:has(.harbor-warehouse) {
+    width: min(620px, calc(100vw - 130px)) !important;
+    height: min(388px, calc(100dvh - 34px)) !important;
+  }
+
+  .harbor-operation-panel__header {
+    position: relative;
+    top: auto;
+    min-height: 38px;
+    padding: 4px 6px;
+  }
+
+  .harbor-operation-panel__close {
+    min-width: 34px;
+    min-height: 34px;
+  }
+
+  .harbor-operation-panel > section,
+  .harbor-operation-panel > .harbor-place,
+  .harbor-operation-panel > .harbor-orders,
+  .harbor-operation-panel > .customs-hub,
+  .harbor-operation-panel > .rail-hub,
+  .harbor-operation-panel > .harbor-office-hub {
+    max-height: calc(100% - 40px) !important;
+    padding: 6px !important;
+    gap: 6px !important;
+    overflow: hidden !important;
+  }
+
+  .harbor-hero {
+    margin-bottom: 6px;
+  }
+
+  .harbor-hero__image {
+    height: 76px !important;
+  }
+
+  .harbor-hero__overlay {
+    padding: 5px 8px;
+  }
+
+  .harbor-service-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 6px !important;
+  }
+
+  .harbor-service-card {
+    min-height: 0 !important;
+    padding: 7px !important;
+  }
+
+  .harbor-service-card small {
+    line-height: 1.2;
+  }
+
+  .customs-hub__layout,
+  .rail-hub .customs-hub__layout,
+  .harbor-operation-panel:has(.rail-hub) .customs-hub__layout {
+    height: 100% !important;
+    grid-template-columns: minmax(0, 1.45fr) minmax(210px, 0.75fr) !important;
+    gap: 7px !important;
+    overflow: hidden !important;
+  }
+
+  .customs-board,
+  .customs-detail {
+    min-height: 0 !important;
+    overflow: hidden !important;
+  }
+
+  .customs-board__list,
+  .rail-hub .customs-board__list,
+  .harbor-operation-panel--rail .customs-board__list {
+    min-height: 0 !important;
+    max-height: 248px !important;
+    overflow: hidden !important;
+  }
+
+  .customs-mission-row {
+    min-height: 0 !important;
+    padding: 5px 6px !important;
+    gap: 4px !important;
+  }
+
+  .customs-detail {
+    padding: 5px !important;
+  }
+
+  .customs-detail__image,
+  .rail-hub .customs-detail__image,
+  .harbor-operation-panel--rail .customs-detail__image {
+    height: 74px !important;
+  }
+
+  .customs-status-grid {
+    gap: 4px !important;
+  }
+
+  .harbor-office-hub {
+    display: grid !important;
+    grid-template-rows: 64px 34px minmax(0, 1fr) !important;
+  }
+
+  .harbor-office-hub__brand {
+    min-height: 64px !important;
+    padding: 4px 38px !important;
+  }
+
+  .harbor-office-hub__crest {
+    width: 48px !important;
+    height: 48px !important;
+  }
+
+  .harbor-office-tabs,
+  .harbor-office-tabs button {
+    min-height: 34px !important;
+  }
+
+  .harbor-office-content {
+    height: 100% !important;
+    min-height: 0 !important;
+    padding-top: 4px !important;
+    overflow: hidden !important;
+  }
+
+  .harbor-office-overview-grid,
+  .harbor-office-dashboard,
+  .harbor-office-operation-grid,
+  .harbor-office-network {
+    height: 100% !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 5px !important;
+    overflow: hidden !important;
+  }
+
+  .harbor-office-feature-card,
+  .harbor-office-dashboard > article,
+  .harbor-office-network > section {
+    min-height: 0 !important;
+    padding: 5px !important;
+  }
+
+  .harbor-office-feature-card__art {
+    height: 58px !important;
+  }
+}
+
+/* Korabbi kiserleti kikotoi elrendezes kikapcsolva. */
+@media (max-width: 0px) and (max-height: 600px) and (orientation: landscape) {
+  .harbor-operation-panel,
+  .harbor-operation-panel--office,
+  .harbor-operation-panel--customs,
+  .harbor-operation-panel--rail,
+  .harbor-operation-panel:has(.rail-hub) {
+    width: min(680px, calc(100vw - 110px)) !important;
+    height: min(430px, calc(100dvh - 28px)) !important;
+    max-width: calc(100vw - 110px) !important;
+    max-height: calc(100dvh - 28px) !important;
+    padding: 8px 10px !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    transform: translate(-50%, -50%) !important;
+  }
+
+  .harbor-operation-panel:has(.harbor-place),
+  .harbor-operation-panel:has(.harbor-warehouse) {
+    width: min(580px, calc(100vw - 150px)) !important;
+  }
+
+  .harbor-operation-panel__header {
+    position: sticky;
+    top: -8px;
+    z-index: 5;
+    min-height: 46px;
+    padding: 7px 8px;
+  }
+
+  .harbor-operation-panel__close {
+    min-width: 40px;
+    min-height: 40px;
+  }
+
+  .harbor-operation-panel > section,
+  .harbor-operation-panel > .harbor-place,
+  .harbor-operation-panel > .harbor-orders,
+  .harbor-operation-panel > .customs-hub,
+  .harbor-operation-panel > .rail-hub,
+  .harbor-operation-panel > .harbor-office-hub {
+    height: auto !important;
+    padding: 8px !important;
+    overflow: visible !important;
+  }
+
+  .harbor-hero__image {
+    height: 112px;
+  }
+
+  .harbor-service-grid,
+  .harbor-office-overview-grid,
+  .harbor-office-dashboard,
+  .harbor-office-operation-grid,
+  .harbor-office-network,
+  .customs-hub__layout,
+  .rail-hub .customs-hub__layout,
+  .harbor-operation-panel:has(.rail-hub) .customs-hub__layout {
+    height: auto !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    overflow: visible !important;
+  }
+
+  .harbor-service-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .harbor-office-hub {
+    display: block !important;
+  }
+
+  .harbor-office-hub__brand {
+    min-height: 72px !important;
+  }
+
+  .harbor-office-content,
+  .customs-board,
+  .customs-detail {
+    min-height: 0 !important;
+    overflow: visible !important;
+  }
+
+  .customs-board__list,
+  .rail-hub .customs-board__list,
+  .harbor-operation-panel--rail .customs-board__list {
+    min-height: 0 !important;
+    max-height: 220px !important;
+    overflow-y: auto !important;
+  }
+
+  .customs-detail__image,
+  .rail-hub .customs-detail__image,
+  .harbor-operation-panel--rail .customs-detail__image {
+    height: 120px !important;
+  }
+}
+
+/* Stabil kikotoi ablakok fekvo telefonra: ket hasab, csak a lista gorgetheto. */
+@media (max-width: 1000px) and (max-height: 600px) and (orientation: landscape) {
+  .harbor-operation-panel,
+  .harbor-operation-panel--office,
+  .harbor-operation-panel--customs,
+  .harbor-operation-panel--rail,
+  .harbor-operation-panel:has(.rail-hub) {
+    width: min(720px, calc(100vw - 28px)) !important;
+    height: min(410px, calc(100dvh - 20px)) !important;
+    max-width: calc(100vw - 28px) !important;
+    max-height: calc(100dvh - 20px) !important;
+    padding: 8px !important;
+    overflow: hidden !important;
+    transform: translate(-50%, -50%) !important;
+    font-size: 1em;
+  }
+
+  .harbor-operation-panel:has(.harbor-place),
+  .harbor-operation-panel:has(.harbor-warehouse) {
+    width: min(600px, calc(100vw - 60px)) !important;
+    height: min(380px, calc(100dvh - 28px)) !important;
+  }
+
+  .harbor-operation-panel__header {
+    position: relative;
+    top: auto;
+    z-index: 2;
+    height: 44px;
+    min-height: 44px;
+    padding: 5px 8px;
+  }
+
+  .harbor-operation-panel__close {
+    min-width: 38px;
+    min-height: 38px;
+  }
+
+  .harbor-operation-panel > section,
+  .harbor-operation-panel > .harbor-place,
+  .harbor-operation-panel > .harbor-orders,
+  .harbor-operation-panel > .customs-hub,
+  .harbor-operation-panel > .rail-hub,
+  .harbor-operation-panel > .harbor-office-hub {
+    width: 100% !important;
+    height: calc(100% - 44px) !important;
+    min-height: 0 !important;
+    padding: 8px !important;
+    overflow: hidden !important;
+  }
+
+  .rail-hub,
+  .customs-hub {
+    display: grid !important;
+    grid-template-rows: auto minmax(0, 1fr) !important;
+    gap: 7px !important;
+  }
+
+  .customs-hub__intro,
+  .harbor-operation-panel--rail .customs-hub__intro {
+    margin: 0 !important;
+    font-size: 0.68rem !important;
+    line-height: 1.3 !important;
+  }
+
+  .customs-hub__layout,
+  .rail-hub .customs-hub__layout,
+  .harbor-operation-panel--rail .customs-hub__layout,
+  .harbor-operation-panel:has(.rail-hub) .customs-hub__layout {
+    min-width: 0 !important;
+    min-height: 0 !important;
+    height: 100% !important;
+    grid-template-columns: minmax(0, 1.5fr) minmax(220px, 0.78fr) !important;
+    gap: 8px !important;
+    overflow: hidden !important;
+  }
+
+  .customs-board,
+  .customs-detail,
+  .harbor-operation-panel--rail .customs-board,
+  .harbor-operation-panel--rail .customs-detail {
+    min-width: 0 !important;
+    min-height: 0 !important;
+    height: 100% !important;
+    overflow: hidden !important;
+  }
+
+  .customs-board__list,
+  .rail-hub .customs-board__list,
+  .harbor-operation-panel--rail .customs-board__list {
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow-y: auto !important;
+  }
+
+  .customs-board__head,
+  .customs-mission-row,
+  .harbor-operation-panel--rail .customs-board__head,
+  .harbor-operation-panel--rail .customs-mission-row,
+  .harbor-operation-panel:has(.rail-hub) .customs-board__head,
+  .harbor-operation-panel:has(.rail-hub) .customs-mission-row {
+    grid-template-columns: minmax(90px, 1.25fr) minmax(82px, 1fr) 42px 60px 38px !important;
+    gap: 4px !important;
+  }
+
+  .customs-mission-row {
+    min-height: 48px !important;
+    padding: 5px !important;
+  }
+
+  .customs-detail {
+    padding: 6px !important;
+    overflow-y: auto !important;
+  }
+
+  .customs-detail__image,
+  .rail-hub .customs-detail__image,
+  .harbor-operation-panel--rail .customs-detail__image {
+    height: 96px !important;
+  }
+
+  .harbor-hero {
+    margin-bottom: 7px;
+  }
+
+  .harbor-hero__image {
+    height: 92px !important;
+  }
+
+  .harbor-service-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 7px !important;
+  }
+
+  .harbor-service-card {
+    min-height: 0 !important;
+    padding: 8px !important;
+  }
+
+  .harbor-office-hub {
+    display: grid !important;
+    grid-template-rows: 70px 36px minmax(0, 1fr) !important;
+  }
+
+  .harbor-office-hub__brand {
+    min-height: 70px !important;
+  }
+
+  .harbor-office-content {
+    min-height: 0 !important;
+    overflow: auto !important;
+  }
+
+  .harbor-office-overview-grid,
+  .harbor-office-dashboard,
+  .harbor-office-operation-grid,
+  .harbor-office-network {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+/* A stabil kompakt panel teljes tartalma lefele gorgetheto. */
+@media (max-width: 1000px) and (max-height: 600px) and (orientation: landscape) {
+  .harbor-operation-panel,
+  .harbor-operation-panel--office,
+  .harbor-operation-panel--customs,
+  .harbor-operation-panel--rail,
+  .harbor-operation-panel:has(.rail-hub) {
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+  }
+
+  .harbor-operation-panel__header {
+    position: sticky;
+    top: -8px;
+    z-index: 10;
+  }
+
+  .harbor-operation-panel > section,
+  .harbor-operation-panel > .harbor-place,
+  .harbor-operation-panel > .harbor-orders,
+  .harbor-operation-panel > .customs-hub,
+  .harbor-operation-panel > .rail-hub,
+  .harbor-operation-panel > .harbor-office-hub {
+    height: auto !important;
+    min-height: calc(100% - 44px) !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  .customs-hub__layout,
+  .rail-hub .customs-hub__layout,
+  .harbor-operation-panel--rail .customs-hub__layout,
+  .harbor-operation-panel:has(.rail-hub) .customs-hub__layout {
+    height: auto !important;
+    min-height: 350px !important;
+    overflow: visible !important;
+  }
+
+  .customs-board,
+  .customs-detail,
+  .harbor-operation-panel--rail .customs-board,
+  .harbor-operation-panel--rail .customs-detail {
+    height: auto !important;
+    min-height: 350px !important;
+  }
+
+  .customs-detail,
+  .harbor-office-content {
+    overflow: visible !important;
+  }
+}
+
+/* Kikotoi iroda: kulon igazitas a mobilos fulekhez es kartyakhoz. */
+@media (max-width: 1000px) and (max-height: 600px) and (orientation: landscape) {
+  .harbor-operation-panel--office {
+    width: min(720px, calc(100vw - 28px)) !important;
+    height: min(410px, calc(100dvh - 20px)) !important;
+    padding: 8px !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+  }
+
+  .harbor-operation-panel--office .harbor-operation-panel__close {
+    position: sticky !important;
+    top: 0 !important;
+    right: 0 !important;
+    z-index: 12;
+    float: right;
+    width: 38px !important;
+    height: 38px !important;
+  }
+
+  .harbor-operation-panel--office .harbor-office-hub {
+    width: 100% !important;
+    height: auto !important;
+    min-height: calc(100% - 4px) !important;
+    display: block !important;
+    padding: 4px !important;
+    overflow: visible !important;
+  }
+
+  .harbor-operation-panel--office .harbor-office-hub__brand {
+    min-height: 68px !important;
+    display: grid !important;
+    grid-template-columns: 52px minmax(0, 1fr) 40px !important;
+    align-items: center !important;
+    gap: 10px !important;
+    padding: 6px 4px !important;
+  }
+
+  .harbor-operation-panel--office .harbor-office-hub__crest {
+    width: 48px !important;
+    height: 48px !important;
+  }
+
+  .harbor-operation-panel--office .harbor-office-hub__brand strong {
+    font-size: 1.15rem !important;
+    line-height: 1.1 !important;
+  }
+
+  .harbor-operation-panel--office .harbor-office-hub__brand small {
+    font-size: 0.6rem !important;
+  }
+
+  .harbor-operation-panel--office .harbor-office-tabs {
+    position: sticky;
+    top: 0;
+    z-index: 8;
+    width: 100% !important;
+    min-height: 38px !important;
+    display: grid !important;
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    gap: 0 !important;
+    background: #0b0906;
+  }
+
+  .harbor-operation-panel--office .harbor-office-tabs button {
+    min-width: 0 !important;
+    min-height: 38px !important;
+    padding: 4px !important;
+    font-size: 0.56rem !important;
+    white-space: normal !important;
+  }
+
+  .harbor-operation-panel--office .harbor-office-content {
+    width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    padding: 7px 0 2px !important;
+    overflow: visible !important;
+  }
+
+  .harbor-operation-panel--office .harbor-office-overview-grid,
+  .harbor-operation-panel--office .harbor-office-dashboard,
+  .harbor-operation-panel--office .harbor-office-operation-grid,
+  .harbor-operation-panel--office .harbor-office-network {
+    width: 100% !important;
+    height: auto !important;
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 7px !important;
+    margin: 0 !important;
+    overflow: visible !important;
+  }
+
+  .harbor-operation-panel--office .harbor-office-feature-card,
+  .harbor-operation-panel--office .harbor-office-dashboard > article,
+  .harbor-operation-panel--office .harbor-office-network > section {
+    width: auto !important;
+    min-width: 0 !important;
+    height: auto !important;
+    min-height: 128px !important;
+    padding: 7px !important;
+  }
+
+  .harbor-operation-panel--office .harbor-office-feature-card__art {
+    height: 72px !important;
+  }
+
+  .harbor-operation-panel--office .harbor-office-bribe-strip {
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    gap: 8px !important;
+  }
+
+  .harbor-operation-panel--office .harbor-office-log {
+    max-height: none !important;
+    overflow: visible !important;
+  }
+}
+
+/* A korozes ertek igazodjon a tobbi eroforras-mezohoz a kompakt felsosavban. */
+@media (max-width: 1000px) and (max-height: 600px) and (orientation: landscape) {
+  .hud-pill--heat {
+    padding: 4px 6px 4px 44px !important;
+    align-items: flex-start;
+    justify-content: center;
+  }
+
+  .hud-pill--heat .hud-pill__icon--police {
+    left: 6px;
+    top: 50%;
+    width: 32px;
+    height: 26px;
+    transform: translateY(-50%);
+  }
+
+  .hud-pill--heat span,
+  .hud-pill--heat strong {
+    position: static;
+    margin: 0;
+    white-space: nowrap;
+    line-height: 1;
+  }
+
+  .hud-pill--heat strong {
+    min-width: 3.4ch;
+    font-variant-numeric: tabular-nums;
+    text-align: left;
+  }
+}
+
+/* Kirablas fekvo telefonon: kisebb HUD, nagyobb es reszletesebb csatater. */
+@media (max-width: 1000px) and (max-height: 600px) and (orientation: landscape) {
+  .robbery-game {
+    padding: 6px;
+  }
+
+  .robbery-game__panel {
+    width: min(900px, calc(100vw - 12px));
+    height: calc(100dvh - 12px);
+    grid-template-rows: 50px 42px minmax(0, 1fr) 68px;
+  }
+
+  .robbery-game__header {
+    min-height: 50px;
+    padding: 5px 10px;
+    gap: 10px;
+  }
+
+  .robbery-game__eyebrow {
+    font-size: 0.5rem;
+  }
+
+  .robbery-game__header h2 {
+    margin: 1px 0;
+    font-size: 1rem;
+  }
+
+  .robbery-game__header p {
+    display: none;
+  }
+
+  .robbery-game__retreat {
+    min-height: 38px;
+    padding: 5px 9px;
+    font-size: 0.58rem;
+  }
+
+  .robbery-game__meters {
+    height: 42px;
+    padding: 4px 10px 5px;
+    gap: 7px;
+  }
+
+  .robbery-meter__copy {
+    margin-bottom: 2px;
+    font-size: 0.52rem;
+  }
+
+  .robbery-meter__track {
+    height: 8px;
+  }
+
+  .robbery-game__arena {
+    min-height: 0;
+    background-size: cover;
+  }
+
+  .robbery-game__status {
+    top: 5px;
+    width: min(430px, calc(100% - 180px));
+    min-height: 30px;
+    padding: 4px 8px;
+    grid-template-columns: 56px 1fr 72px;
+    font-size: 0.55rem;
+  }
+
+  .robbery-defender {
+    width: 132px;
+    min-height: 48px;
+    grid-template-columns: 34px minmax(0, 1fr);
+    gap: 4px;
+    padding: 3px;
+  }
+
+  .robbery-defender__portrait {
+    width: 32px;
+    height: 38px;
+    font-size: 1.05rem;
+  }
+
+  .robbery-defender__copy strong {
+    font-size: 0.62rem;
+  }
+
+  .robbery-defender__copy small,
+  .robbery-defender__copy em {
+    font-size: 0.5rem;
+  }
+
+  .robbery-defender__health {
+    height: 5px;
+  }
+
+  .robbery-defender--1 { top: 18%; left: 8%; }
+  .robbery-defender--2 { top: 18%; right: 8%; }
+  .robbery-defender--3 { top: 54%; left: 17%; }
+  .robbery-defender--4 { top: 54%; right: 17%; }
+
+  .robbery-battle-log {
+    bottom: 5px;
+    min-height: 26px;
+    padding: 4px 8px;
+    font-size: 0.56rem;
+  }
+
+  .robbery-game__footer {
+    min-height: 68px;
+    padding: 5px 7px;
+    grid-template-columns: minmax(0, 1fr) 160px;
+    gap: 7px;
+  }
+
+  .robbery-tactics {
+    gap: 5px;
+  }
+
+  .robbery-tactic {
+    min-height: 56px;
+    padding: 3px 5px;
+    grid-template-columns: 30px minmax(0, 1fr);
+    gap: 0 5px;
+  }
+
+  .robbery-tactic__icon {
+    width: 28px;
+    height: 38px;
+    font-size: 0.9rem;
+  }
+
+  .robbery-tactic strong {
+    font-size: 0.6rem;
+  }
+
+  .robbery-tactic small {
+    display: none;
+  }
+
+  .robbery-game__attack {
+    min-height: 56px;
+    font-size: 1rem;
+  }
+
+  .robbery-team-picker--cards {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .robbery-team-choice {
+    min-height: 112px;
+  }
+}
+
+/* A csapatvalaszto nem a harci HUD mereteit hasznalja. */
+@media (max-width: 1000px) and (max-height: 600px) and (orientation: landscape) {
+  .robbery-game.is-team-selection .robbery-game__panel {
+    width: min(720px, calc(100vw - 20px));
+    height: calc(100dvh - 16px);
+    max-height: calc(100dvh - 16px);
+    grid-template-rows: 50px minmax(0, 1fr) auto 62px;
+    overflow: hidden;
+  }
+
+  .robbery-game.is-team-selection .robbery-team-picker,
+  .robbery-game.is-team-selection .robbery-team-picker--cards {
+    width: 100%; min-height: 0; margin: 6px auto; padding: 0 8px;
+    display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: stretch; gap: 7px; overflow: hidden;
+  }
+
+  .robbery-game.is-team-selection .robbery-team-choice {
+    height: 100%; min-height: 0; max-height: 250px; padding: 5px;
+    display: grid; grid-template-columns: 76px minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr); gap: 6px; overflow: hidden;
+  }
+
+  .robbery-game.is-team-selection .robbery-team-choice__portrait {
+    width: 76px; height: 100%; min-height: 0; max-height: none; grid-row: 1;
+  }
+
+  .robbery-game.is-team-selection .robbery-team-choice__body {
+    min-width: 0; min-height: 0; overflow: hidden;
+  }
+
+  .robbery-game.is-team-selection .robbery-team-choice__passive {
+    min-height: 0; margin-top: 2px; font-size: 0.42rem;
+  }
+
+  .robbery-game.is-team-selection .robbery-team-choice__stats { gap: 3px; }
+  .robbery-game.is-team-selection .robbery-team-choice__stat { padding: 3px 4px; }
+
+  .robbery-game.is-team-selection .robbery-combat-preview {
+    width: calc(100% - 16px); margin: 0 auto 5px; padding: 5px 8px; gap: 5px;
+  }
+
+  .robbery-game.is-team-selection .robbery-game__footer {
+    height: 62px; min-height: 62px; padding: 5px 8px; display: block;
+  }
+
+  .robbery-game.is-team-selection .robbery-game__actions {
+    height: 100%; margin: 0; align-items: stretch;
+  }
+
+  .robbery-game.is-team-selection .robbery-game__auto,
+  .robbery-game.is-team-selection .robbery-game__attack {
+    width: min(220px, 42%); min-width: 0; height: 50px; min-height: 50px;
+    font-size: 0.82rem;
+  }
+}
+
+/* Az elindult 3v3 harc sajat haromsoros racsot es kompakt egysegeket kap. */
+@media (max-width: 1000px) and (max-height: 600px) and (orientation: landscape) {
+  .robbery-game:not(.is-team-selection) .robbery-game__panel {
+    grid-template-rows: 50px minmax(0, 1fr) 68px;
+  }
+
+  .robbery-game:not(.is-team-selection) .robbery-game__arena {
+    grid-row: 2;
+    min-height: 0;
+  }
+
+  .robbery-game:not(.is-team-selection) .robbery-game__footer {
+    grid-row: 3;
+    height: 68px;
+    min-height: 68px;
+  }
+
+  .robbery-game:not(.is-team-selection) .battle-unit {
+    width: 132px;
+    min-height: 54px;
+    padding: 4px 5px;
+    gap: 1px 4px;
+  }
+
+  .robbery-game:not(.is-team-selection) .battle-unit__name {
+    font-size: 0.62rem;
+  }
+
+  .robbery-game:not(.is-team-selection) .battle-unit__role,
+  .robbery-game:not(.is-team-selection) .battle-unit em {
+    font-size: 0.46rem;
+  }
+
+  .robbery-game:not(.is-team-selection) .battle-unit__combat {
+    margin-top: 1px;
+    font-size: 0.46rem;
+    line-height: 1.1;
+  }
+
+  .robbery-game:not(.is-team-selection) .battle-unit__health {
+    height: 6px;
+  }
+
+  .robbery-game:not(.is-team-selection) .battle-unit--enemy-1 { top: 25%; left: 25%; }
+  .robbery-game:not(.is-team-selection) .battle-unit--enemy-2 { top: 18%; left: 50%; }
+  .robbery-game:not(.is-team-selection) .battle-unit--enemy-3 { top: 25%; left: 75%; }
+  .robbery-game:not(.is-team-selection) .battle-unit--ally-1 { top: 74%; left: 25%; }
+  .robbery-game:not(.is-team-selection) .battle-unit--ally-2 { top: 80%; left: 50%; }
+  .robbery-game:not(.is-team-selection) .battle-unit--ally-3 { top: 74%; left: 75%; }
+
+  .robbery-game:not(.is-team-selection) .robbery-game__actions {
+    height: 100%;
+    margin: 0;
+    align-items: stretch;
+  }
+
+  .robbery-game:not(.is-team-selection) .robbery-game__auto,
+  .robbery-game:not(.is-team-selection) .robbery-game__attack {
+    width: min(220px, 42%);
+    min-width: 0;
+    height: 56px;
+    min-height: 56px;
+    font-size: 0.82rem;
+  }
+}
+
+/* Karakterlap fekvo telefonon: minden fo resz egy kepernyon marad. */
+@media (max-width: 1000px) and (max-height: 600px) and (orientation: landscape) {
+  .character-panel { padding: 6px; }
+  .character-sheet {
+    width: min(900px, calc(100vw - 12px)); height: calc(100dvh - 12px);
+    max-height: calc(100dvh - 12px); grid-template-rows: 56px minmax(0, 1fr) 42px 32px 44px;
+    overflow: hidden;
+  }
+  .character-sheet__header {
+    min-height: 56px; padding: 5px 10px;
+    grid-template-columns: 54px minmax(0, 1fr) 100px;
+  }
+  .character-sheet__header h2 { font-size: 1.35rem; }
+  .character-sheet__close { width: 44px; height: 40px; font-size: 1.3rem; }
+  .character-sheet__cash { font-size: 0.9rem; }
+  .character-sheet__body {
+    min-height: 0; padding: 6px 8px;
+    grid-template-columns: 146px minmax(220px, 1fr) 146px; gap: 7px; overflow: hidden;
+  }
+  .character-equipment {
+    min-height: 0; grid-template-rows: repeat(3, minmax(0, 1fr)); gap: 5px;
+  }
+  .character-equipment__slot {
+    min-height: 0; height: 100%; grid-template-columns: 48px minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+  }
+  .character-equipment__art { width: 48px; height: 100%; min-height: 0; }
+  .character-equipment__copy {
+    min-width: 0; min-height: 0; padding: 5px; grid-template-rows: auto auto auto;
+    align-content: center; border-top: 0; border-left: 1px solid rgba(214, 173, 102, 0.28);
+  }
+  .character-equipment__slot span { font-size: 0.5rem; }
+  .character-equipment__slot strong { font-size: 0.62rem; }
+  .character-equipment__slot small { font-size: 0.54rem; }
+  .character-figure__name { top: 7px; padding: 5px 18px; font-size: 0.82rem; }
+  .character-figure__portrait { padding: 42px 10px 40px; }
+  .character-figure__art { width: auto; height: 100%; max-height: 100%; }
+  .character-figure__rank {
+    bottom: 7px; width: calc(100% - 16px); padding: 6px 8px; font-size: 0.6rem;
+  }
+  .character-stats {
+    min-height: 42px; padding: 4px 8px;
+    grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 3px;
+  }
+  .character-stat {
+    min-width: 0; padding: 3px 4px; display: grid; justify-items: center; gap: 1px; text-align: center;
+  }
+  .character-stat span { font-size: 0.46rem; }
+  .character-stat strong { font-size: 0.62rem; }
+  .character-xp {
+    min-height: 32px; padding: 3px 8px 5px;
+    grid-template-columns: minmax(160px, 0.45fr) minmax(0, 1fr); align-items: center; gap: 8px;
+  }
+  .character-xp__summary { padding: 0; gap: 5px; }
+  .character-xp__summary strong { font-size: 0.58rem; }
+  .character-xp__summary span { font-size: 0.52rem; }
+  .character-xp__track { height: 8px; }
+  .item-craft-panel {
+    position: relative; z-index: 12; width: calc(100% - 16px);
+    min-height: 38px; margin: 2px auto 4px; gap: 4px; overflow: visible;
+  }
+  .item-craft-panel__toggle { min-height: 38px; padding: 4px 8px; }
+  .item-craft-panel__copy { display: flex; align-items: center; gap: 8px; }
+  .item-craft-panel__copy strong { font-size: 0.68rem; }
+  .item-craft-panel__copy span { display: none; }
+  .item-craft-panel__toggle em { font-size: 0.54rem; }
+  .item-craft-panel:not(.is-collapsed) {
+    position: absolute; left: 8px; right: 8px; bottom: 8px;
+    width: auto; max-height: calc(100% - 16px); margin: 0;
+    overflow: auto; background: rgba(12, 9, 7, 0.995);
+    box-shadow: 0 0 0 1px rgba(220, 175, 85, 0.55), 0 20px 55px rgba(0, 0, 0, 0.82);
+  }
+  .item-craft-panel:not(.is-collapsed) .item-craft-panel__copy span { display: block; }
+  .item-craft-panel:not(.is-collapsed) .item-craft-panel__body { padding: 4px 8px 8px; }
+  .item-craft-panel:not(.is-collapsed) .item-craft-panel__grid { max-height: 160px; }
+  .equipment-picker { right: 8px; bottom: 8px; max-height: calc(100% - 16px); }
+}
+
+.hud-crew-toggle,
+.hud-crew-close {
+  display: none;
+}
+
+/* A banda fekvo telefonon kulon, gorgetheto fiokkent nyilik meg. */
+@media (max-width: 1000px) and (max-height: 600px) and (orientation: landscape) {
+  .hud-crew-toggle {
+    position: fixed;
+    top: 50%;
+    right: max(0px, env(safe-area-inset-right));
+    z-index: 79;
+    width: 34px;
+    min-width: 34px;
+    height: 92px;
+    min-height: 92px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 5px;
+    border: 1px solid rgba(191, 145, 61, 0.7);
+    border-right: 0;
+    background: linear-gradient(180deg, rgba(48, 36, 20, 0.98), rgba(10, 8, 6, 0.98));
+    color: #dfbf78;
+    font: 700 0.62rem Georgia, serif;
+    letter-spacing: 0.1em;
+    line-height: 1;
+    writing-mode: vertical-rl;
+    transform: translateY(-50%) rotate(180deg);
+    text-transform: uppercase;
+    pointer-events: auto;
+    box-shadow: -8px 0 18px rgba(0, 0, 0, 0.42);
+  }
+
+  .hud-crew-toggle[aria-expanded="true"] {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .crew-panel {
+    position: fixed;
+    top: max(6px, env(safe-area-inset-top));
+    right: max(6px, env(safe-area-inset-right));
+    bottom: max(6px, env(safe-area-inset-bottom));
+    left: auto;
+    z-index: 220;
+    width: min(370px, calc(100vw - 12px));
+    max-height: none;
+    display: block !important;
+    padding: 10px;
+    overflow: hidden;
+    border-radius: 3px;
+    background: linear-gradient(180deg, rgba(25, 20, 13, 0.995), rgba(6, 6, 4, 0.995));
+    box-shadow: -20px 0 50px rgba(0, 0, 0, 0.72), inset 0 0 0 4px #050403;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transform: translateX(calc(100% + 20px));
+    transition: transform 180ms ease, opacity 180ms ease, visibility 180ms;
+  }
+
+  body.is-mobile-crew-open .crew-panel {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transform: translateX(0);
+  }
+
+  body.is-mobile-crew-open::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 219;
+    background: rgba(0, 0, 0, 0.62);
+    pointer-events: none;
+  }
+
+  .crew-panel__header {
+    position: relative;
+    min-height: 48px;
+    margin: 0 0 8px;
+    padding: 4px 48px 8px 4px;
+  }
+
+  .hud-crew-close {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 40px;
+    height: 40px;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    border: 1px solid rgba(191, 145, 61, 0.6);
+    background: #0b0906;
+    color: #ddbd75;
+    font-size: 1.35rem;
+  }
+
+  .crew-cards {
+    height: calc(100% - 56px);
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) !important;
+    grid-auto-rows: 126px;
+    align-content: start;
+    gap: 8px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 2px 3px 8px 2px;
+  }
+
+  .crew-card {
+    width: 100%;
+    min-height: 126px;
+    height: 126px;
+    grid-template-columns: 82px minmax(0, 1fr);
+    gap: 8px;
+    padding: 6px;
+    grid-column: 1 / -1;
+  }
+
+  .crew-card__portrait {
+    width: 82px;
+    min-height: 112px;
+  }
+
+  .crew-card__body {
+    min-width: 0;
+    height: 100%;
+  }
+
+  .crew-card__header {
+    min-height: 25px;
+    padding: 0 2px 3px;
+  }
+
+  .crew-card__name { font-size: 0.72rem; }
+  .crew-card__role { font-size: 0.48rem; }
+
+  .crew-card__stats {
+    min-height: 0;
+    height: calc(100% - 27px);
+    display: grid;
+    grid-template-rows: repeat(3, minmax(0, 1fr));
+    gap: 3px;
+  }
+
+  .crew-card.is-locked .crew-card__stats {
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  .crew-card__stat {
+    min-height: 0;
+    grid-template-columns: minmax(0, 1fr) 62px;
+    gap: 5px;
+    padding: 2px 3px;
+  }
+
+  .crew-card__mini-action {
+    width: 62px;
+    min-width: 62px;
+    min-height: 28px;
+    font-size: 0.55rem;
+  }
+}

@@ -475,6 +475,9 @@ const hudQuickWorld = document.getElementById("hudQuickWorld");
 const hudQuickMessages = document.getElementById("hudQuickMessages");
 const hudMessageBadge = document.getElementById("hudMessageBadge");
 const hudProcessTasks = document.getElementById("hudProcessTasks");
+const hudCrewToggle = document.getElementById("hudCrewToggle");
+const hudCrewClose = document.getElementById("hudCrewClose");
+const crewPanel = document.getElementById("crewPanel");
 const harborMapView = document.getElementById("harborMapView");
 const harborMapZones = document.getElementById("harborMapZones");
 const harborOperationPanel = document.getElementById("harborOperationPanel");
@@ -5591,10 +5594,15 @@ function getBackgroundMapRect(width = null, height = null) {
   const viewport = getLayoutViewportSize();
   width = Number.isFinite(Number(width)) && Number(width) > 0 ? Number(width) : viewport.width;
   height = Number.isFinite(Number(height)) && Number(height) > 0 ? Number(height) : viewport.height;
-  const desktopHud = width >= 900;
+  const compactLandscape = width <= 1000 && height <= 600 && width > height;
+  const desktopHud = width >= 900 && !compactLandscape;
   const topInset = desktopHud ? 68 : 58;
-  const leftInset = desktopHud ? 8 + clamp(Math.round(width * 0.122), 168, 180) : 0;
-  const rightInset = desktopHud ? clamp(Math.round(width * 0.161), 218, 233) : 0;
+  const leftInset = compactLandscape
+    ? 130
+    : (desktopHud ? 8 + clamp(Math.round(width * 0.122), 168, 180) : 0);
+  const rightInset = compactLandscape
+    ? 148
+    : (desktopHud ? clamp(Math.round(width * 0.161), 218, 233) : 0);
   const availableWidth = Math.max(320, width - leftInset - rightInset);
   const availableHeight = Math.max(240, height - topInset);
   const mapAspectRatio = 1534 / 1025;
@@ -6941,6 +6949,7 @@ function showCharacterPanel() {
 
 function hideCharacterPanel() {
   hideEquipmentPicker();
+  if (characterPanel?.contains(document.activeElement)) document.activeElement?.blur();
   document.body.classList.remove("is-character-open");
   characterPanel?.classList.add("hidden");
   characterPanel?.setAttribute("aria-hidden", "true");
@@ -7830,9 +7839,9 @@ function ensureCityEngine() {
   if (cityEnginePromise) return cityEnginePromise;
   window.MaffiaAssetRuntime?.loadImage?.(mapBackgroundLayer);
   const featureStyles = Promise.all([
-    loadStylesheet("./styles/combat.css?v=crew-portrait-uniform-2026-08-04-1"),
+    loadStylesheet("./styles/combat.css?v=mobile-robbery-selection-2026-08-11-15"),
     loadStylesheet("./styles/features.css?v=npc-city-half-size-2026-08-07-1"),
-  ]).then(() => loadStylesheet("./styles/hud-redesign.css?v=nexforge-topbar-join-2026-08-09-2"));
+  ]).then(() => loadStylesheet("./styles/hud-redesign.css?v=mobile-item-craft-2026-08-11-18"));
   const phaserEngine = loadClassicScript("https://cdn.jsdelivr.net/npm/phaser@3.90.0/dist/phaser.min.js");
   cityEnginePromise = Promise.all([featureStyles, phaserEngine])
     .then(() => loadClassicScript("./js/city-scene.js?v=fast-city-startup-2026-08-09-1"))
@@ -8897,6 +8906,7 @@ function openSettingsDialog() {
 
 function closeSettingsDialog() {
   if (!settingsDialog) return;
+  if (settingsDialog.contains(document.activeElement)) document.activeElement?.blur();
   settingsDialog.classList.add("hidden");
   settingsDialog.setAttribute("aria-hidden", "true");
   document.body.classList.remove("is-settings-open");
@@ -8919,6 +8929,7 @@ function openHelpDialog() {
 
 function closeHelpDialog() {
   if (!helpDialog) return;
+  if (helpDialog.contains(document.activeElement)) document.activeElement?.blur();
   helpDialog.classList.add("hidden");
   helpDialog.setAttribute("aria-hidden", "true");
 }
@@ -9593,6 +9604,21 @@ function bindHudActions() {
   questOverviewClose?.addEventListener("click", closeQuestOverview);
   settingsClose?.addEventListener("click", closeSettingsDialog);
   helpClose?.addEventListener("click", closeHelpDialog);
+  const setMobileCrewOpen = (open) => {
+    document.body.classList.toggle("is-mobile-crew-open", open);
+    hudCrewToggle?.setAttribute("aria-expanded", String(open));
+    if (open) {
+      crewPanelRenderKey = "";
+      renderCrewPanel();
+      window.requestAnimationFrame(() => hudCrewClose?.focus());
+    } else {
+      if (crewPanel?.contains(document.activeElement)) document.activeElement?.blur();
+    }
+  };
+  hudCrewToggle?.addEventListener("click", () => {
+    setMobileCrewOpen(!document.body.classList.contains("is-mobile-crew-open"));
+  });
+  hudCrewClose?.addEventListener("click", () => setMobileCrewOpen(false));
   settingsAnimations?.addEventListener("change", () => applyAnimationSetting(settingsAnimations.checked));
   settingsFullscreen?.addEventListener("click", toggleGameFullscreen);
   settingsLogout?.addEventListener("click", logoutCurrentProfile);
@@ -9629,6 +9655,10 @@ window.addEventListener("keydown", (event) => {
     closeHelpDialog();
     closeQuestOverview();
     closeSettingsDialog();
+    if (document.body.classList.contains("is-mobile-crew-open")) {
+      document.body.classList.remove("is-mobile-crew-open");
+      hudCrewToggle?.setAttribute("aria-expanded", "false");
+    }
     hideLotInfoModal();
     hideAuxPanel();
     hideMessagesDialog();
@@ -9711,6 +9741,34 @@ registerForm.addEventListener("submit", async (event) => {
 });
 
 playerNameInput.value = getRememberedProfileName();
+
+window.maffiaFacebookSessionPromise?.then(async (session) => {
+  if (!session?.profileName) return;
+  const loginStatus = document.getElementById("loginStatus");
+  try {
+    if (loginStatus) loginStatus.textContent = "Facebook-belepes sikerult. A jatek betoltese folyamatban...";
+    await ensureCityEngine();
+    const saved = session.exists ? await loadGame(session.profileName) : false;
+    if (!saved) {
+      startNewGame(session.profileName);
+      return;
+    }
+    overlay.classList.add("hidden");
+    if (state.needsAvatarSelection) {
+      setHudVisible(false);
+      sceneRef?.refreshScene();
+      showAvatarSelection();
+      return;
+    }
+    hideAvatarSelection();
+    setHudVisible(true);
+    void refreshMessageBadge();
+    sceneRef?.refreshScene();
+    if (state.needsWorldBaseSelection) void openAuxPanel("world");
+  } catch (error) {
+    if (loginStatus) loginStatus.textContent = error?.message || "A Facebook-profil betoltese nem sikerult.";
+  }
+});
 
 document.querySelectorAll("[data-password-target]").forEach((button) => {
   button.addEventListener("click", () => {

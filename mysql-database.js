@@ -66,6 +66,30 @@ const schema = `
     INDEX idx_auth_sessions_expiry (expires_at)
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_hungarian_ci;
 
+  CREATE TABLE IF NOT EXISTS external_identities (
+    provider VARCHAR(32) NOT NULL,
+    provider_user_id VARCHAR(191) NOT NULL,
+    profile_name VARCHAR(18) NOT NULL,
+    display_name VARCHAR(120) NOT NULL DEFAULT '',
+    created_at BIGINT NOT NULL,
+    updated_at BIGINT NOT NULL,
+    last_login_at BIGINT,
+    PRIMARY KEY (provider, provider_user_id),
+    UNIQUE KEY uq_external_identity_profile_provider (profile_name, provider),
+    INDEX idx_external_identity_profile (profile_name)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_hungarian_ci;
+
+  CREATE TABLE IF NOT EXISTS data_deletion_requests (
+    confirmation_code CHAR(36) PRIMARY KEY,
+    provider VARCHAR(32) NOT NULL,
+    provider_user_id VARCHAR(191) NOT NULL,
+    profile_name VARCHAR(18),
+    request_status VARCHAR(24) NOT NULL DEFAULT 'completed',
+    requested_at BIGINT NOT NULL,
+    completed_at BIGINT,
+    INDEX idx_data_deletion_provider_user (provider, provider_user_id)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_hungarian_ci;
+
   CREATE TABLE IF NOT EXISTS player_saves (
     profile_name VARCHAR(18) PRIMARY KEY,
     state_json LONGTEXT NOT NULL,

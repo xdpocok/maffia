@@ -11,7 +11,7 @@
 .robbery-game__arena {
   background:
     linear-gradient(180deg, rgba(4, 3, 2, 0.08), rgba(4, 3, 2, 0.38)),
-    url("./assets/battle/battle.webp") center center / 100% 100% no-repeat;
+    url("../assets/battle/battle.webp") center center / 100% 100% no-repeat;
   contain: layout paint;
 }
 

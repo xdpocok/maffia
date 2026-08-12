@@ -40,6 +40,14 @@ const KEEP_ALIVE_TIMEOUT_MS = readIntegerEnv("KEEP_ALIVE_TIMEOUT_MS", 5_000, 1_0
 const API_RATE_LIMIT_WINDOW_MS = readIntegerEnv("API_RATE_LIMIT_WINDOW_MS", 60_000, 5_000, 10 * 60_000);
 const API_READ_RATE_LIMIT_MAX = readIntegerEnv("API_READ_RATE_LIMIT_MAX", 900, 60, 10_000);
 const API_WRITE_RATE_LIMIT_MAX = readIntegerEnv("API_WRITE_RATE_LIMIT_MAX", 240, 30, 5_000);
+const META_APP_ID = String(process.env.META_APP_ID || "").trim();
+const META_APP_SECRET = String(process.env.META_APP_SECRET || "").trim();
+const META_INSTANT_GAMES_ENABLED = readBooleanEnv("META_INSTANT_GAMES_ENABLED", false);
+const META_SIGNED_INFO_MAX_AGE_SECONDS = readIntegerEnv("META_SIGNED_INFO_MAX_AGE_SECONDS", 600, 60, 3600);
+const META_SIGNED_REQUEST_PAYLOAD = "maffia-login-v1";
+const PUBLIC_BASE_URL = String(process.env.PUBLIC_BASE_URL || "https://maffiabirodalom.hu").replace(/\/$/, "");
+const META_ALLOWED_ORIGINS = new Set(String(process.env.META_ALLOWED_ORIGINS || "https://www.facebook.com,https://apps.facebook.com")
+  .split(",").map((value) => value.trim()).filter(Boolean));
 const ROOT_DIR = __dirname;
 const SERVER_LOG_FILE = process.env.SERVER_LOG_FILE
   ? path.resolve(ROOT_DIR, process.env.SERVER_LOG_FILE)
@@ -132,6 +140,15 @@ const insertAuthSessionStmt = db.prepare(`INSERT INTO auth_sessions (session_id,
 const selectAuthSessionStmt = db.prepare(`SELECT session_id, profile_name, expires_at FROM auth_sessions WHERE session_id = ?`);
 const deleteAuthSessionStmt = db.prepare(`DELETE FROM auth_sessions WHERE session_id = ?`);
 const deleteExpiredAuthSessionsStmt = db.prepare(`DELETE FROM auth_sessions WHERE expires_at <= ?`);
+const selectExternalIdentityStmt = db.prepare(`SELECT provider_user_id, profile_name, display_name FROM external_identities WHERE provider = ? AND provider_user_id = ?`);
+const selectExternalIdentityByProfileStmt = db.prepare(`SELECT provider_user_id FROM external_identities WHERE provider = ? AND profile_name = ?`);
+const insertExternalIdentityStmt = db.prepare(`INSERT INTO external_identities (provider, provider_user_id, profile_name, display_name, created_at, updated_at, last_login_at) VALUES (?, ?, ?, ?, ?, ?, ?)`);
+const updateExternalIdentityLoginStmt = db.prepare(`UPDATE external_identities SET display_name = ?, updated_at = ?, last_login_at = ? WHERE provider = ? AND provider_user_id = ?`);
+const deleteExternalIdentitiesByProfileStmt = db.prepare(`DELETE FROM external_identities WHERE profile_name = ?`);
+const deleteExternalIdentityStmt = db.prepare(`DELETE FROM external_identities WHERE provider = ? AND provider_user_id = ?`);
+const deleteAuthSessionsByProfileStmt = db.prepare(`DELETE FROM auth_sessions WHERE profile_name = ?`);
+const deleteAccountByProfileStmt = db.prepare(`DELETE FROM user_accounts WHERE profile_name = ?`);
+const insertDataDeletionRequestStmt = db.prepare(`INSERT INTO data_deletion_requests (confirmation_code, provider, provider_user_id, profile_name, request_status, requested_at, completed_at) VALUES (?, ?, ?, ?, ?, ?, ?)`);
 
 const selectSaveStmt = db.prepare(`
   SELECT profile_name, state_json, created_at, updated_at
@@ -1465,7 +1482,10 @@ function createSessionToken(profileName, sessionId, expiresAt) {
 
 function getSessionIdentityFromRequest(request) {
   const cookies = parseCookieHeader(request.headers.cookie || "");
-  const [payload, signature, extra] = String(cookies[ACTIVE_PROFILE_COOKIE] || "").split(".");
+  const authorization = String(request.headers.authorization || "");
+  const bearerMatch = authorization.match(/^Bearer\s+([^\s]+)$/i);
+  const sessionToken = bearerMatch?.[1] || cookies[ACTIVE_PROFILE_COOKIE] || "";
+  const [payload, signature, extra] = String(sessionToken).split(".");
   if (!payload || !signature || extra) return null;
   const expected = Buffer.from(signSessionPayload(payload));
   const received = Buffer.from(signature);
@@ -1479,6 +1499,74 @@ function getSessionIdentityFromRequest(request) {
   } catch {
     return null;
   }
+}
+
+function verifyMetaSignedPlayerInfo(signedPlayerInfo) {
+  if (!META_INSTANT_GAMES_ENABLED || !META_APP_ID || !META_APP_SECRET) {
+    throw Object.assign(new Error("A Facebook Instant Games belepes meg nincs bekapcsolva."), { statusCode: 503 });
+  }
+  const [encodedSignature, encodedPayload, extra] = String(signedPlayerInfo || "").split(".");
+  if (!encodedSignature || !encodedPayload || extra) {
+    throw Object.assign(new Error("Hibas Facebook jatekos-alairas."), { statusCode: 401 });
+  }
+  const receivedSignature = Buffer.from(encodedSignature, "base64url");
+  const expectedSignature = createHmac("sha256", META_APP_SECRET).update(encodedPayload).digest();
+  if (receivedSignature.length !== expectedSignature.length || !timingSafeEqual(receivedSignature, expectedSignature)) {
+    throw Object.assign(new Error("A Facebook jatekos-alairas nem ervenyes."), { statusCode: 401 });
+  }
+  let payload;
+  try {
+    payload = JSON.parse(Buffer.from(encodedPayload, "base64url").toString("utf8"));
+  } catch {
+    throw Object.assign(new Error("A Facebook jatekos-adat nem olvashato."), { statusCode: 401 });
+  }
+  const playerId = String(payload.player_id || "").trim();
+  const issuedAtSeconds = Number(payload.issued_at) || 0;
+  const ageSeconds = Math.abs(Math.floor(Date.now() / 1000) - issuedAtSeconds);
+  if (payload.algorithm !== "HMAC-SHA256" || !/^\d{5,191}$/.test(playerId)) {
+    throw Object.assign(new Error("A Facebook jatekos-adat tartalma ervenytelen."), { statusCode: 401 });
+  }
+  if (payload.request_payload !== META_SIGNED_REQUEST_PAYLOAD || ageSeconds > META_SIGNED_INFO_MAX_AGE_SECONDS) {
+    throw Object.assign(new Error("A Facebook belepesi igazolas lejart vagy mas kereshez tartozik."), { statusCode: 401 });
+  }
+  return { playerId, payload };
+}
+
+function verifyMetaSignedRequest(signedRequest) {
+  if (!META_APP_SECRET) {
+    throw Object.assign(new Error("A Meta alkalmazastitok nincs beallitva."), { statusCode: 503 });
+  }
+  const [encodedSignature, encodedPayload, extra] = String(signedRequest || "").split(".");
+  if (!encodedSignature || !encodedPayload || extra) {
+    throw Object.assign(new Error("Hibas Meta torlesi alairas."), { statusCode: 401 });
+  }
+  const receivedSignature = Buffer.from(encodedSignature, "base64url");
+  const expectedSignature = createHmac("sha256", META_APP_SECRET).update(encodedPayload).digest();
+  if (receivedSignature.length !== expectedSignature.length || !timingSafeEqual(receivedSignature, expectedSignature)) {
+    throw Object.assign(new Error("Ervenytelen Meta torlesi alairas."), { statusCode: 401 });
+  }
+  try {
+    return JSON.parse(Buffer.from(encodedPayload, "base64url").toString("utf8"));
+  } catch {
+    throw Object.assign(new Error("A Meta torlesi keres nem olvashato."), { statusCode: 401 });
+  }
+}
+
+function createFacebookProfileName(playerId) {
+  const suffix = createHmac("sha256", SESSION_SECRET).update(`facebook:${playerId}`).digest("hex").slice(0, 14);
+  return `fb_${suffix}`;
+}
+
+function applyMetaCorsHeaders(request, response) {
+  const origin = String(request.headers.origin || "");
+  if (!origin || !META_ALLOWED_ORIGINS.has(origin)) return false;
+  response.setHeader("Access-Control-Allow-Origin", origin);
+  response.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+  response.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type, Accept");
+  response.setHeader("Access-Control-Max-Age", "86400");
+  response.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+  response.setHeader("Vary", "Origin");
+  return true;
 }
 
 function getActiveProfileFromRequest(request) {
@@ -7075,6 +7163,20 @@ async function retreatServerRobbery(profileName, actionId) {
   });
 }
 
+async function deleteProfileAndAccountData(profileName) {
+  if (!profileName) return;
+  await db.transaction(async () => {
+    await deleteMessagesByProfileStmt.run(profileName, profileName);
+    await deleteWorldLotsByOwnerStmt.run(profileName);
+    await deleteClansByBossStmt.run(profileName);
+    await deleteSaveStmt.run(profileName);
+    await deleteAuthSessionsByProfileStmt.run(profileName);
+    await deleteExternalIdentitiesByProfileStmt.run(profileName);
+    await deleteAccountByProfileStmt.run(profileName);
+    await deletePlayerStmt.run(profileName);
+  });
+}
+
 async function handleApiRequest(request, response, pathname) {
   const presentedIdentity = getSessionIdentityFromRequest(request);
   if (presentedIdentity) {
@@ -7086,6 +7188,85 @@ async function handleApiRequest(request, response, pathname) {
     if (!sessionValid) clearActiveProfileCookie(response);
   } else {
     request.authenticatedProfileName = "";
+  }
+
+  if (pathname === "/api/facebook/config" && request.method === "GET") {
+    sendJson(response, 200, {
+      enabled: Boolean(META_INSTANT_GAMES_ENABLED && META_APP_ID && META_APP_SECRET),
+      appId: META_INSTANT_GAMES_ENABLED ? META_APP_ID : "",
+      requestPayload: META_SIGNED_REQUEST_PAYLOAD,
+    });
+    return true;
+  }
+
+  if (pathname === "/api/facebook/session" && request.method === "POST") {
+    try {
+      const rawBody = await readRequestBody(request);
+      const body = rawBody ? JSON.parse(rawBody) : {};
+      const verified = verifyMetaSignedPlayerInfo(body.signedPlayerInfo);
+      const displayName = String(body.displayName || "").replace(/[\u0000-\u001f\u007f]/g, "").trim().slice(0, 120);
+      const now = Date.now();
+      let identity = await selectExternalIdentityStmt.get("facebook_instant_games", verified.playerId);
+      let profileName = identity?.profile_name || createFacebookProfileName(verified.playerId);
+      if (!identity) {
+        const conflictingIdentity = await selectExternalIdentityByProfileStmt.get("facebook_instant_games", profileName);
+        if (conflictingIdentity && conflictingIdentity.provider_user_id !== verified.playerId) {
+          throw Object.assign(new Error("Nem sikerult egyedi Facebook-profilt letrehozni."), { statusCode: 409 });
+        }
+        await insertExternalIdentityStmt.run("facebook_instant_games", verified.playerId, profileName, displayName, now, now, now);
+      } else {
+        await updateExternalIdentityLoginStmt.run(displayName, now, now, "facebook_instant_games", verified.playerId);
+      }
+      const expiresAt = now + SESSION_MAX_AGE_SECONDS * 1000;
+      const sessionId = randomUUID();
+      await deleteExpiredAuthSessionsStmt.run(now);
+      await insertAuthSessionStmt.run(sessionId, profileName, expiresAt, now, now);
+      setActiveProfileCookie(response, profileName, sessionId, expiresAt);
+      const player = await selectPlayerStmt.get(profileName);
+      sendJson(response, 200, {
+        ok: true,
+        profileName,
+        displayName,
+        exists: Boolean(player),
+        sessionToken: createSessionToken(profileName, sessionId, expiresAt),
+        expiresAt,
+      });
+      return true;
+    } catch (error) {
+      sendJson(response, error.statusCode || 400, { error: error.message || "A Facebook belepes nem sikerult." });
+      return true;
+    }
+  }
+
+  if (pathname === "/api/facebook/data-deletion" && request.method === "POST") {
+    try {
+      const rawBody = await readRequestBody(request);
+      const form = new URLSearchParams(rawBody || "");
+      const signedRequest = form.get("signed_request") || (() => {
+        try { return JSON.parse(rawBody || "{}").signed_request || ""; } catch { return ""; }
+      })();
+      const deletionPayload = verifyMetaSignedRequest(signedRequest);
+      const providerUserId = String(deletionPayload.user_id || deletionPayload.player_id || "").trim();
+      if (!/^\d{5,191}$/.test(providerUserId)) {
+        sendJson(response, 400, { error: "A torlesi keresbol hianyzik a jatekos azonositoja." });
+        return true;
+      }
+      const identity = await selectExternalIdentityStmt.get("facebook_instant_games", providerUserId);
+      const confirmationCode = randomUUID();
+      if (identity?.profile_name) await deleteProfileAndAccountData(identity.profile_name);
+      else await deleteExternalIdentityStmt.run("facebook_instant_games", providerUserId);
+      const now = Date.now();
+      const deletionAuditId = `sha256:${createHmac("sha256", SESSION_SECRET).update(providerUserId).digest("hex")}`;
+      await insertDataDeletionRequestStmt.run(confirmationCode, "facebook_instant_games", deletionAuditId, null, "completed", now, now);
+      sendJson(response, 200, {
+        url: `${PUBLIC_BASE_URL}/adattorles.html?code=${encodeURIComponent(confirmationCode)}`,
+        confirmation_code: confirmationCode,
+      });
+      return true;
+    } catch (error) {
+      sendJson(response, error.statusCode || 400, { error: error.message || "Az adattorles nem sikerult." });
+      return true;
+    }
   }
 
   if (pathname === "/api/session" && request.method === "GET") {
@@ -8836,8 +9017,14 @@ async function handleStaticRequest(request, response, pathname, searchParams) {
 
 const server = http.createServer(async (request, response) => {
   applySecurityHeaders(response);
+  const metaCorsAllowed = applyMetaCorsHeaders(request, response);
   try {
     const url = new URL(request.url || "/", `http://${request.headers.host || `${HOST}:${PORT}`}`);
+    if (request.method === "OPTIONS") {
+      response.writeHead(metaCorsAllowed ? 204 : 403);
+      response.end();
+      return;
+    }
     const rateLimit = checkApiRateLimit(request, url.pathname);
     if (rateLimit) {
       response.setHeader("Retry-After", String(rateLimit.retryAfterSeconds));

@@ -6732,3 +6732,212 @@ body.is-harbor-map-open .studio-hub {
   .harbor-operation-panel:has(.rail-hub) { width: calc(100vw - 28px) !important; height: auto !important; max-height: calc(100vh - 12px) !important; overflow-y: auto !important; }
   .harbor-operation-panel:has(.rail-hub) .customs-hub__layout { grid-template-columns: 1fr !important; overflow: visible; }
 }
+
+/* Telefonos hasznalhatosag: olvashato meretek, biztonsagos belogasok es teljes menu. */
+@media (max-width: 760px) {
+  html,
+  body {
+    min-height: 100%;
+    min-height: 100dvh;
+    overscroll-behavior: none;
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    font-size: max(16px, 1em);
+  }
+
+  button,
+  [role="button"] {
+    touch-action: manipulation;
+  }
+
+  .boot-overlay {
+    display: block;
+    padding: 0 max(12px, env(safe-area-inset-right)) env(safe-area-inset-bottom)
+      max(12px, env(safe-area-inset-left));
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .boot-overlay::before {
+    position: fixed;
+    background-position: center top;
+    background-size: cover;
+    opacity: 0.52;
+  }
+
+  .boot-card {
+    width: 100%;
+    height: auto;
+    min-height: 100vh;
+    min-height: 100dvh;
+    padding-top: clamp(150px, 28vh, 260px);
+    filter: none;
+  }
+
+  .login-deck {
+    position: relative;
+    left: auto;
+    bottom: auto;
+    width: min(100%, 440px);
+    height: auto;
+    margin: 0 auto;
+    padding-bottom: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    font-size: 16px;
+  }
+
+  .login-panel,
+  .login-panel--register {
+    height: auto;
+    padding: 20px 16px 18px;
+  }
+
+  .login-seal {
+    display: none;
+  }
+
+  .auth-field,
+  .login-panel--register .auth-field {
+    min-height: 48px;
+  }
+
+  .auth-submit,
+  .login-panel--register .auth-submit {
+    min-height: 48px;
+  }
+
+  .login-options {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .remember-option,
+  .text-action,
+  .password-toggle {
+    min-height: 44px;
+  }
+
+  .hud-topbar {
+    top: max(0px, env(safe-area-inset-top));
+  }
+
+  .hud-utility-nav {
+    position: fixed;
+    top: calc(max(0px, env(safe-area-inset-top)) + 58px);
+    right: max(8px, env(safe-area-inset-right));
+    z-index: 80;
+    width: auto;
+    display: flex;
+    gap: 6px;
+    padding: 5px;
+    border: 1px solid rgba(181, 138, 61, 0.48);
+    background: rgba(9, 7, 5, 0.92);
+    pointer-events: auto;
+  }
+
+  .hud-utility-nav button {
+    flex: 0 0 44px;
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    padding: 6px;
+  }
+
+  .hud-utility-nav button i {
+    margin: 0 auto;
+  }
+
+  .hud-utility-nav button span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+  }
+
+  .hud-bottom-bar {
+    bottom: max(8px, env(safe-area-inset-bottom));
+    max-height: min(190px, 28dvh);
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  .hud-bottom-bar__quick-row,
+  .hud-bottom-bar__action-row {
+    min-width: 0;
+  }
+
+  .hud-quick-btn,
+  .hud-action,
+  .hud-action-slot {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .aux-panel,
+  .side-dialog,
+  .character-panel,
+  .crew-member-panel,
+  .lot-info-modal,
+  .robbery-game,
+  .robbery-result,
+  .police-raid,
+  .harbor-operation-panel {
+    max-width: calc(100vw - 12px) !important;
+    max-height: calc(100dvh - 12px) !important;
+  }
+}
+
+@media (max-width: 380px) {
+  .hud-pill {
+    padding-left: 25px;
+  }
+
+  .hud-pill__icon {
+    left: 3px;
+    width: 21px;
+    height: 21px;
+  }
+
+  .hud-pill span {
+    font-size: 0.5rem;
+  }
+
+  .hud-pill strong {
+    font-size: 0.72rem;
+  }
+
+  .hud-profile-card,
+  .hud-avatar-card {
+    width: 142px;
+  }
+
+  .hud-quest-card {
+    left: 58px;
+    max-width: calc(100vw - 66px);
+  }
+}
+
+@media (max-width: 760px) and (orientation: landscape) {
+  .boot-card {
+    padding-top: 72px;
+  }
+
+  .login-deck {
+    width: min(100%, 700px);
+  }
+
+  .hud-profile-card,
+  .hud-avatar-card,
+  .hud-quest-tabs,
+  .hud-quest-card,
+  .hud-harbor-shortcut {
+    transform: scale(0.82);
+    transform-origin: top left;
+  }
+}
