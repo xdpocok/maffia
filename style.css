@@ -1261,6 +1261,14 @@ body.is-harbor-map-open .lot-house-layer {
   border: 1px solid rgba(214, 173, 102, 0.22);
   background:
     linear-gradient(90deg, rgba(87, 26, 21, 0.82), rgba(53, 50, 21, 0.86) 30%, rgba(31, 86, 42, 0.76) 50%, rgba(53, 50, 21, 0.86) 70%, rgba(87, 26, 21, 0.82));
+  cursor: pointer;
+  touch-action: manipulation;
+  user-select: none;
+}
+
+.garage-minigame__meter:focus-visible {
+  outline: 2px solid rgba(255, 214, 128, 0.9);
+  outline-offset: 3px;
 }
 
 .garage-minigame__safe-zone {
@@ -5413,6 +5421,25 @@ body.is-harbor-map-open .hud-harbor-shortcut {
   box-shadow:
     0 10px 24px rgba(0, 0, 0, 0.5),
     inset 0 0 0 1px rgba(238, 192, 98, 0.13);
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
+  transition: border-color 150ms ease, filter 150ms ease, box-shadow 150ms ease;
+}
+
+.studio-hub:hover,
+.studio-hub:focus-visible {
+  border-color: rgba(246, 195, 91, 0.96);
+  filter: brightness(1.12);
+  box-shadow:
+    0 10px 26px rgba(0, 0, 0, 0.58),
+    0 0 14px rgba(219, 160, 55, 0.2),
+    inset 0 0 0 1px rgba(255, 220, 147, 0.2);
+}
+
+.studio-hub:focus-visible {
+  outline: 2px solid #e5bb6b;
+  outline-offset: 2px;
 }
 
 .studio-hub::after {

@@ -844,8 +844,9 @@ function normalizeItemInventory(source, equipment = null) {
   const defaults = getDefaultItemInventory();
   const output = {};
   equipmentSlotOrder.forEach((slot) => {
-    const savedItems = Array.isArray(source?.[slot]) ? source[slot] : [];
-    const merged = new Map((savedItems.length ? [] : defaults[slot]).map((item) => [item.id, { ...item }]));
+    const hasSavedSlot = Array.isArray(source?.[slot]);
+    const savedItems = hasSavedSlot ? source[slot] : [];
+    const merged = new Map((hasSavedSlot ? [] : defaults[slot]).map((item) => [item.id, { ...item }]));
     savedItems.forEach((rawItem) => {
       const item = normalizeEquipmentItem(slot, rawItem);
       if (item) merged.set(item.id, item);
@@ -955,11 +956,14 @@ function normalizeMarketStock(source) {
   return source.map((entry) => {
     const slot = equipmentSlotOrder.includes(entry?.slot) ? entry.slot : null;
     if (!slot) return null;
-    const item = normalizeEquipmentItem(slot, entry);
+    const rawItem = entry?.item && typeof entry.item === "object" ? entry.item : entry;
+    const item = normalizeEquipmentItem(slot, rawItem);
     if (!item) return null;
     return {
       slot,
-      price: Number.isFinite(entry?.price) ? Math.max(1, Math.round(entry.price)) : getEquipmentRarityPrice(item.rarity, item.power),
+      price: Number.isFinite(Number(entry?.price))
+        ? Math.max(1, Math.round(Number(entry.price)))
+        : getEquipmentRarityPrice(item.rarity, item.power),
       item,
     };
   }).filter(Boolean).slice(0, MARKET_MAX_OFFERS);
@@ -1025,7 +1029,7 @@ function getMarketSlotPlan(seed = "market", cycle = 0) {
 
 function generateMarketStock(seed = state.profileName || "market", refreshAt = Date.now()) {
   const stock = [];
-  const cycle = Math.floor(refreshAt / (4 * 60 * 60 * 1000));
+  const cycle = Math.floor(refreshAt / MARKET_REFRESH_MS);
   const influenceBenefits = getInfluenceBenefits();
   const rarityPlan = getMarketRarityPlan(seed, cycle, influenceBenefits);
   const slotPlan = getMarketSlotPlan(seed, cycle);
@@ -1853,6 +1857,7 @@ function renderInboxCards(entries = [], notificationMode = false) {
       <div class="messages-list">
           ${entries.map((message, messageIndex) => {
             const typeClass = String(message.messageType || (notificationMode ? "event" : "player")).replace(/[^a-z0-9_-]/gi, "");
+            const deletableMessageId = Number(message.id) || 0;
             const isPvpAttackNotice = message.payload?.kind === "pvp_attack_received"
               || (message.messageType === "pvp" && message.senderProfileName);
             const pvpCounterattack = isPvpAttackNotice
@@ -1860,7 +1865,7 @@ function renderInboxCards(entries = [], notificationMode = false) {
               : null;
             return `
             <article class="message-card message-card--${typeClass}${message.payload?.kind === "clan_invitation" ? " message-card--clan-invitation" : ""}${message.readAt ? " is-read" : " is-unread"}" data-message-index="${messageIndex}" tabindex="0">
-              ${notificationMode ? "" : `<button class="message-card__delete" type="button" data-message-delete="${Number(message.id) || 0}" aria-label="Üzenet törlése">×</button>`}
+              ${deletableMessageId > 0 ? `<button class="message-card__delete" type="button" data-message-delete="${deletableMessageId}" data-message-delete-kind="${notificationMode ? "notification" : "message"}" aria-label="${notificationMode ? "Értesítés" : "Üzenet"} törlése">×</button>` : ""}
               <div class="message-card__stamp">${getMessageTypeLabel(message.messageType, message.payload)}</div>
               <div class="message-card__copy">
                 <div class="message-card__heading">
@@ -2007,7 +2012,12 @@ function bindMessagesPanelActions() {
       try {
         const response = await fetch(`/api/messages/${messageId}`, { method: "DELETE" });
         if (!response.ok) throw new Error("delete_failed");
-        messagesPanelData.messages = messagesPanelData.messages.filter((message) => Number(message.id) !== messageId);
+        const deleteKind = deleteButton.dataset.messageDeleteKind === "notification" ? "notifications" : "messages";
+        messagesPanelData[deleteKind] = messagesPanelData[deleteKind].filter((message) => Number(message.id) !== messageId);
+        const unreadCount = [...messagesPanelData.messages, ...messagesPanelData.notifications]
+          .filter((message) => !message.readAt)
+          .length;
+        updateMessageBadge(unreadCount);
         renderMessagesPanel(messagesPanelData);
       } catch {
         deleteButton.disabled = false;
@@ -2785,7 +2795,6 @@ function renderLeaderboardPanel(saves) {
 }
 
 function getMarketPanelHtml() {
-  ensureMarketStock();
   const stock = Array.isArray(state.marketStock) ? state.marketStock : [];
   return `
     <section class="market-panel">
@@ -2865,7 +2874,7 @@ function getMarketPanelHtml() {
             <button
               class="market-item__buy"
               type="button"
-              data-market-buy="${entry.item.id}"
+              data-market-buy="${escapeHtml(entry.item.id)}"
               ${disabled ? "disabled" : ""}>
               ${alreadyOwned ? "Elkelt" : cannotAfford ? "Nincs eleg penz" : "Megveszem"}
             </button>
@@ -2930,10 +2939,87 @@ function bindMarketBuyButtons(rootElement, options = {}) {
     button.addEventListener("click", async (event) => {
       event.preventDefault();
       event.stopPropagation();
-      buyMarketItem(button.dataset.marketBuy, options);
+      if (button.dataset.marketBusy === "1") return;
+      button.dataset.marketBusy = "1";
+      button.disabled = true;
+      await buyMarketItem(button.dataset.marketBuy, options);
+      if (button.isConnected) {
+        delete button.dataset.marketBusy;
+        button.disabled = false;
+      }
     });
   });
   bindMarketPanelControls(rootElement);
+}
+
+function applyMarketApiItems(source) {
+  const items = Array.isArray(source) ? source : [];
+  state.marketStock = normalizeMarketStock(items.map((entry) => {
+    const payload = entry?.payload && typeof entry.payload === "object" ? entry.payload : {};
+    const payloadItem = payload?.item && typeof payload.item === "object" ? payload.item : {};
+    return {
+      ...payload,
+      slot: entry?.slotKey || payload.slot,
+      price: Number.isFinite(Number(entry?.price)) ? Number(entry.price) : payload.price,
+      item: {
+        ...payloadItem,
+        id: String(entry?.itemId || payloadItem.id || ""),
+        name: entry?.itemName || payloadItem.name,
+        rarity: entry?.rarity || payloadItem.rarity,
+        power: Number.isFinite(Number(entry?.statValue)) ? Number(entry.statValue) : payloadItem.power,
+        stat: entry?.statKind === "defense" ? "defense" : (entry?.statKind === "attack" ? "attack" : payloadItem.stat),
+      },
+    };
+  }));
+  const expirations = items
+    .map((entry) => Number(entry?.expiresAt))
+    .filter((value) => Number.isFinite(value) && value > Date.now());
+  state.marketRefreshAt = expirations.length ? Math.min(...expirations) : 0;
+  state.marketCatalogVersion = EQUIPMENT_CATALOG_VERSION;
+  return state.marketStock.length;
+}
+
+async function fetchMarketApiItems() {
+  const response = await fetch(`/api/market-items?limit=${MARKET_MAX_OFFERS}`, {
+    headers: { Accept: "application/json" },
+    cache: "no-store",
+  });
+  const payload = await response.json().catch(() => ({ items: [] }));
+  if (!response.ok) throw new Error(payload.error || "A piaci keszlet nem toltheto be.");
+  return Array.isArray(payload.items) ? payload.items : [];
+}
+
+async function syncMarketStockFromServer() {
+  if (!state.profileName) return false;
+  const items = await fetchMarketApiItems();
+  if (items.length >= MARKET_MAX_OFFERS) {
+    applyMarketApiItems(items);
+    return true;
+  }
+
+  // Zero active rows means the common refresh deadline expired: all eight are
+  // replaced. With 1-7 rows only the missing positions are filled by the server.
+  const generatedStock = normalizeMarketStock(generateMarketStock(
+    `${state.profileName}-server-refresh-${items.length}-${Date.now()}`,
+    Date.now(),
+  ));
+  const response = await fetch("/api/market-items/refresh", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify({ marketStock: generatedStock }),
+  });
+  const payload = await response.json().catch(() => ({ items: [] }));
+  if (!response.ok) {
+    state.marketStock = [];
+    state.marketRefreshAt = 0;
+    throw new Error(payload.error || "Az uj piaci keszlet nem mentheto.");
+  }
+  if (!applyMarketApiItems(payload.items)) {
+    state.marketStock = [];
+    state.marketRefreshAt = 0;
+    throw new Error("A szerver nem adott vissza vasarolhato piaci arut.");
+  }
+  return true;
 }
 
 function renderBlackMarketPanel() {
@@ -3601,17 +3687,12 @@ async function loadClanPanel(options = {}) {
 }
 
 async function buyMarketItem(itemId, options = {}) {
-  ensureMarketStock();
   const offer = (state.marketStock || []).find((entry) => entry.item.id === itemId);
-  if (!offer) {
-    sceneRef?.setMessage("Ez az aru mar lekerult a piacrol.");
-    return false;
-  }
-  if (state.money < getMarketOfferPrice(offer)) {
+  if (offer && state.money < getMarketOfferPrice(offer)) {
     sceneRef?.setMessage("Nincs eleg penzed ehhez az aruhoz.");
     return false;
   }
-  const alreadyOwned = Array.isArray(state.itemInventory?.[offer.slot])
+  const alreadyOwned = offer && Array.isArray(state.itemInventory?.[offer.slot])
     && state.itemInventory[offer.slot].some((entry) => entry.id === offer.item.id);
   if (alreadyOwned) {
     sceneRef?.setMessage("Ez a darab mar ott van a cuccaid kozott.");
@@ -3619,14 +3700,33 @@ async function buyMarketItem(itemId, options = {}) {
   }
   try {
     const result = await requestServerEconomy("market-buy", { itemId });
+    const purchasedId = String(result.item?.id || itemId);
+    const purchasedSlot = equipmentSlotOrder.includes(result.item?.slot) ? result.item.slot : offer?.slot;
+    let inventoryContainsPurchase = Boolean(purchasedSlot)
+      && Array.isArray(state.itemInventory?.[purchasedSlot])
+      && state.itemInventory[purchasedSlot].some((item) => String(item?.id || "") === purchasedId);
+    if (!inventoryContainsPurchase && state.profileName) {
+      await loadGame(state.profileName);
+      inventoryContainsPurchase = Boolean(purchasedSlot)
+        && Array.isArray(state.itemInventory?.[purchasedSlot])
+        && state.itemInventory[purchasedSlot].some((item) => String(item?.id || "") === purchasedId);
+    }
+    if (!inventoryContainsPurchase) throw new Error("A szerver nem igazolta vissza a targyat a leltarban.");
+    // The bought offer is immediately replaced so the market keeps eight
+    // purchasable items until the scheduled full rotation.
+    try { await syncMarketStockFromServer(); } catch (refreshError) {
+      console.warn("A feketepiac vasarlas utani feltoltese sikertelen:", refreshError);
+    }
     if (options.rerender !== false) renderBlackMarketPanel();
     if (typeof options.afterBuy === "function") options.afterBuy();
     sceneRef?.refreshHUD();
-    sceneRef?.setMessage(`${result.item?.name || offer.item.name} megveve a piacrol. A szerver levonta: ${result.price} $.`);
+    sceneRef?.setMessage(`${result.item?.name || offer?.item?.name || "Az aru"} megveve a piacrol. A szerver levonta: ${result.price} $.`);
     return true;
   } catch (error) {
     sceneRef?.setMessage(error.message || "A vasarlas nem sikerult.");
+    try { await syncMarketStockFromServer(); } catch { /* Az eredeti szerverhiba mar lathato. */ }
     if (options.rerender !== false) renderBlackMarketPanel();
+    if (typeof options.afterBuy === "function") options.afterBuy();
     return false;
   }
 }
@@ -4034,28 +4134,13 @@ async function openAuxPanel(kind) {
   }
   if (kind === "market") {
     try {
-      if (state.profileName) {
-        const response = await fetch(`/api/market-items?limit=${MARKET_MAX_OFFERS}`, {
-          headers: { Accept: "application/json" },
-        });
-        const payload = response.ok ? await response.json() : { items: [] };
-        if (Array.isArray(payload.items)) {
-          state.marketStock = normalizeMarketStock(payload.items.map((entry) => entry?.payload || {
-            slot: entry.slotKey,
-            price: entry.price,
-            item: {
-              id: entry.itemId,
-              name: entry.itemName,
-              rarity: entry.rarity,
-              power: entry.statValue,
-              stat: entry.statKind === "defense" ? "defense" : "attack",
-              image: entry.payload?.item?.image,
-            },
-          }));
-        }
-      }
-    } catch {
-      // Fall back to local stock if the market endpoint is temporarily unavailable.
+      await syncMarketStockFromServer();
+    } catch (error) {
+      // A stale local offer can never be purchased safely. Fail closed and
+      // show no offers until the authoritative server stock is available.
+      state.marketStock = [];
+      state.marketRefreshAt = 0;
+      sceneRef?.setMessage(error.message || "A piaci keszlet nem toltheto be.");
     }
     renderBlackMarketPanel();
     return;
@@ -8704,7 +8789,6 @@ function applyServerRobberyState(serverState = {}) {
   if (Array.isArray(serverState.marketStock)) state.marketStock = normalizeMarketStock(serverState.marketStock);
   if (Number.isFinite(Number(serverState.marketRefreshAt))) state.marketRefreshAt = Number(serverState.marketRefreshAt);
   if (typeof serverState.marketCatalogVersion === "string") state.marketCatalogVersion = serverState.marketCatalogVersion;
-  ensureMarketStock();
   if (Number.isFinite(Number(serverState.crew))) {
     state.crew = Math.max(
       Number(serverState.crew),

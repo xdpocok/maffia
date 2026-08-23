@@ -287,7 +287,13 @@
     const band = enemyBand(Number(enemy?.threat) || 1);
     const stagePressure = Math.min(1, getDungeonDifficultyTier() / 21);
     const ratio = band.min + (band.max - band.min) * Math.min(1, .18 + stagePressure * .62 + Math.random() * .20);
-    const targetTotal = player.total * ratio;
+    // Egy teljes menetben 3-5 ellenfél követi egymást. Az egyenkénti ellenfél
+    // erejét ezért a hullámszámhoz igazítjuk, különben a teljesítés matematikailag
+    // lehetetlenné válik. Négy szintenként ettől még fokozatosan nő a nyomás.
+    const waveScale = Math.min(.72, 1.2 / Math.sqrt(Math.max(1, activeMission?.waveCount || battleQueue.length || 1)));
+    const tierScale = 1 + getDungeonDifficultyTier() * .012;
+    const effectiveRatio = ratio * waveScale * tierScale;
+    const targetTotal = player.total * effectiveRatio;
     let maxHealth = Math.max(30, Math.round(player.maxHealth * (.78 + ratio * .18)));
     let strength = Math.max(6, Math.round(player.strength * ratio * (.94 + Math.random() * .12)));
     let defense = Math.max(4, Math.round(player.defense * ratio * (.94 + Math.random() * .12)));
@@ -296,7 +302,7 @@
     maxHealth = Math.max(25, Math.round(maxHealth * scale));
     strength = Math.max(5, Math.round(strength * scale));
     defense = Math.max(3, Math.round(defense * scale));
-    return { ...enemyEquipment(Number(enemy?.threat) || 1), band: band.label, ratio, maxHealth, health: maxHealth, strength, defense, total: Math.round(maxHealth * .35 + strength * 2 + defense * 1.55) };
+    return { ...enemyEquipment(Number(enemy?.threat) || 1), band: band.label, ratio: effectiveRatio, maxHealth, health: maxHealth, strength, defense, total: Math.round(maxHealth * .35 + strength * 2 + defense * 1.55) };
   }
 
   function statsMarkup(combat, enemy = false) {
@@ -453,8 +459,11 @@
     fightStage?.classList.add(playerRoll >= enemyRoll ? "is-enemy-hit" : "is-player-hit");
     window.setTimeout(() => fightStage?.classList.remove("is-player-hit", "is-enemy-hit"), 460);
     const playerWonRoll = playerRoll >= enemyRoll;
-    const playerDamage = Math.max(1, Math.round((playerCombat.strength * .22 + playerRoll * 2.1 - enemyCombat.defense * .10) * (playerWonRoll ? 1.22 : .78)));
-    const enemyDamage = Math.max(1, Math.round((enemyCombat.strength * .22 + enemyRoll * 2.1 - playerCombat.defense * .10) * (playerWonRoll ? .78 : 1.22)));
+    // A dobás győztese viszi be a fő találatot; a másik fél csak gyengébb
+    // ellentámadást ad. Korábban mindketten majdnem teljes sebzést okoztak,
+    // ezért a játékos még könnyű fokozaton sem élhette túl a teljes folyosót.
+    const playerDamage = Math.max(1, Math.round((playerCombat.strength * .22 + playerRoll * 2.1 - enemyCombat.defense * .10) * (playerWonRoll ? 1.20 : .34)));
+    const enemyDamage = Math.max(1, Math.round((enemyCombat.strength * .22 + enemyRoll * 2.1 - playerCombat.defense * .10) * (playerWonRoll ? .26 : 1.20)));
     enemyCombat.health = Math.max(0, enemyCombat.health - playerDamage);
     playerCombat.health = Math.max(0, playerCombat.health - enemyDamage);
     round += 1;
@@ -476,7 +485,12 @@
       const won = enemyDefeated || (!playerDefeated && timeLimitReached && playerHealthRatio >= enemyHealthRatio);
       if (won && enemyIndex + 1 < battleQueue.length) {
         const defeatedName = selectedEnemy.name;
-        status.textContent = `${defeatedName} legyőzve. Haladás a következő helyiségbe...`;
+        const recoveredHealth = Math.min(
+          playerCombat.maxHealth - playerCombat.health,
+          Math.round(playerCombat.maxHealth * .15),
+        );
+        playerCombat.health += recoveredHealth;
+        status.textContent = `${defeatedName} legyőzve. +${recoveredHealth} élet, haladás a következő helyiségbe...`;
         panel?.classList.add("is-advancing");
         await wait(720);
         prepareEnemy(enemyIndex + 1);

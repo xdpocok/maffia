@@ -1160,11 +1160,13 @@ async function sellHarborMarketItem(slot, itemId, zone) {
 
 function bindHarborMarketControls(zone) {
   harborOperationPanel?.querySelectorAll("[data-harbor-market-mode]").forEach((button) => {
-    button.addEventListener("click", (event) => {
+    button.addEventListener("click", async (event) => {
       event.preventDefault();
       event.stopPropagation();
       pendingHarborSaleKey = "";
-      renderHarborMarket(zone, button.dataset.harborMarketMode === "sell" ? "sell" : "buy");
+      const nextMode = button.dataset.harborMarketMode === "sell" ? "sell" : "buy";
+      if (nextMode === "buy") await openHarborMarket(zone, nextMode);
+      else renderHarborMarket(zone, nextMode);
     });
   });
   harborOperationPanel?.querySelectorAll("[data-market-sell-item]").forEach((button) => {
@@ -1178,6 +1180,19 @@ function bindHarborMarketControls(zone) {
       );
     });
   });
+}
+
+async function openHarborMarket(zone, mode = harborMarketMode) {
+  if (mode !== "sell") {
+    try {
+      await syncMarketStockFromServer();
+    } catch (error) {
+      state.marketStock = [];
+      state.marketRefreshAt = 0;
+      sceneRef?.setMessage(error.message || "A feketepiaci keszlet nem toltheto be.");
+    }
+  }
+  renderHarborMarket(zone, mode);
 }
 
 function renderHarborMarket(zone, mode = harborMarketMode) {
@@ -1334,11 +1349,32 @@ function bindHarborGarageControls(zone) {
       await startGarageMission(button.dataset.garageMission);
     });
   });
-  harborOperationPanel.querySelectorAll("[data-garage-hit]").forEach((button) => {
-    button.addEventListener("click", async (event) => {
+  harborOperationPanel.querySelectorAll("[data-garage-hit]").forEach((control) => {
+    const submitCheckpoint = async (event) => {
       event.preventDefault();
       event.stopPropagation();
-      await resolveGarageCheckpoint();
+      const gameState = garageMiniGameState;
+      if (!gameState || gameState.inputLocked) return;
+      syncGarageNeedleFromDom(gameState);
+      gameState.lockedPointer = gameState.pointer;
+      gameState.inputLocked = true;
+      stopGarageMiniGame(false);
+      harborOperationPanel.querySelectorAll("[data-garage-hit]").forEach((entry) => {
+        entry.setAttribute("aria-disabled", "true");
+        if (entry instanceof HTMLButtonElement) entry.disabled = true;
+      });
+      await resolveGarageCheckpoint(gameState.lockedPointer);
+    };
+    control.addEventListener("pointerdown", submitCheckpoint);
+    control.addEventListener("click", (event) => {
+      if (event.detail === 0) submitCheckpoint(event);
+      else {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    });
+    control.addEventListener("keydown", (event) => {
+      if ((event.key === "Enter" || event.key === " ") && !(control instanceof HTMLButtonElement)) submitCheckpoint(event);
     });
   });
   harborOperationPanel.querySelectorAll("[data-garage-abort]").forEach((button) => {
@@ -1373,7 +1409,7 @@ function renderGarageMiniGame(zone, mission) {
       </div>
       <div class="garage-minigame">
         <p class="harbor-operation-panel__muted">Akkor nyomj ra, amikor a jelolo a zold savban van. Minden kattintas utan szukul a zold sav, a felrenyomas pedig csokkenti a jutalmat.</p>
-        <div class="garage-minigame__meter">
+        <div class="garage-minigame__meter" data-garage-hit role="button" tabindex="0" aria-label="Átcsúszás időzítése">
           <div class="garage-minigame__safe-zone" style="left:${(gameState.safeCenter - gameState.safeWidth / 2) * 100}%; width:${gameState.safeWidth * 100}%"></div>
           <div class="garage-minigame__needle" style="left:${gameState.pointer * 100}%"></div>
         </div>
@@ -1382,7 +1418,7 @@ function renderGarageMiniGame(zone, mission) {
           <span>${escapeHtml(gameState.logText)}${penaltyPercent > 0 ? ` Jutalomlevonas: ${penaltyPercent}%.` : ""}</span>
         </div>
         <div class="garage-minigame__actions">
-          <button type="button" data-garage-hit>Atcsuszas</button>
+          <button type="button" data-garage-hit${gameState.inputLocked ? " disabled" : ""}>Atcsuszas</button>
         </div>
       </div>
     </section>
@@ -1464,15 +1500,18 @@ function applyServerGarageAction(action = {}) {
     speed: action.speed,
     statusText: action.attempts ? "Kovetkezo ellenorzes" : "Motorok indulnak",
     logText: "Vidd at a jelolot a zold savon a megfelelo pillanatban.",
+    inputLocked: false,
+    lockedPointer: null,
   };
 }
 
-async function resolveGarageCheckpoint() {
+async function resolveGarageCheckpoint(capturedPointer = null) {
   const gameState = garageMiniGameState;
   const mission = gameState ? getGarageMissionById(gameState.missionId) : null;
   if (!gameState || !mission) return false;
   const needle = harborOperationPanel?.querySelector(".garage-minigame__needle");
-  const pointer = needle ? clamp(parseFloat(needle.style.left) / 100, 0, 1) : gameState.pointer;
+  const visualPointer = needle ? clamp(parseFloat(needle.style.left) / 100, 0, 1) : gameState.pointer;
+  const pointer = Number.isFinite(Number(capturedPointer)) ? clamp(Number(capturedPointer), 0, 1) : visualPointer;
   try {
     const data = await requestServerGarage({ operation: "checkpoint", actionId: gameState.serverActionId, pointer });
     if (data.action?.status === "completed") return finishGarageMissionFromServer(data.result || data.action.result || {});
@@ -1483,6 +1522,15 @@ async function resolveGarageCheckpoint() {
     renderGarageMiniGame(harborZoneDefs.find((entry) => entry.id === "garage") || { id: "garage", title: "Garazs" }, mission);
     return hit;
   } catch (error) {
+    if (garageMiniGameState) {
+      garageMiniGameState.inputLocked = false;
+      garageMiniGameState.lockedPointer = null;
+      startGarageMiniGameLoop();
+      harborOperationPanel?.querySelectorAll("[data-garage-hit]").forEach((entry) => {
+        entry.removeAttribute("aria-disabled");
+        if (entry instanceof HTMLButtonElement) entry.disabled = false;
+      });
+    }
     sceneRef?.setMessage(error.message);
     return false;
   }
@@ -1553,7 +1601,7 @@ function renderHarborZonePanel(zone) {
   if (zone.id === "bar") return renderHarborBar(zone);
   if (zone.id === "warehouse") return renderHarborWarehouse(zone);
   if (zone.id === "office") return renderHarborOffice(zone);
-  if (zone.id === "market") return renderHarborMarket(zone);
+  if (zone.id === "market") return openHarborMarket(zone);
   if (zone.id === "garage") return renderHarborGarage(zone);
   if (zone.id === "customs") return renderHarborCustoms(zone);
   if (["docks", "rail", "fish"].includes(zone.id)) return renderHarborOrders(zone, zone.id === "fish" ? "fish" : "mixed");
@@ -1855,4 +1903,3 @@ async function requestServerGarage(payload = {}) {
   applyServerRobberyState(data.state || {});
   return data;
 }
-

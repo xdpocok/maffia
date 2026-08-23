@@ -15,6 +15,7 @@
     "backup": "powershell -ExecutionPolicy Bypass -File scripts/create-backup.ps1",
     "backup:db": "powershell -ExecutionPolicy Bypass -File scripts/create-backup.ps1 -IncludeDatabase",
     "check:combat": "node scripts/simulate-combat-balance.mjs",
+    "check:dungeon": "node scripts/simulate-dungeon-balance.mjs",
     "check:progression": "node scripts/simulate-early-progression.mjs",
     "check:server-processes": "node scripts/check-server-processes.mjs",
     "check:data-integrity": "node scripts/check-data-integrity.mjs",

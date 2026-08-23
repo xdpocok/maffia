@@ -58,6 +58,7 @@ const SERVER_MARKET_MAX_OFFERS = 8;
 const SERVER_MARKET_QUERY_LIMIT = 100;
 const SERVER_MARKET_MAX_YELLOW_OFFERS = 2;
 const SERVER_MARKET_MAX_RED_OFFERS = 2;
+const SERVER_MARKET_REFRESH_MS = 6 * 60 * 60 * 1000;
 const SERVER_CLAN_WAR_DURATION_MS = 24 * 60 * 60 * 1000;
 const SERVER_CLAN_WAR_COOLDOWN_MS = 6 * 60 * 60 * 1000;
 const SERVER_PVP_COOLDOWN_MS = 15 * 60 * 1000;
@@ -885,6 +886,8 @@ const listMarketItemsStmt = db.prepare(`
   SELECT item_id, market_scope, owner_profile_name, slot_key, item_name, rarity, stat_kind, stat_value, price, stock, expires_at, payload_json, updated_at
   FROM market_items
   WHERE (? IS NULL OR owner_profile_name = ?)
+    AND stock > 0
+    AND (expires_at IS NULL OR expires_at > ?)
   ORDER BY updated_at DESC, item_id ASC
   LIMIT ?
 `);
@@ -1783,6 +1786,23 @@ function mapMarketItemRow(row) {
   } catch {
     payload = {};
   }
+  const slot = SERVER_EQUIPMENT_SLOTS.includes(row.slot_key) ? row.slot_key : "";
+  const rarity = ["gray", "yellow", "red"].includes(row.rarity) ? row.rarity : "gray";
+  const sourceItem = payload?.item && typeof payload.item === "object" ? payload.item : {};
+  const canonicalPayload = {
+    ...(payload && typeof payload === "object" ? payload : {}),
+    slot,
+    price: Math.max(1, toSafeInt(row.price, 1, 1)),
+    item: {
+      ...sourceItem,
+      id: String(row.item_id || "").slice(0, 128),
+      name: String(row.item_name || sourceItem.name || "Ismeretlen targy").slice(0, 160),
+      rarity,
+      power: Math.max(0, toSafeInt(row.stat_value, sourceItem.power || 0, 0)),
+      stat: row.stat_kind === "defense" ? "defense" : "attack",
+      slot,
+    },
+  };
   return {
     itemId: row.item_id,
     marketScope: row.market_scope,
@@ -1795,7 +1815,7 @@ function mapMarketItemRow(row) {
     price: row.price,
     stock: row.stock,
     expiresAt: row.expires_at,
-    payload,
+    payload: canonicalPayload,
     updatedAt: row.updated_at,
   };
 }
@@ -2238,23 +2258,9 @@ const defaultGameConfigEntries = {
 };
 
 function buildMarketStockFromRows(rows = []) {
-  return rows.map((row) => {
-    const payload = parseJsonSafely(row.payload_json, {});
-    if (payload && payload.item && payload.slot) {
-      return payload;
-    }
-    return {
-      slot: row.slot_key,
-      price: row.price,
-      item: {
-        id: row.item_id,
-        name: row.item_name,
-        rarity: row.rarity,
-        power: row.stat_value,
-        stat: row.stat_kind === "defense" ? "defense" : "attack",
-      },
-    };
-  });
+  return rows
+    .map((row) => mapMarketItemRow(row).payload)
+    .filter((offer) => offer.slot && offer.item?.id);
 }
 
 function buildProcessTasksFromRows(rows = []) {
@@ -2419,7 +2425,7 @@ async function buildProfileState(profileName) {
     listPlayerBuildingDifficultiesStmt.all(profileName),
     listPlayerWorldRivalsStmt.all(profileName),
     selectPlayerHarborGarageStmt.get(profileName),
-    listMarketItemsStmt.all(profileName, profileName, SERVER_MARKET_QUERY_LIMIT),
+    listMarketItemsStmt.all(profileName, profileName, Date.now(), SERVER_MARKET_QUERY_LIMIT),
     selectOwnedWorldLotStmt.get(profileName),
   ]);
   if (!playerRow && !stateRow && !runtimeRow && !processTaskRows.length && !territoryRows.length && !equipmentRows.length && !inventoryRows.length && !crewRows.length && !questRows.length && !notificationRows.length && !districtRows.length && !buildingDifficultyRows.length && !worldRivalRows.length && !garageRow) return null;
@@ -2439,6 +2445,14 @@ async function buildProfileState(profileName) {
     offeredQuests: Array.isArray(quests?.offeredQuests) ? quests.offeredQuests : (baseState.offeredQuests ?? []),
     marketStock: buildMarketStockFromRows(selectServerMarketDisplayEntries(marketRows)),
   };
+  const activeMarketExpirations = marketRows
+    .map((row) => Number(row?.expires_at))
+    .filter((expiresAt) => Number.isFinite(expiresAt) && expiresAt > Date.now());
+  if (activeMarketExpirations.length) {
+    // The structured market rows are the source of truth. Never return an old
+    // snapshot deadline that would make the client regenerate phantom offers.
+    merged.marketRefreshAt = Math.min(...activeMarketExpirations);
+  }
 
   if (runtimeRow) {
     const runtime = parseJsonSafely(runtimeRow.runtime_json, {});
@@ -3294,6 +3308,13 @@ function protectServerOwnedClientSave(existingState, incomingState) {
     crew: Math.max(0, getOwnedCrewMembers(existing).length, toSafeInt(existing.crew, 0, 0)),
     equipment: existing.equipment && typeof existing.equipment === "object" ? existing.equipment : incoming.equipment,
     itemInventory: existing.itemInventory && typeof existing.itemInventory === "object" ? existing.itemInventory : incoming.itemInventory,
+    // A normal background save must never restore a stale/sold market offer.
+    // Market stock is changed only by the dedicated market endpoints.
+    marketStock: Array.isArray(existing.marketStock) ? existing.marketStock : [],
+    marketRefreshAt: Math.max(0, Number(existing.marketRefreshAt) || 0),
+    marketCatalogVersion: typeof existing.marketCatalogVersion === "string"
+      ? existing.marketCatalogVersion
+      : EQUIPMENT_CATALOG_VERSION,
     harborBarUsage: existing.harborBarUsage && typeof existing.harborBarUsage === "object"
       ? existing.harborBarUsage
       : incoming.harborBarUsage,
@@ -4785,6 +4806,86 @@ async function runEquipEconomyCommand(profileName, body = {}) {
   });
 }
 
+function normalizeServerMarketRefreshStock(profileName, source, now = Date.now()) {
+  const profileKey = String(profileName || "player").toLowerCase().replace(/[^a-z0-9_-]+/g, "-").slice(0, 24) || "player";
+  // Every refill gets new identifiers. This prevents a partial refill from
+  // colliding with offers that were generated earlier in the same 6h cycle.
+  const refreshNonce = now.toString(36);
+  return (Array.isArray(source) ? source : []).slice(0, SERVER_MARKET_MAX_OFFERS).map((offer, index) => {
+    const slot = SERVER_EQUIPMENT_SLOTS.includes(offer?.slot) ? offer.slot : null;
+    const sourceItem = offer?.item && typeof offer.item === "object" ? offer.item : {};
+    if (!slot || !sourceItem.name) return null;
+    const rarity = ["gray", "yellow", "red"].includes(sourceItem.rarity) ? sourceItem.rarity : "gray";
+    const power = clampServer(toSafeInt(sourceItem.power, 0, 0), 0, 500);
+    const stat = sourceItem.stat === "defense" ? "defense" : "attack";
+    const sourceId = String(sourceItem.id || `${slot}-${index}`)
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]+/g, "-")
+      .slice(-54);
+    const itemId = `market-${profileKey}-${refreshNonce}-${index}-${sourceId}`.slice(0, 128);
+    const imageCandidate = String(sourceItem.image || "").slice(0, 320);
+    const image = /^(?:\.\/|\/)assets\//.test(imageCandidate) ? imageCandidate : "";
+    return {
+      slot,
+      price: clampServer(toSafeInt(offer?.price, 1, 1), 1, 1_000_000),
+      item: {
+        ...sourceItem,
+        id: itemId,
+        slot,
+        name: String(sourceItem.name).slice(0, 160),
+        rarity,
+        power,
+        stat,
+        image,
+      },
+    };
+  }).filter(Boolean);
+}
+
+async function runMarketRefreshCommand(profileName, body = {}) {
+  return db.transaction(async () => {
+    await lockPlayerStmt.get(profileName);
+    const profile = await buildProfileState(profileName);
+    if (!profile) return { statusCode: 404, error: "A jatekosprofil nem talalhato." };
+    const now = Date.now();
+    const existingRows = await listMarketItemsStmt.all(profileName, profileName, now, SERVER_MARKET_QUERY_LIMIT);
+    if (existingRows.length >= SERVER_MARKET_MAX_OFFERS) {
+      return {
+        statusCode: 200,
+        payload: { ok: true, created: false, added: 0, items: selectServerMarketDisplayEntries(existingRows.map(mapMarketItemRow)) },
+      };
+    }
+    const existingItems = existingRows.map(mapMarketItemRow);
+    const existingStock = existingItems.map((entry) => entry.payload).filter((offer) => offer?.item?.id);
+    const generatedStock = normalizeServerMarketRefreshStock(profileName, body.marketStock, now);
+    const missingCount = Math.max(0, SERVER_MARKET_MAX_OFFERS - existingStock.length);
+    if (generatedStock.length < missingCount) return { statusCode: 400, error: "Nem erkezett eleg ervenyes piaci aru." };
+
+    const marketStock = [
+      ...existingStock,
+      ...generatedStock.slice(0, missingCount),
+    ];
+    // A reszleges feltoltes nem tolja ki a teljes csere idejet. Amikor a kozos
+    // hatarido lejar, mind a nyolc ajanlat egyszerre tunik el es ujrageneralodik.
+    const existingExpirations = existingItems
+      .map((entry) => Number(entry.expiresAt))
+      .filter((expiresAt) => Number.isFinite(expiresAt) && expiresAt > now);
+    const refreshAt = existingExpirations.length
+      ? Math.min(...existingExpirations)
+      : now + SERVER_MARKET_REFRESH_MS;
+    await writeMarketStock(profileName, {
+      ...profile.state,
+      marketStock,
+      marketRefreshAt: refreshAt,
+      marketCatalogVersion: EQUIPMENT_CATALOG_VERSION,
+    }, now);
+    const committedRows = await listMarketItemsStmt.all(profileName, profileName, now, SERVER_MARKET_QUERY_LIMIT);
+    const items = selectServerMarketDisplayEntries(committedRows.map(mapMarketItemRow));
+    if (items.length !== SERVER_MARKET_MAX_OFFERS) throw Object.assign(new Error("A nyolc piaci ajanlat mentese sikertelen."), { statusCode: 500 });
+    return { statusCode: 200, payload: { ok: true, created: true, added: missingCount, items } };
+  });
+}
+
 async function runMarketBuyCommand(profileName, body = {}) {
   return db.transaction(async () => {
     await lockPlayerStmt.get(profileName);
@@ -4826,6 +4927,14 @@ async function runMarketBuyCommand(profileName, body = {}) {
     const now = Date.now();
     await markMarketItemSoldStmt.run(now, itemId, profileName);
     await persistPvpState(profileName, state, now);
+    const committedProfile = await buildProfileState(profileName);
+    const committedState = committedProfile?.state;
+    const committedInventory = normalizeServerInventory(committedState?.itemInventory);
+    if (!committedInventory[slot].some((entry) => String(entry?.id || "") === itemId)) {
+      const persistenceError = new Error("A vasarlas megtortent, de a targy nem kerult a leltarba.");
+      persistenceError.statusCode = 500;
+      throw persistenceError;
+    }
     await logEvent(profileName, "market_purchase", "Feketepiaci vasarlas", {
       itemId,
       slot,
@@ -4841,7 +4950,7 @@ async function runMarketBuyCommand(profileName, body = {}) {
         basePrice,
         price,
         discountPercent: Math.round(marketDiscountRate * 1000) / 10,
-        state: buildEconomyClientState(state),
+        state: buildEconomyClientState(committedState),
       },
     };
   });
@@ -4872,6 +4981,12 @@ async function runMarketSellCommand(profileName, body = {}) {
     state.money = Math.max(0, toSafeInt(state.money, 0, 0) + price);
     const now = Date.now();
     await persistPvpState(profileName, state, now, { allowInventoryRemovals: true });
+    const committedProfile = await buildProfileState(profileName);
+    const committedState = committedProfile?.state;
+    const committedInventory = normalizeServerInventory(committedState?.itemInventory);
+    if (committedInventory[slot].some((entry) => String(entry?.id || "") === itemId)) {
+      throw Object.assign(new Error("Az eladott targy a leltarban maradt."), { statusCode: 500 });
+    }
     await logEvent(profileName, "market_sale", "Feketepiaci eladas", {
       itemId,
       itemName: item.name,
@@ -4884,7 +4999,7 @@ async function runMarketSellCommand(profileName, body = {}) {
         ok: true,
         item: { ...item, slot },
         price,
-        state: buildEconomyClientState(state),
+        state: buildEconomyClientState(committedState),
       },
     };
   });
@@ -7665,9 +7780,29 @@ async function handleApiRequest(request, response, pathname) {
     const requestedLimit = toSafeInt(url.searchParams.get("limit"), SERVER_MARKET_MAX_OFFERS, 1);
     const limit = Math.min(SERVER_MARKET_QUERY_LIMIT, Math.max(SERVER_MARKET_MAX_OFFERS, requestedLimit));
     const ownerFilter = profileName || null;
-    const items = selectServerMarketDisplayEntries((await listMarketItemsStmt.all(ownerFilter, ownerFilter, limit)).map(mapMarketItemRow));
+    const now = Date.now();
+    const rows = await listMarketItemsStmt.all(ownerFilter, ownerFilter, now, limit);
+    const items = selectServerMarketDisplayEntries(rows.map(mapMarketItemRow));
     sendJson(response, 200, { items: items.slice(0, SERVER_MARKET_MAX_OFFERS) });
     return true;
+  }
+
+  if (pathname === "/api/market-items/refresh" && request.method === "POST") {
+    try {
+      const profileName = getActiveProfileFromRequest(request);
+      if (!profileName) {
+        sendJson(response, 401, { error: "A piac frissitesehez be kell jelentkezni." });
+        return true;
+      }
+      const rawBody = await readRequestBody(request);
+      const body = rawBody ? JSON.parse(rawBody) : {};
+      const result = await runMarketRefreshCommand(profileName, body);
+      sendJson(response, result.statusCode, result.payload || { error: result.error });
+      return true;
+    } catch (error) {
+      sendJson(response, error.statusCode || 400, { error: error.message || "A piaci keszlet nem frissitheto." });
+      return true;
+    }
   }
 
   if (pathname === "/api/clans/dashboard" && request.method === "GET") {
@@ -8537,7 +8672,7 @@ async function handleApiRequest(request, response, pathname) {
       sendJson(response, result.statusCode, result.payload || { error: result.error });
       return true;
     } catch (error) {
-      sendJson(response, 400, { error: error.message || "A gazdasagi muvelet nem hajthato vegre." });
+      sendJson(response, error.statusCode || 400, { error: error.message || "A gazdasagi muvelet nem hajthato vegre." });
       return true;
     }
   }

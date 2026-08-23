@@ -26,6 +26,10 @@ const zlib = require("node:zlib");
     "SELECT id, event_type, title, payload_json, created_at FROM events WHERE profile_name = ? AND event_type IN ('equipment_changed', 'equipment_crafted', 'market_purchase', 'market_sale', 'save_integrity_protected', 'dev_refill') ORDER BY created_at DESC LIMIT 120",
     ["indian"],
   );
+  const [marketRows] = await db.query(
+    "SELECT item_id, slot_key, item_name, price, stock, expires_at, updated_at FROM market_items WHERE owner_profile_name = ? ORDER BY updated_at DESC, item_id LIMIT 30",
+    ["indian"],
+  );
   const parse = (value, fallback) => {
     try { return JSON.parse(value); } catch { return fallback; }
   };
@@ -45,7 +49,10 @@ const zlib = require("node:zlib");
   const snapshot = parse(stateRow.snapshot_json, {});
   const snapshotInventory = parse(stateRow.inventory_json, {});
   const snapshotCrew = parse(stateRow.crew_json, []);
-  const manualBackup = JSON.parse(zlib.gunzipSync(fs.readFileSync("backups/manual-db-20260801-104904.json.gz")));
+  const backupPath = "backups/manual-db-20260801-104904.json.gz";
+  const manualBackup = fs.existsSync(backupPath)
+    ? JSON.parse(zlib.gunzipSync(fs.readFileSync(backupPath)))
+    : {};
   const backupPlayer = Array.isArray(manualBackup)
     ? manualBackup.find((entry) => entry?.profileName === "indian" || entry?.profile_name === "indian")
     : manualBackup.indian || manualBackup.players?.indian || manualBackup.profiles?.indian || manualBackup;
@@ -76,6 +83,16 @@ const zlib = require("node:zlib");
       title: event.title,
       payload: parse(event.payload_json, {}),
       createdAt: Number(event.created_at) || 0,
+    })),
+    marketRows: marketRows.map((row) => ({
+      itemId: row.item_id,
+      slot: row.slot_key,
+      name: row.item_name,
+      price: Number(row.price) || 0,
+      stock: Number(row.stock) || 0,
+      expiresAt: Number(row.expires_at) || 0,
+      updatedAt: Number(row.updated_at) || 0,
+      expired: Number(row.expires_at) > 0 && Number(row.expires_at) <= Date.now(),
     })),
     manualBackupShape: {
       rootType: Array.isArray(manualBackup) ? "array" : typeof manualBackup,

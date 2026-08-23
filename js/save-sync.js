@@ -54,7 +54,6 @@ function getRememberedProfileName() {
 
 function createSaveSnapshot() {
   syncTimedActions();
-  ensureMarketStock();
   syncWorldRivalCities();
   return {
     profileName: state.profileName,
@@ -205,7 +204,6 @@ function hydrateState(saved) {
   state.marketStock = normalizeMarketStock(state.marketStock);
   state.marketRefreshAt = Number.isFinite(Number(state.marketRefreshAt)) ? Number(state.marketRefreshAt) : 0;
   state.marketCatalogVersion = typeof state.marketCatalogVersion === "string" ? state.marketCatalogVersion : "";
-  ensureMarketStock();
   state.mainBaseSpotId = typeof state.mainBaseSpotId === "string" ? state.mainBaseSpotId : null;
   state.worldBaseLotId = normalizeWorldBaseLotId(state.worldBaseLotId);
   state.worldBaseLevel = Math.max(1, Math.round(Number(state.worldBaseLevel) || 1));
