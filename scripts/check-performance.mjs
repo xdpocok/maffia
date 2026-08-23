@@ -8,7 +8,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const budget = JSON.parse(fs.readFileSync(path.join(root, "performance", "budget.json"), "utf8"));
 const report = JSON.parse(fs.readFileSync(path.join(root, "performance", "asset-report-after.json"), "utf8"));
 const files = [
-  "assets-inline.js", "game.js", "js/asset-runtime.js", "js/world-map.js", "js/city-scene.js", "js/app-shell.js",
+  "assets-inline.js", "game.js", "js/asset-runtime.js", "js/world-map.js", "js/city-scene.js", "js/app-shell.js", "js/shell-game.js", "js/dungeon.js",
   "style.css", "styles/combat.css", "styles/features.css",
 ].filter((file) => fs.existsSync(path.join(root, file)));
 function compressedSize(file) {

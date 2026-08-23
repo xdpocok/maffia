@@ -263,6 +263,10 @@ const state = {
   needsAvatarSelection: false,
   money: 120,
   fame: 0,
+  underworldMoney: 0,
+  underworldXp: 0,
+  underworldLevel: 1,
+  dungeonProgress: { easy: 1, medium: 1, hard: 1 },
   influence: 10,
   influenceSystemVersion: 1,
   crew: 0,
@@ -5923,12 +5927,21 @@ function protectClientPersistentProgress(saved) {
     : crewMembers.some((member) => member.hired && member.id === state.activeCrewMemberId)
       ? state.activeCrewMemberId
       : (crewMembers.find((member) => member.hired)?.id || null);
+  const currentDungeonProgress = state.dungeonProgress && typeof state.dungeonProgress === "object" ? state.dungeonProgress : {};
+  const savedDungeonProgress = saved.dungeonProgress && typeof saved.dungeonProgress === "object" ? saved.dungeonProgress : {};
+  const dungeonProgress = Object.fromEntries(["easy", "medium", "hard"].map((key) => [
+    key,
+    clamp(Math.max(Number(currentDungeonProgress[key]) || 1, Number(savedDungeonProgress[key]) || 1), 1, 88),
+  ]));
   return {
     ...saved,
     territories: mergeProtectedClientTerritories(state.territories, saved.territories),
     crewMembers,
     crew: Math.max(hiredCrewCount, Number(state.crew) || 0, Number(saved.crew) || 0),
     activeCrewMemberId,
+    dungeonProgress,
+    underworldMoney: Math.max(0, Number(state.underworldMoney) || 0),
+    underworldXp: Math.max(0, Number(state.underworldXp) || 0, Number(saved.underworldXp) || 0),
   };
 }
 
@@ -7335,9 +7348,15 @@ function restAtBase(spot) {
     sceneRef?.setMessage("Ez nem a fő bázisod.");
     return;
   }
+  // A mentor feladat a Pihenés gomb használatát kéri. Ezt a valódi fő
+  // bázison akkor is fogadjuk el, ha a játékos már magasabb szintű, tele
+  // van az élete/energiája, vagy az ingyenes pihenés még töltődik.
+  const completedMentorRest = completeMentorStep("rest");
   const remaining = Math.max(0, Number(state.baseRestAvailableAt) - Date.now());
   if (remaining > 0) {
-    sceneRef?.setMessage(`A bázison ${formatCountdown(remaining)} múlva pihenhetsz újra ingyen.`);
+    sceneRef?.setMessage(completedMentorRest
+      ? `A mentor pihenési feladata teljesült. A következő ingyenes pihenésig ${formatCountdown(remaining)} van hátra.`
+      : `A bázison ${formatCountdown(remaining)} múlva pihenhetsz újra ingyen.`);
     return;
   }
 
@@ -7349,7 +7368,7 @@ function restAtBase(spot) {
   state.heat = clamp(state.heat - heatLoss, 0, 100);
   state.baseRestDay = state.day;
   state.baseRestAvailableAt = Date.now() + BASE_REST_COOLDOWN_MS;
-  completeMentorStep("rest");
+  if (!completedMentorRest) completeMentorStep("rest");
   sceneRef?.pushLog(`Pihenés a bázison. +${healthGain} életerő, +${energyGain} akciópont, -${heatLoss} körözés.`);
   sceneRef?.setMessage("A banda elbújt a bázison. Hat óra múlva pihenhetsz itt újra ingyen.");
   saveGame();
@@ -7630,6 +7649,10 @@ function startNewGame(name) {
   state.needsAvatarSelection = true;
   state.money = 120;
   state.fame = 0;
+  state.underworldMoney = 0;
+  state.underworldXp = 0;
+  state.underworldLevel = 1;
+  state.dungeonProgress = { easy: 1, medium: 1, hard: 1 };
   state.influence = STARTING_INFLUENCE;
   state.influenceSystemVersion = INFLUENCE_SYSTEM_VERSION;
   state.crew = 0;
@@ -7737,6 +7760,10 @@ function resetGame() {
   state.needsAvatarSelection = false;
   state.money = 120;
   state.fame = 0;
+  state.underworldMoney = 0;
+  state.underworldXp = 0;
+  state.underworldLevel = 1;
+  state.dungeonProgress = { easy: 1, medium: 1, hard: 1 };
   state.crew = 0;
   state.heat = 0;
   state.health = 100;
@@ -7841,7 +7868,7 @@ function ensureCityEngine() {
   const featureStyles = Promise.all([
     loadStylesheet("./styles/combat.css?v=mobile-robbery-selection-2026-08-11-15"),
     loadStylesheet("./styles/features.css?v=npc-city-half-size-2026-08-07-1"),
-  ]).then(() => loadStylesheet("./styles/hud-redesign.css?v=mobile-item-craft-2026-08-11-18"));
+  ]).then(() => loadStylesheet("./styles/hud-redesign.css?v=harbor-scrollbars-2026-08-23-3"));
   const phaserEngine = loadClassicScript("https://cdn.jsdelivr.net/npm/phaser@3.90.0/dist/phaser.min.js");
   cityEnginePromise = Promise.all([featureStyles, phaserEngine])
     .then(() => loadClassicScript("./js/city-scene.js?v=fast-city-startup-2026-08-09-1"))

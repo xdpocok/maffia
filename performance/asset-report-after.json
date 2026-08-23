@@ -1,9 +1,9 @@
 {
-  "projectBytes": 187009586,
-  "imageBytes": 148481924,
-  "imageCount": 781,
-  "imagesOver1MB": 44,
-  "referencedImageBytes": 19080835,
+  "projectBytes": 210362719,
+  "imageBytes": 171682379,
+  "imageCount": 799,
+  "imagesOver1MB": 53,
+  "referencedImageBytes": 21264571,
   "missingImageReferences": [],
   "referencedImages": [
     {
@@ -82,6 +82,20 @@
       "width": 1280,
       "height": 820,
       "mode": "RGB"
+    },
+    {
+      "path": "assets/character/dungeon-fighter-enemy-v1.webp",
+      "bytes": 168706,
+      "width": 1024,
+      "height": 1536,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/character/dungeon-fighter-player-v1.webp",
+      "bytes": 187704,
+      "width": 1024,
+      "height": 1536,
+      "mode": "RGBA"
     },
     {
       "path": "assets/character/gangster-character.webp",
@@ -1064,6 +1078,41 @@
       "mode": "RGBA"
     },
     {
+      "path": "assets/map/dungeon-corridor-v1.webp",
+      "bytes": 184138,
+      "width": 1672,
+      "height": 941,
+      "mode": "RGB"
+    },
+    {
+      "path": "assets/map/dungeon-guard-room-v1.webp",
+      "bytes": 248670,
+      "width": 1672,
+      "height": 941,
+      "mode": "RGB"
+    },
+    {
+      "path": "assets/map/dungeon-hideout-mafia-v1.webp",
+      "bytes": 195990,
+      "width": 1535,
+      "height": 864,
+      "mode": "RGB"
+    },
+    {
+      "path": "assets/map/dungeon-prison-mafia-v1.webp",
+      "bytes": 418434,
+      "width": 1672,
+      "height": 941,
+      "mode": "RGB"
+    },
+    {
+      "path": "assets/map/dungeon-vault-v1.webp",
+      "bytes": 313052,
+      "width": 1672,
+      "height": 941,
+      "mode": "RGB"
+    },
+    {
       "path": "assets/map/map-background-clean-roadfix-1440.webp",
       "bytes": 247476,
       "width": 1440,
@@ -1174,6 +1223,20 @@
       "width": 261,
       "height": 220,
       "mode": "RGBA"
+    },
+    {
+      "path": "assets/map/shell-cup-red-v2.webp",
+      "bytes": 214428,
+      "width": 420,
+      "height": 425,
+      "mode": "RGBA"
+    },
+    {
+      "path": "assets/map/shell-game-mafia-table-v1.webp",
+      "bytes": 252614,
+      "width": 1672,
+      "height": 941,
+      "mode": "RGB"
     },
     {
       "path": "assets/map/underpass-interior-mafia-v2.webp",

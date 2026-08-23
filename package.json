@@ -19,6 +19,7 @@
     "check:server-processes": "node scripts/check-server-processes.mjs",
     "check:data-integrity": "node scripts/check-data-integrity.mjs",
     "check:stability": "node scripts/check-stability.mjs",
+    "check:static-links": "node scripts/audit-static-links.mjs",
     "check:stabilization": "node --check game.js && node --check server.js && node scripts/check-stability.mjs",
     "audit:assets": "python scripts/audit-assets.py --output performance/asset-report-after.json",
     "assets:responsive": "python scripts/generate-responsive-assets.py",

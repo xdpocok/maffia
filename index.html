@@ -4,16 +4,28 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Maffia: Birodalomépítő</title>
+    <script>
+      // Never leave credentials in the address bar or browser history, even if
+      // the login JavaScript has not finished loading when Enter is pressed.
+      (() => {
+        const url = new URL(window.location.href);
+        const sensitiveKeys = ["login", "password", "username", "email", "password-confirmation"];
+        if (!sensitiveKeys.some((key) => url.searchParams.has(key))) return;
+        sensitiveKeys.forEach((key) => url.searchParams.delete(key));
+        const cleanUrl = `${url.pathname}${url.search}${url.hash}`;
+        window.history.replaceState(null, document.title, cleanUrl || "/");
+      })();
+    </script>
     <link rel="preload" as="image" href="./register-960.webp" media="(max-width: 1199px)" fetchpriority="high" />
     <link rel="preload" as="image" href="./register-1440.webp" media="(min-width: 1200px) and (max-width: 1799px)" fetchpriority="high" />
     <link rel="preload" as="image" href="./register.webp" media="(min-width: 1800px)" fetchpriority="high" />
-    <link rel="stylesheet" href="./style.css?v=underpass-large-scene-2026-08-10-15" />
+    <link rel="stylesheet" href="./style.css?v=shell-cup-betting-2026-08-23-16" />
   </head>
   <body>
     <div id="bootOverlay" class="boot-overlay">
       <section class="boot-card" aria-label="Bejelentkezés és regisztráció">
         <div class="login-deck">
-          <form id="registerForm" class="login-panel login-panel--signin" novalidate>
+          <form id="registerForm" class="login-panel login-panel--signin" method="post" action="/api/session" novalidate>
             <h2>Bejelentkezés</h2>
             <label class="auth-field">
               <span class="auth-field__icon" aria-hidden="true">♟</span>
@@ -36,7 +48,7 @@
 
           <div class="login-seal" aria-hidden="true"><strong>M</strong></div>
 
-          <form id="previewRegistrationForm" class="login-panel login-panel--register" novalidate>
+          <form id="previewRegistrationForm" class="login-panel login-panel--register" method="post" action="/api/register" novalidate>
             <h2>Regisztráció</h2>
             <label class="auth-field"><span class="auth-field__icon" aria-hidden="true">♟</span><span class="sr-only">Felhasználónév</span><input id="registrationName" name="username" type="text" minlength="3" maxlength="18" placeholder="Felhasználónév" autocomplete="username" required /></label>
             <label class="auth-field"><span class="auth-field__icon" aria-hidden="true">✉</span><span class="sr-only">E-mail cím</span><input id="registrationEmail" name="email" type="email" maxlength="254" placeholder="E-mail cím" autocomplete="email" required /></label>
@@ -216,13 +228,89 @@
       <div id="underpassBackdrop" class="underpass-modal__backdrop"></div>
       <article class="underpass-modal__panel" role="dialog" aria-modal="true" aria-labelledby="underpassTitle">
         <button id="underpassClose" class="underpass-modal__close" type="button" aria-label="Aluljáró bezárása">×</button>
-        <div class="underpass-modal__eyebrow">Déli városrész · 27-es telek</div>
-        <h2 id="underpassTitle">Aluljáró</h2>
-        <p>Az éjszakai aluljáró mélyén árusok, kártyások és a város alvilágának emberei gyűlnek össze a földalatti szerelvények mellett.</p>
+        <h2 id="underpassTitle" tabindex="0">Aluljáró<span class="underpass-title-stats" role="tooltip"><span>Fekete pénz <strong id="dungeonUnderworldMoney">0</strong></span><span>Alvilági XP <strong id="dungeonUnderworldXp">0 / 50</strong></span><span>Alvilági szint <strong id="dungeonUnderworldLevel">1</strong></span></span></h2>
         <div id="underpassScene" class="underpass-modal__scene">
           <img class="underpass-modal__image" src="./assets/map/underpass-interior-mafia-v2.webp" alt="1930-as évekbeli maffia aluljáró árusokkal, kártyásokkal és földalatti szerelvénnyel">
+          <button id="shellGameHotspot" class="underpass-hotspot underpass-hotspot--shell-game" type="button" aria-label="Itt a piros, hol a piros játék megnyitása"><span>Itt a piros, hol a piros?</span></button>
+          <button id="dungeonHotspot" class="underpass-hotspot underpass-hotspot--dungeon" type="button" aria-label="Dungeon megnyitása"><span>Dungeon</span></button>
+          <button id="underworldExchangeHotspot" class="underpass-hotspot underpass-hotspot--exchange" type="button" aria-label="Alvilági pénzváltó megnyitása"><span>Alvilági pénzváltó</span></button>
         </div>
-        <div class="underpass-modal__footer">A helyszín jelenleg felfedezhető városi pont.</div>
+      </article>
+    </section>
+
+    <section id="underworldExchangeModal" class="underworld-exchange hidden" aria-hidden="true">
+      <div id="underworldExchangeBackdrop" class="underworld-exchange__backdrop"></div>
+      <article class="underworld-exchange__panel" role="dialog" aria-modal="true" aria-labelledby="underworldExchangeTitle">
+        <button id="underworldExchangeClose" class="underworld-exchange__close" type="button" aria-label="Pénzváltó bezárása">×</button>
+        <div class="underworld-exchange__eyebrow">A lépcső alatti uzsorás</div>
+        <h2 id="underworldExchangeTitle">Alvilági pénzváltó</h2>
+        <div class="underworld-exchange__balances"><span>Rendes pénz <strong id="exchangeNormalBalance">0 $</strong></span><span>Fekete pénz <strong id="exchangeBlackBalance">0</strong></span></div>
+        <label for="underworldExchangeAmount">Beváltandó összeg</label>
+        <input id="underworldExchangeAmount" type="number" min="1" step="1" value="100" inputmode="numeric">
+        <div class="underworld-exchange__rates">
+          <button id="exchangeToBlack" type="button"><span>Rendesből fekete</span><strong>100 $ → 70 fekete pénz</strong></button>
+          <button id="exchangeToNormal" type="button"><span>Feketéből rendes</span><strong>100 fekete → 60 $</strong></button>
+        </div>
+        <p id="underworldExchangeStatus" aria-live="polite">A pénzváltó minden üzletből részesedést tart meg.</p>
+      </article>
+    </section>
+
+    <section id="dungeonModal" class="dungeon hidden" aria-hidden="true">
+      <div id="dungeonBackdrop" class="dungeon__backdrop"></div>
+      <article class="dungeon__panel" role="dialog" aria-modal="true" aria-labelledby="dungeonTitle">
+        <button id="dungeonClose" class="dungeon__close" type="button" aria-label="Dungeon bezárása">×</button>
+        <header class="dungeon__header"><div class="dungeon__eyebrow">Az alvilág vasútja</div><h2 id="dungeonTitle">Dungeon</h2><p id="dungeonStatus" aria-live="polite">Válassz küldetést. Minél mélyebbre mész, annál nagyobb a veszély és a jutalom.</p></header>
+        <div id="dungeonMissionSelect" class="dungeon__missions">
+          <button class="dungeon-card dungeon-card--easy" type="button" data-dungeon-difficulty="easy"><span class="dungeon-card__level">Könnyű</span><em>Szint <strong data-dungeon-stage="easy">1</strong> / 88</em><strong>Az eltűnt küldemény</strong><small>3 ellenfél · legfeljebb 8 harci kör</small><b>Jutalom: 40 fekete pénz · 12 alvilági XP</b></button>
+          <button class="dungeon-card dungeon-card--medium" type="button" data-dungeon-difficulty="medium"><span class="dungeon-card__level">Közepes</span><em>Szint <strong data-dungeon-stage="medium">1</strong> / 88</em><strong>A 08-as cella</strong><small>4 ellenfél · legfeljebb 10 harci kör</small><b>Jutalom: 90 fekete pénz · 28 alvilági XP</b></button>
+          <button class="dungeon-card dungeon-card--hard" type="button" data-dungeon-difficulty="hard"><span class="dungeon-card__level">Nehéz</span><em>Szint <strong data-dungeon-stage="hard">1</strong> / 88</em><strong>A vasrács mögött</strong><small>5 ellenfél · legfeljebb 12 harci kör</small><b>Jutalom: 180 fekete pénz · 55 alvilági XP</b></button>
+        </div>
+        <section id="dungeonTargetSelect" class="dungeon-target hidden" aria-hidden="true">
+          <div class="dungeon-target__heading"><span>Föld alatti búvóhely</span><h3>Válaszd ki, kit támadsz meg</h3></div>
+          <div id="dungeonEnemyChoices" class="dungeon-target__choices dungeon-target__choices--enemy"></div>
+          <div class="dungeon-target__heading dungeon-target__heading--crew"><span>A te bandád</span><h3>Válaszd ki, melyik embered támad</h3></div>
+          <div id="dungeonCrewChoices" class="dungeon-target__choices dungeon-target__choices--crew"></div>
+          <div class="dungeon-target__actions">
+            <button id="dungeonAttackStart" class="dungeon__roll" type="button" disabled>Támadás indítása</button>
+            <button id="dungeonSelectionBack" class="dungeon__back" type="button">Vissza</button>
+          </div>
+        </section>
+        <section id="dungeonEncounter" class="dungeon-encounter hidden" aria-hidden="true">
+          <div class="dungeon-fight-stage">
+            <div class="dungeon-fighter dungeon-fighter--player"><img id="dungeonPlayerPortrait" src="./assets/character/player-avatar-boss.webp" alt="Saját harcos"><span id="dungeonPlayerName">Te</span><strong id="dungeonPlayerScore">❤️ 100</strong><div id="dungeonPlayerStats" class="dungeon-fighter__stats"></div></div>
+            <div class="dungeon-encounter__versus">VS</div>
+            <div class="dungeon-fighter dungeon-fighter--enemy"><img id="dungeonEnemyPortrait" src="./assets/character/gangster-character.webp" alt="Ellenség"><span id="dungeonEnemyName">Ellenség</span><strong id="dungeonEnemyScore">❤️ 100</strong><div id="dungeonEnemyStats" class="dungeon-fighter__stats"></div></div>
+          </div>
+          <div id="dungeonVaultReward" class="dungeon-vault-reward hidden" aria-hidden="true">
+            <div class="dungeon-vault-reward__safe"><div class="dungeon-vault-reward__door"><i></i></div><div class="dungeon-vault-reward__gold"></div></div>
+            <div class="dungeon-vault-reward__flash"><span>A széf kinyílt!</span><strong id="dungeonRewardMoney">+0 fekete pénz</strong><b id="dungeonRewardFame">+0 alvilági XP</b><em id="dungeonRewardLevel">Következő Dungeon szint: 2</em></div>
+          </div>
+          <aside class="dungeon-dice-dock">
+            <div class="dungeon-dice"><div id="dungeonPlayerDie" class="dungeon-die">?</div><div id="dungeonEnemyDie" class="dungeon-die dungeon-die--enemy">?</div></div>
+            <div class="dungeon-encounter__progress"><span id="dungeonRoundText">Válassz küldetést</span><div><i id="dungeonProgressFill"></i></div></div>
+            <button id="dungeonRoll" class="dungeon__roll" type="button">Dobás</button>
+            <div id="dungeonCompletionActions" class="dungeon-completion-actions hidden"><button id="dungeonNextLevel" class="dungeon__roll" type="button">Következő szint</button><button id="dungeonBack" class="dungeon__back" type="button">Kilépés a menübe</button></div>
+          </aside>
+        </section>
+      </article>
+    </section>
+
+    <section id="shellGameModal" class="shell-game hidden" aria-hidden="true">
+      <div id="shellGameBackdrop" class="shell-game__backdrop"></div>
+      <article class="shell-game__panel" role="dialog" aria-modal="true" aria-labelledby="shellGameTitle">
+        <button id="shellGameClose" class="shell-game__close" type="button" aria-label="Játék bezárása">×</button>
+        <div class="shell-game__eyebrow">Az aluljáró szerencsejátéka</div>
+        <h2 id="shellGameTitle">Itt a piros, hol a piros?</h2>
+        <p id="shellGameMessage" class="shell-game__message" aria-live="polite">Figyeld meg, melyik pohár alá kerül a piros golyó!</p>
+        <div class="shell-game__room">
+          <div id="shellGameTable" class="shell-game__table">
+            <button class="shell-game__cup-slot" type="button" data-shell-slot="0" aria-label="Bal oldali pohár felnyitása"><span class="shell-game__ball"></span><span class="shell-game__cup"></span></button>
+            <button class="shell-game__cup-slot" type="button" data-shell-slot="1" aria-label="Középső pohár felnyitása"><span class="shell-game__ball"></span><span class="shell-game__cup"></span></button>
+            <button class="shell-game__cup-slot" type="button" data-shell-slot="2" aria-label="Jobb oldali pohár felnyitása"><span class="shell-game__ball"></span><span class="shell-game__cup"></span></button>
+          </div>
+          <div id="shellGamePickRow" class="shell-game__pick-row" aria-label="Tét elhelyezése"><button type="button" data-shell-bet-slot="0" aria-label="Tét a bal oldali pohárra">+</button><button type="button" data-shell-bet-slot="1" aria-label="Tét a középső pohárra">+</button><button type="button" data-shell-bet-slot="2" aria-label="Tét a jobb oldali pohárra">+</button></div>
+        </div>
+        <div class="shell-game__controls"><button id="shellGameStart" class="shell-game__start" type="button">Játék indítása</button><div class="shell-game__score"><span>Győzelem: <strong id="shellGameWins">0</strong></span><span>Vereség: <strong id="shellGameLosses">0</strong></span></div></div>
       </article>
     </section>
 
@@ -809,11 +897,14 @@
     <script src="./js/world-map.js?v=influence-system-2026-07-30-1"></script>
     <script src="./js/equipment-catalog-data.js?v=item-catalog-2026-08-01-1"></script>
     <script src="./js/map-config.js?v=underpass-name-modal-2026-08-10-22"></script>
-    <script src="./js/save-sync.js?v=mentor-dismiss-step-2026-08-10-2"></script>
+    <script src="./js/save-sync.js?v=dungeon-progress-sync-2026-08-22-3"></script>
     <script src="./js/quests.js?v=mentor-dismiss-step-2026-08-10-5"></script>
     <script src="./js/ui-choice-wheel.js?v=choice-wheel-module-2026-08-09-1"></script>
+    <script src="./js/shell-game.js?v=shell-game-random-final-2026-08-23-9"></script>
+    <script src="./js/dungeon.js?v=dungeon-persistent-health-2026-08-23-13"></script>
+    <script src="./js/underworld-exchange.js?v=underworld-exchange-2026-08-22-1"></script>
     <script src="./js/harbor.js?v=harbor-module-2026-08-09-1"></script>
-    <script src="./game.js?v=mobile-item-craft-2026-08-11-18"></script>
+    <script src="./game.js?v=harbor-scrollbars-2026-08-23-22"></script>
     <script src="./js/app-shell.js?v=cache-refresh-2026-08-01-1"></script>
   </body>
 </html>

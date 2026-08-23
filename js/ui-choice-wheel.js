@@ -138,6 +138,16 @@ function hideLotInfoModal() {
 
 function showUnderpassModal() {
   hideChoiceWheel();
+  const underworldMoney = Math.max(0, Math.round(Number(state?.underworldMoney) || 0));
+  const underworldXp = Math.max(0, Math.round(Number(state?.underworldXp) || 0));
+  const underworldLevel = Math.min(88, Math.max(1, Math.floor(Math.sqrt(underworldXp / 50)) + 1));
+  const nextLevelXp = 50 * underworldLevel * underworldLevel;
+  const moneyEl = document.getElementById("dungeonUnderworldMoney");
+  const xpEl = document.getElementById("dungeonUnderworldXp");
+  const levelEl = document.getElementById("dungeonUnderworldLevel");
+  if (moneyEl) moneyEl.textContent = String(underworldMoney);
+  if (xpEl) xpEl.textContent = underworldLevel >= 88 ? `${underworldXp} / MAX` : `${underworldXp} / ${nextLevelXp}`;
+  if (levelEl) levelEl.textContent = String(underworldLevel);
   underpassModal?.classList.remove("hidden");
   underpassModal?.setAttribute("aria-hidden", "false");
 }
@@ -446,5 +456,3 @@ async function runChoiceAction(actionId) {
   sceneRef?.drawDistrictHighlight?.();
   hideChoiceWheel();
 }
-
-

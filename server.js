@@ -2665,6 +2665,14 @@ async function writePlayerState(profileName, state, now, existingProfileState = 
     needsAvatarSelection: Boolean(state.needsAvatarSelection),
     money: state.money ?? 0,
     fame: preservedFame,
+    underworldMoney: Math.max(0, toSafeInt(state.underworldMoney, 0, 0)),
+    underworldXp: Math.max(0, toSafeInt(state.underworldXp, 0, 0)),
+    underworldLevel: Math.max(1, toSafeInt(state.underworldLevel, 1, 1)),
+    dungeonProgress: {
+      easy: Math.min(88, Math.max(1, toSafeInt(state.dungeonProgress?.easy, 1, 1))),
+      medium: Math.min(88, Math.max(1, toSafeInt(state.dungeonProgress?.medium, 1, 1))),
+      hard: Math.min(88, Math.max(1, toSafeInt(state.dungeonProgress?.hard, 1, 1))),
+    },
     heat: state.heat ?? 0,
     influence: normalizeServerInfluence(state.influence, SERVER_STARTING_INFLUENCE),
     influenceSystemVersion: SERVER_INFLUENCE_SYSTEM_VERSION,
@@ -3292,6 +3300,15 @@ function protectServerOwnedClientSave(existingState, incomingState) {
     worldBaseLotId: existing.worldBaseLotId || incoming.worldBaseLotId || null,
     worldBaseLevel: Math.max(1, toSafeInt(existing.worldBaseLevel, 1, 1), toSafeInt(incoming.worldBaseLevel, 1, 1)),
     needsWorldBaseSelection: existing.worldBaseLotId ? false : Boolean(incoming.needsWorldBaseSelection),
+    dungeonProgress: Object.fromEntries(["easy", "medium", "hard"].map((key) => [
+      key,
+      Math.min(88, Math.max(
+        1,
+        toSafeInt(existing.dungeonProgress?.[key], 1, 1),
+        toSafeInt(incoming.dungeonProgress?.[key], 1, 1),
+      )),
+    ])),
+    underworldXp: Math.max(0, toSafeInt(existing.underworldXp, 0, 0), toSafeInt(incoming.underworldXp, 0, 0)),
   };
 }
 

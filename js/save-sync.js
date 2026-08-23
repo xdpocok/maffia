@@ -63,6 +63,10 @@ function createSaveSnapshot() {
     needsAvatarSelection: state.needsAvatarSelection,
     money: state.money,
     fame: state.fame,
+    underworldMoney: state.underworldMoney,
+    underworldXp: state.underworldXp,
+    underworldLevel: state.underworldLevel,
+    dungeonProgress: state.dungeonProgress,
     influence: normalizeInfluence(state.influence),
     influenceSystemVersion: INFLUENCE_SYSTEM_VERSION,
     crew: state.crew,
@@ -129,6 +133,14 @@ function createSaveSnapshot() {
 function normalizeClientStateAfterServerUpdate(previousOfferedQuests = state.offeredQuests) {
   state.money = Math.max(0, Math.round(Number(state.money) || 0));
   state.fame = Math.max(0, Math.round(Number(state.fame) || 0));
+  state.underworldMoney = Math.max(0, Math.round(Number(state.underworldMoney) || 0));
+  state.underworldXp = Math.max(0, Math.round(Number(state.underworldXp) || 0));
+  state.underworldLevel = Math.min(88, Math.max(1, Math.floor(Math.sqrt(state.underworldXp / 50)) + 1));
+  state.dungeonProgress = {
+    easy: clamp(Math.round(Number(state.dungeonProgress?.easy) || 1), 1, 88),
+    medium: clamp(Math.round(Number(state.dungeonProgress?.medium) || 1), 1, 88),
+    hard: clamp(Math.round(Number(state.dungeonProgress?.hard) || 1), 1, 88),
+  };
   state.health = clamp(Number(state.health) || 0, 0, 100);
   state.energy = clamp(Number(state.energy) || 0, 0, 100);
   state.heat = clamp(Number(state.heat) || 0, 0, 100);
@@ -321,6 +333,7 @@ async function flushQueuedSave(forceKeepalive = false) {
         sceneRef?.refreshHUD();
         if (previousTerritories !== JSON.stringify(state.territories)) sceneRef?.refreshMap();
         sceneRef?.setMessage("A szerver frissebb allapotot kuldott, a jatek szinkronizalva lett.");
+        latestQueuedSave = createSaveSnapshot();
         return;
       }
       // The live game continues even if the remote save endpoint is temporarily unavailable.
@@ -465,4 +478,3 @@ function startServerStateSync() {
   }, SERVER_STATE_SYNC_INTERVAL_MS);
   void syncPoliceRaidFromServer();
 }
-
