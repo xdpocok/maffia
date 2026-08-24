@@ -21,13 +21,21 @@ const health = await get("/api/health");
 check("szerver health", health.response.ok && JSON.parse(health.text).ok === true, `HTTP ${health.response.status}`);
 
 const page = await get("/");
+const styleSource = fs.readFileSync(path.join(root, "style.css"), "utf8");
 check("login felulet", page.response.ok && page.text.includes('id="registerForm"') && page.text.includes('id="previewRegistrationForm"'));
 check("kozossegi megosztasi kep", page.text.includes('property="og:image" content="https://maffiabirodalom.hu/register.webp"') && page.text.includes('name="twitter:card" content="summary_large_image"'));
 check("belepesi adatok nem kerulnek URL-be", page.text.includes('id="registerForm" class="login-panel login-panel--signin" method="post"') && page.text.includes("window.history.replaceState"));
 check("kormenu", page.text.includes('id="choiceWheel"') && page.text.includes('id="choiceWheelAction5"'));
 check("27-es telek", page.text.includes('id="underpassModal"') && page.text.includes('id="underpassTitle"') && page.text.includes('id="shellGameHotspot"'));
 check("kikoto kontenerek", ["harborMapView", "harborMapZones", "harborOperationPanel", "hudQuickDock"].every((id) => page.text.includes(`id="${id}"`)));
-check("nexforge studio link", page.text.includes('href="https://nexforge.hu/"') && page.text.includes('rel="noopener noreferrer"'));
+check(
+  "nexforge studio link",
+  page.text.includes('href="https://nexforge.hu/"')
+    && page.text.includes('rel="noopener noreferrer"')
+    && styleSource.includes("pointer-events: auto;")
+    && styleSource.includes("body.is-harbor-map-open .studio-hub")
+    && !styleSource.includes("body.is-harbor-map-open .studio-hub {\n  display: none;"),
+);
 
 const gameSource = fs.readFileSync(path.join(root, "game.js"), "utf8");
 const mapConfigSource = fs.readFileSync(path.join(root, "js", "map-config.js"), "utf8");
@@ -56,8 +64,7 @@ const marketNow = Date.now();
 check(
   "piaci ajanlatok ervenyesek",
   Array.isArray(marketPayload.items)
-    && marketPayload.items.every((item) => Number(item.stock) > 0 && (!item.expiresAt || Number(item.expiresAt) > marketNow))
-    && serverSource.includes("AND stock > 0")
+    && marketPayload.items.every((item) => Number(item.stock) >= 0 && (!item.expiresAt || Number(item.expiresAt) > marketNow))
     && serverSource.includes("AND (expires_at IS NULL OR expires_at > ?)")
     && gameSource.includes('fetch("/api/market-items/refresh"'),
 );
@@ -69,10 +76,18 @@ check(
   "nyolc feketepiaci aru es teljes idozitett csere",
   gameSource.includes("if (items.length >= MARKET_MAX_OFFERS)")
     && gameSource.includes("Math.floor(refreshAt / MARKET_REFRESH_MS)")
-    && serverSource.includes("existingRows.length >= SERVER_MARKET_MAX_OFFERS")
-    && serverSource.includes("SERVER_MARKET_MAX_OFFERS - existingStock.length")
+    && serverSource.includes("if (existingRows.length > 0)")
+    && serverSource.includes("entry?.item?.id === itemId ? { ...entry, stock: 0 } : entry")
     && serverSource.includes("items.length !== SERVER_MARKET_MAX_OFFERS")
     && !serverSource.includes("await renewExpiredMarketItemsByOwnerStmt.run"),
+);
+check(
+  "feketepiac szerveres automatikus ujratoltes",
+  serverSource.includes("function createServerMarketStock")
+    && serverSource.includes("rows.length === 0")
+    && serverSource.includes("const refreshResult = await runMarketRefreshCommand(ownerFilter)")
+    && serverSource.includes("const marketStock = createServerMarketStock(profileName, now)")
+    && serverSource.includes('source: "black-market"'),
 );
 
 console.table(checks);

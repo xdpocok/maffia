@@ -961,6 +961,9 @@ function normalizeMarketStock(source) {
     if (!item) return null;
     return {
       slot,
+      stock: Number.isFinite(Number(entry?.stock))
+        ? Math.max(0, Math.round(Number(entry.stock)))
+        : 1,
       price: Number.isFinite(Number(entry?.price))
         ? Math.max(1, Math.round(Number(entry.price)))
         : getEquipmentRarityPrice(item.rarity, item.power),
@@ -2796,6 +2799,7 @@ function renderLeaderboardPanel(saves) {
 
 function getMarketPanelHtml() {
   const stock = Array.isArray(state.marketStock) ? state.marketStock : [];
+  const availableCount = stock.filter((entry) => Number(entry?.stock) > 0).length;
   return `
     <section class="market-panel">
       <article class="market-panel__hero">
@@ -2806,7 +2810,7 @@ function getMarketPanelHtml() {
         <div class="market-panel__ledger">
           <strong>Kassza: ${state.money} $</strong>
           <span>Friss keszlet: ${new Date(state.marketRefreshAt).toLocaleTimeString("hu-HU", { hour: "2-digit", minute: "2-digit" })}</span>
-          <em>A piacon most ${stock.length} elerheto aru var rad.</em>
+          <em>A piacon most ${availableCount} elerheto aru var rad.</em>
         </div>
       </article>
       <div class="market-panel__tools" data-market-tools>
@@ -2842,17 +2846,18 @@ function getMarketPanelHtml() {
       </div>
       <div class="market-panel__grid">
         ${stock.map((entry) => {
+          const soldOut = Number(entry?.stock) <= 0;
           const alreadyOwned = Array.isArray(state.itemInventory?.[entry.slot])
             && state.itemInventory[entry.slot].some((ownedItem) => ownedItem.id === entry.item.id);
           const discountedPrice = getMarketOfferPrice(entry);
           const discountPercent = Math.round(getInfluenceBenefits().marketDiscountRate * 1000) / 10;
           const cannotAfford = state.money < discountedPrice;
-          const disabled = alreadyOwned || cannotAfford;
+          const disabled = soldOut || alreadyOwned || cannotAfford;
           const upgradeDelta = getMarketOfferDeltaPower(entry.slot, entry.item);
           const isUpgrade = upgradeDelta > 0;
           return `
           <article
-            class="market-item market-item--buying${alreadyOwned ? " is-owned" : ""}"
+            class="market-item market-item--buying${alreadyOwned ? " is-owned" : ""}${soldOut ? " is-sold-out" : ""}"
             tabindex="0"
             data-market-card
             data-market-slot="${entry.slot}"
@@ -2876,7 +2881,7 @@ function getMarketPanelHtml() {
               type="button"
               data-market-buy="${escapeHtml(entry.item.id)}"
               ${disabled ? "disabled" : ""}>
-              ${alreadyOwned ? "Elkelt" : cannotAfford ? "Nincs eleg penz" : "Megveszem"}
+              ${soldOut ? "Elfogyott" : alreadyOwned ? "Elkelt" : cannotAfford ? "Nincs eleg penz" : "Megveszem"}
             </button>
             ${getMarketEquippedCompareHtml(entry.slot, entry.item)}
           </article>
@@ -2960,6 +2965,7 @@ function applyMarketApiItems(source) {
     return {
       ...payload,
       slot: entry?.slotKey || payload.slot,
+      stock: Number.isFinite(Number(entry?.stock)) ? Number(entry.stock) : payload.stock,
       price: Number.isFinite(Number(entry?.price)) ? Number(entry.price) : payload.price,
       item: {
         ...payloadItem,
@@ -2997,8 +3003,9 @@ async function syncMarketStockFromServer() {
     return true;
   }
 
-  // Zero active rows means the common refresh deadline expired: all eight are
-  // replaced. With 1-7 rows only the missing positions are filled by the server.
+  // A megvett ajanlatok stock=0 allapotban a kozos lejaratig latszanak. A POST
+  // csak akkor ker idozitett teljes cseret, ha a szerver egyetlen aktualis sort
+  // sem adott vissza (uj profil vagy lejart teljes keszlet).
   const generatedStock = normalizeMarketStock(generateMarketStock(
     `${state.profileName}-server-refresh-${items.length}-${Date.now()}`,
     Date.now(),
@@ -7952,8 +7959,8 @@ function ensureCityEngine() {
   window.MaffiaAssetRuntime?.loadImage?.(mapBackgroundLayer);
   const featureStyles = Promise.all([
     loadStylesheet("./styles/combat.css?v=mobile-robbery-selection-2026-08-11-15"),
-    loadStylesheet("./styles/features.css?v=npc-city-half-size-2026-08-07-1"),
-  ]).then(() => loadStylesheet("./styles/hud-redesign.css?v=harbor-scrollbars-2026-08-23-3"));
+    loadStylesheet("./styles/features.css?v=market-soldout-cycle-2026-08-24-2"),
+  ]).then(() => loadStylesheet("./styles/hud-redesign.css?v=nexforge-harbor-link-2026-08-24-4"));
   const phaserEngine = loadClassicScript("https://cdn.jsdelivr.net/npm/phaser@3.90.0/dist/phaser.min.js");
   cityEnginePromise = Promise.all([featureStyles, phaserEngine])
     .then(() => loadClassicScript("./js/city-scene.js?v=fast-city-startup-2026-08-09-1"))

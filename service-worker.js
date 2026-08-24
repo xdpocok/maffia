@@ -1,7 +1,7 @@
-const CACHE_VERSION = "maffia-assets-2026-08-23-189-nexforge-link";
+const CACHE_VERSION = "maffia-assets-2026-08-24-192-nexforge-harbor-link";
 const CORE_ASSETS = [
-  "./style.css?v=nexforge-link-2026-08-23-18",
-  "./styles/hud-redesign.css?v=harbor-scrollbars-2026-08-23-3",
+  "./style.css?v=nexforge-link-2026-08-24-19",
+  "./styles/hud-redesign.css?v=nexforge-harbor-link-2026-08-24-4",
   "./assets-inline.js",
   "./js/facebook-instant.js?v=facebook-instant-base-2026-08-11-1",
   "./js/asset-runtime.js?v=cache-refresh-2026-08-01-1",
@@ -22,7 +22,7 @@ const CORE_ASSETS = [
   "./assets/map/dungeon-hideout-mafia-v1.webp",
   "./js/harbor.js?v=market-authority-2026-08-23-4",
   "./js/app-shell.js?v=cache-refresh-2026-08-01-1",
-  "./game.js?v=market-eight-rotation-2026-08-23-28"
+  "./game.js?v=nexforge-harbor-link-2026-08-24-31"
 ];
 
 self.addEventListener("install", (event) => {

@@ -1338,9 +1338,33 @@
 @media (max-width: 1000px) and (max-height: 600px) and (orientation: landscape) {
   .hud-root::before,
   .hud-corner-brand,
-  .studio-hub,
   .crew-panel,
   .hud-log-card {
+    display: none !important;
+  }
+
+  .studio-hub {
+    top: 58px !important;
+    right: max(8px, env(safe-area-inset-right)) !important;
+    width: 54px !important;
+    height: 54px !important;
+    display: flex !important;
+    padding: 0 !important;
+    justify-content: center !important;
+    pointer-events: auto !important;
+  }
+
+  .studio-hub__mark {
+    width: 48px !important;
+    height: 48px !important;
+    flex-basis: 48px !important;
+  }
+
+  .studio-hub__mark img {
+    width: 48px !important;
+  }
+
+  .studio-hub__name {
     display: none !important;
   }
 

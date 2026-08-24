@@ -1415,6 +1415,23 @@
   opacity: 0.72;
 }
 
+.market-item.is-sold-out {
+  border-color: rgba(137, 113, 79, 0.2);
+  background: linear-gradient(180deg, rgba(25, 22, 18, 0.98), rgba(12, 10, 8, 0.99));
+}
+
+.market-item.is-sold-out .market-item__art {
+  filter: grayscale(0.82) brightness(0.58);
+  opacity: 0.72;
+}
+
+.market-item.is-sold-out .market-item__meta,
+.market-item.is-sold-out .market-item__copy,
+.market-item.is-sold-out .market-item__stats,
+.market-item.is-sold-out .market-item__upgrade {
+  opacity: 0.52;
+}
+
 .market-panel__footnote {
   color: rgba(231, 216, 183, 0.72);
   font-size: 0.82rem;

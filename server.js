@@ -886,7 +886,6 @@ const listMarketItemsStmt = db.prepare(`
   SELECT item_id, market_scope, owner_profile_name, slot_key, item_name, rarity, stat_kind, stat_value, price, stock, expires_at, payload_json, updated_at
   FROM market_items
   WHERE (? IS NULL OR owner_profile_name = ?)
-    AND stock > 0
     AND (expires_at IS NULL OR expires_at > ?)
   ORDER BY updated_at DESC, item_id ASC
   LIMIT ?
@@ -1793,6 +1792,7 @@ function mapMarketItemRow(row) {
     ...(payload && typeof payload === "object" ? payload : {}),
     slot,
     price: Math.max(1, toSafeInt(row.price, 1, 1)),
+    stock: Math.max(0, toSafeInt(row.stock, 0, 0)),
     item: {
       ...sourceItem,
       id: String(row.item_id || "").slice(0, 128),
@@ -4842,37 +4842,87 @@ function normalizeServerMarketRefreshStock(profileName, source, now = Date.now()
   }).filter(Boolean);
 }
 
-async function runMarketRefreshCommand(profileName, body = {}) {
+function shuffleServerMarketValues(values = []) {
+  const output = [...values];
+  for (let index = output.length - 1; index > 0; index -= 1) {
+    const swapIndex = randomServerInt(0, index);
+    [output[index], output[swapIndex]] = [output[swapIndex], output[index]];
+  }
+  return output;
+}
+
+function createServerMarketStock(profileName, now = Date.now()) {
+  const profileKey = String(profileName || "player")
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, "-")
+    .slice(0, 24) || "player";
+  const redCount = Math.random() < 0.28 ? 2 : 1;
+  const yellowCount = Math.random() < 0.46 ? 2 : 1;
+  const grayCount = Math.max(0, SERVER_MARKET_MAX_OFFERS - redCount - yellowCount);
+  const rarityPlan = shuffleServerMarketValues([
+    ...Array(grayCount).fill("gray"),
+    ...Array(yellowCount).fill("yellow"),
+    ...Array(redCount).fill("red"),
+  ]).slice(0, SERVER_MARKET_MAX_OFFERS);
+  const slotPlan = shuffleServerMarketValues([
+    ...SERVER_EQUIPMENT_SLOTS,
+    ...shuffleServerMarketValues(SERVER_EQUIPMENT_SLOTS).slice(0, SERVER_MARKET_MAX_OFFERS - SERVER_EQUIPMENT_SLOTS.length),
+  ]).slice(0, SERVER_MARKET_MAX_OFFERS);
+  const usedTemplates = new Set();
+
+  return slotPlan.map((slot, index) => {
+    const rarity = rarityPlan[index] || "gray";
+    const catalog = Array.isArray(sharedEquipmentCatalog?.[slot]) ? sharedEquipmentCatalog[slot] : [];
+    const preferredPool = catalog.filter((entry) => entry?.rarity === rarity && !usedTemplates.has(`${slot}:${entry.id}`));
+    const rarityPool = catalog.filter((entry) => entry?.rarity === rarity);
+    const unusedPool = catalog.filter((entry) => !usedTemplates.has(`${slot}:${entry.id}`));
+    const pool = preferredPool.length ? preferredPool : rarityPool.length ? rarityPool : unusedPool.length ? unusedPool : catalog;
+    const template = pool[randomServerInt(0, Math.max(0, pool.length - 1))];
+    if (!template) return null;
+    usedTemplates.add(`${slot}:${template.id}`);
+    const resolvedRarity = ["gray", "yellow", "red"].includes(template.rarity) ? template.rarity : rarity;
+    const power = Math.max(0, toSafeInt(template.power ?? template.defense, 0, 0));
+    const item = {
+      ...template,
+      id: `market-${profileKey}-${now.toString(36)}-${index}-${randomUUID().slice(0, 8)}`,
+      templateId: template.id,
+      sourceTemplateId: template.id,
+      source: "black-market",
+      slot,
+      rarity: resolvedRarity,
+      power,
+      stat: template.stat === "defense" ? "defense" : "attack",
+      name: `${template.name} (${resolvedRarity === "red" ? "piros" : resolvedRarity === "yellow" ? "sarga" : "szurke"} piac)`,
+    };
+    return {
+      slot,
+      price: getServerEquipmentMarketPrice(item),
+      item,
+    };
+  }).filter(Boolean).slice(0, SERVER_MARKET_MAX_OFFERS);
+}
+
+async function runMarketRefreshCommand(profileName, _body = {}) {
   return db.transaction(async () => {
     await lockPlayerStmt.get(profileName);
     const profile = await buildProfileState(profileName);
     if (!profile) return { statusCode: 404, error: "A jatekosprofil nem talalhato." };
     const now = Date.now();
     const existingRows = await listMarketItemsStmt.all(profileName, profileName, now, SERVER_MARKET_QUERY_LIMIT);
-    if (existingRows.length >= SERVER_MARKET_MAX_OFFERS) {
+    // A jelenlegi ciklus ajanlatai a keszlet nullara fogyasa utan is megmaradnak.
+    // Igy a vasarlas nem valt ki azonnali potlast: a kartya "Elfogyott" allapotban
+    // latszik a kozos lejarati ido vegeig.
+    if (existingRows.length > 0) {
       return {
         statusCode: 200,
         payload: { ok: true, created: false, added: 0, items: selectServerMarketDisplayEntries(existingRows.map(mapMarketItemRow)) },
       };
     }
-    const existingItems = existingRows.map(mapMarketItemRow);
-    const existingStock = existingItems.map((entry) => entry.payload).filter((offer) => offer?.item?.id);
-    const generatedStock = normalizeServerMarketRefreshStock(profileName, body.marketStock, now);
-    const missingCount = Math.max(0, SERVER_MARKET_MAX_OFFERS - existingStock.length);
-    if (generatedStock.length < missingCount) return { statusCode: 400, error: "Nem erkezett eleg ervenyes piaci aru." };
-
-    const marketStock = [
-      ...existingStock,
-      ...generatedStock.slice(0, missingCount),
-    ];
-    // A reszleges feltoltes nem tolja ki a teljes csere idejet. Amikor a kozos
-    // hatarido lejar, mind a nyolc ajanlat egyszerre tunik el es ujrageneralodik.
-    const existingExpirations = existingItems
-      .map((entry) => Number(entry.expiresAt))
-      .filter((expiresAt) => Number.isFinite(expiresAt) && expiresAt > now);
-    const refreshAt = existingExpirations.length
-      ? Math.min(...existingExpirations)
-      : now + SERVER_MARKET_REFRESH_MS;
+    // The catalogue, stats and prices are generated by the server. The browser
+    // may request the timed reset, but it can never submit cheaper or stronger items.
+    const marketStock = createServerMarketStock(profileName, now);
+    if (marketStock.length !== SERVER_MARKET_MAX_OFFERS) return { statusCode: 400, error: "Nem generalhato nyolc ervenyes piaci aru." };
+    const refreshAt = now + SERVER_MARKET_REFRESH_MS;
     await writeMarketStock(profileName, {
       ...profile.state,
       marketStock,
@@ -4882,7 +4932,7 @@ async function runMarketRefreshCommand(profileName, body = {}) {
     const committedRows = await listMarketItemsStmt.all(profileName, profileName, now, SERVER_MARKET_QUERY_LIMIT);
     const items = selectServerMarketDisplayEntries(committedRows.map(mapMarketItemRow));
     if (items.length !== SERVER_MARKET_MAX_OFFERS) throw Object.assign(new Error("A nyolc piaci ajanlat mentese sikertelen."), { statusCode: 500 });
-    return { statusCode: 200, payload: { ok: true, created: true, added: missingCount, items } };
+    return { statusCode: 200, payload: { ok: true, created: true, added: SERVER_MARKET_MAX_OFFERS, items } };
   });
 }
 
@@ -4923,7 +4973,9 @@ async function runMarketBuyCommand(profileName, body = {}) {
     state.money -= price;
     state.itemInventory[slot].push(item);
     advanceServerQuests(state, "market_buy", "any", 1);
-    state.marketStock = (Array.isArray(state.marketStock) ? state.marketStock : []).filter((entry) => entry?.item?.id !== itemId);
+    state.marketStock = (Array.isArray(state.marketStock) ? state.marketStock : []).map((entry) => (
+      entry?.item?.id === itemId ? { ...entry, stock: 0 } : entry
+    ));
     const now = Date.now();
     await markMarketItemSoldStmt.run(now, itemId, profileName);
     await persistPvpState(profileName, state, now);
@@ -7781,7 +7833,17 @@ async function handleApiRequest(request, response, pathname) {
     const limit = Math.min(SERVER_MARKET_QUERY_LIMIT, Math.max(SERVER_MARKET_MAX_OFFERS, requestedLimit));
     const ownerFilter = profileName || null;
     const now = Date.now();
-    const rows = await listMarketItemsStmt.all(ownerFilter, ownerFilter, now, limit);
+    let rows = await listMarketItemsStmt.all(ownerFilter, ownerFilter, now, limit);
+    if (ownerFilter && rows.length === 0) {
+      const refreshResult = await runMarketRefreshCommand(ownerFilter);
+      if (refreshResult.statusCode !== 200) {
+        sendJson(response, refreshResult.statusCode, refreshResult.payload || { error: refreshResult.error });
+        return true;
+      }
+      const refreshedItems = Array.isArray(refreshResult.payload?.items) ? refreshResult.payload.items : [];
+      sendJson(response, 200, { items: refreshedItems.slice(0, SERVER_MARKET_MAX_OFFERS) });
+      return true;
+    }
     const items = selectServerMarketDisplayEntries(rows.map(mapMarketItemRow));
     sendJson(response, 200, { items: items.slice(0, SERVER_MARKET_MAX_OFFERS) });
     return true;
