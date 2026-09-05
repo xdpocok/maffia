@@ -732,23 +732,31 @@
 .hud-log-card {
   left: 7px;
   bottom: 0;
+  z-index: 30;
   width: clamp(250px, 20vw, 290px);
-  height: clamp(130px, 22vh, 240px);
+  height: clamp(170px, 27vh, 300px);
   min-height: 0;
   padding: 12px 11px 50px;
   border-radius: 0;
   background: linear-gradient(180deg, rgba(14, 13, 9, 0.995), rgba(6, 6, 4, 0.995));
+  pointer-events: auto;
 }
 .hud-log-card__header { display: flex; justify-content: space-between; padding-bottom: 8px; border-bottom: 1px solid rgba(177, 135, 61, 0.42); }
 .hud-log-card__header > span { color: #8d6a31; }
 .hud-log-card .hud-mini-title { color: #c19b55; font-size: 0.83rem; }
-.hud-log { height: calc(100% - 25px); margin-top: 8px; overflow-y: auto; color: #a99164; font-size: 0.72rem; }
+.hud-log { height: calc(100% - 25px); margin-top: 8px; overflow-y: auto; color: #a99164; font-size: 0.72rem; white-space: normal; }
 .hud-log { scrollbar-width: thin; scrollbar-color: #c89b4a #090705; }
 .hud-log::-webkit-scrollbar { width: 10px; }
 .hud-log::-webkit-scrollbar-track { background: linear-gradient(180deg, rgba(255, 226, 160, 0.04), rgba(0, 0, 0, 0.2)), #090705; }
 .hud-log::-webkit-scrollbar-thumb { border: 2px solid #090705; border-radius: 8px; background: linear-gradient(180deg, #e0c27b 0%, #a7752c 55%, #6a4115 100%); }
+.hud-chat-line { width: 100%; min-width: 0; display: flex; align-items: baseline; gap: 4px; padding: 3px; border-bottom: 1px solid rgba(165, 124, 53, 0.14); line-height: 1.25; white-space: normal; }
+.hud-chat-line:last-child { border-bottom: 0; }
+.hud-chat-line__name { flex: 0 0 auto; max-width: 42%; overflow: hidden; color: #c7a75f; font-size: 0.7rem; line-height: inherit; letter-spacing: 0.015em; text-overflow: ellipsis; white-space: nowrap; }
+.hud-chat-line__time { flex: 0 0 auto; margin-left: auto; color: #715b37; font-size: 0.48rem; line-height: inherit; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.hud-chat-line__body { flex: 1 1 auto; min-width: 0; color: #d5c398; font-size: 0.72rem; line-height: inherit; overflow-wrap: anywhere; white-space: normal; }
+.hud-chat-line.is-own .hud-chat-line__name { color: #e0bc70; }
 .hud-chat-compose { position: absolute; left: 11px; right: 11px; bottom: 10px; height: 34px; display: grid; grid-template-columns: 1fr 38px; pointer-events: auto; }
-.hud-chat-compose input { min-width: 0; border: 1px solid rgba(170, 128, 56, 0.38); border-right: 0; border-radius: 0; padding: 0 10px; outline: 0; background: #0a0906; color: #cdb57f; font: italic 0.72rem Georgia, serif; }
+.hud-chat-compose input { min-width: 0; border: 1px solid rgba(170, 128, 56, 0.38); border-right: 0; border-radius: 0; padding: 0 10px; outline: 0; background: #0a0906; color: #cdb57f; caret-color: #f0c86f; cursor: text; pointer-events: auto; user-select: text; font: italic 0.72rem Georgia, serif; }
 .hud-chat-compose input:focus { border-color: rgba(209, 165, 80, 0.72); }
 .hud-chat-compose button { border: 1px solid rgba(181, 138, 62, 0.5); border-radius: 0; background: linear-gradient(180deg, #342718, #0c0a07); color: #caa65f; }
 
@@ -1190,7 +1198,7 @@
   .crew-card__stat small { font-size: 0.43rem; }
   .crew-card__stat strong { font-size: 0.68rem; }
   .crew-card__mini-action { width: 42px; min-height: 24px; font-size: 0.46rem; }
-  .hud-log-card { height: 128px; }
+  .hud-log-card { height: 180px; }
   .hud-avatar-card { top: 116px; }
   .hud-avatar-frame { height: 146px; }
   .hud-quest-tabs { top: 450px; }

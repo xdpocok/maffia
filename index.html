@@ -55,7 +55,7 @@
     <link rel="preload" as="image" href="./register-960.webp" media="(max-width: 1199px)" fetchpriority="high" />
     <link rel="preload" as="image" href="./register-1440.webp" media="(min-width: 1200px) and (max-width: 1799px)" fetchpriority="high" />
     <link rel="preload" as="image" href="./register.webp" media="(min-width: 1800px)" fetchpriority="high" />
-    <link rel="stylesheet" href="./style.css?v=nexforge-link-2026-08-24-19" />
+    <link rel="stylesheet" href="./style.css?v=rail-mission-fit-2026-09-03-22" />
   </head>
   <body>
     <div id="bootOverlay" class="boot-overlay">
@@ -263,13 +263,13 @@
     <section id="underpassModal" class="underpass-modal hidden" aria-hidden="true">
       <div id="underpassBackdrop" class="underpass-modal__backdrop"></div>
       <article class="underpass-modal__panel" role="dialog" aria-modal="true" aria-labelledby="underpassTitle">
-        <button id="underpassClose" class="underpass-modal__close" type="button" aria-label="Aluljáró bezárása">×</button>
-        <h2 id="underpassTitle" tabindex="0">Aluljáró<span class="underpass-title-stats" role="tooltip"><span>Fekete pénz <strong id="dungeonUnderworldMoney">0</strong></span><span>Alvilági XP <strong id="dungeonUnderworldXp">0 / 50</strong></span><span>Alvilági szint <strong id="dungeonUnderworldLevel">1</strong></span></span></h2>
+        <button id="underpassClose" class="underpass-modal__close" type="button" aria-label="Alvilág bezárása">×</button>
+        <h2 id="underpassTitle"><span>Alvilág</span><button id="underpassStatsToggle" class="underpass-title-toggle" type="button" aria-expanded="false" aria-controls="underpassTitleStats" aria-label="Alvilági adatok megjelenítése"><span aria-hidden="true">⌄</span></button><span id="underpassTitleStats" class="underpass-title-stats"><span>Fekete pénz <strong id="dungeonUnderworldMoney">0</strong></span><span>Alvilági XP <strong id="dungeonUnderworldXp">0 / 50</strong></span><span>Alvilági szint <strong id="dungeonUnderworldLevel">1</strong></span></span></h2>
         <div id="underpassScene" class="underpass-modal__scene">
-          <img class="underpass-modal__image" src="./assets/map/underpass-interior-mafia-v2.webp" alt="1930-as évekbeli maffia aluljáró árusokkal, kártyásokkal és földalatti szerelvénnyel">
+          <img class="underpass-modal__image" src="./assets/map/underpass-interior-mafia-v2.webp" alt="Az Alvilág 1930-as évekbeli maffiahelyszíne árusokkal, kártyásokkal és földalatti szerelvénnyel">
           <button id="shellGameHotspot" class="underpass-hotspot underpass-hotspot--shell-game" type="button" aria-label="Itt a piros, hol a piros játék megnyitása"><span>Itt a piros, hol a piros?</span></button>
           <button id="dungeonHotspot" class="underpass-hotspot underpass-hotspot--dungeon" type="button" aria-label="Dungeon megnyitása"><span>Dungeon</span></button>
-          <button id="underworldExchangeHotspot" class="underpass-hotspot underpass-hotspot--exchange" type="button" aria-label="Alvilági pénzváltó megnyitása"><span>Alvilági pénzváltó</span></button>
+          <button id="underworldExchangeHotspot" class="underpass-hotspot underpass-hotspot--exchange" type="button" aria-label="Pénzváltó megnyitása"><span>Pénzváltó</span></button>
         </div>
       </article>
     </section>
@@ -335,7 +335,7 @@
       <div id="shellGameBackdrop" class="shell-game__backdrop"></div>
       <article class="shell-game__panel" role="dialog" aria-modal="true" aria-labelledby="shellGameTitle">
         <button id="shellGameClose" class="shell-game__close" type="button" aria-label="Játék bezárása">×</button>
-        <div class="shell-game__eyebrow">Az aluljáró szerencsejátéka</div>
+        <div class="shell-game__eyebrow">Az Alvilág szerencsejátéka</div>
         <h2 id="shellGameTitle">Itt a piros, hol a piros?</h2>
         <p id="shellGameMessage" class="shell-game__message" aria-live="polite">Figyeld meg, melyik pohár alá kerül a piros golyó!</p>
         <div class="shell-game__room">
@@ -936,17 +936,17 @@
     <script src="./js/facebook-instant.js?v=facebook-instant-base-2026-08-11-1"></script>
     <script src="./js/asset-runtime.js?v=cache-refresh-2026-08-01-1"></script>
     <script src="./assets-inline.js"></script>
-    <script src="./js/world-map.js?v=influence-system-2026-07-30-1"></script>
-    <script src="./js/equipment-catalog-data.js?v=item-catalog-2026-08-01-1"></script>
-    <script src="./js/map-config.js?v=underpass-name-modal-2026-08-10-22"></script>
-    <script src="./js/save-sync.js?v=market-authority-2026-08-23-4"></script>
+    <script src="./js/world-map.js?v=world-rival-balance-v2-2026-09-05-11"></script>
+    <script src="./js/equipment-catalog-data.js?v=item-crop-fix-2026-08-24-2"></script>
+    <script src="./js/map-config.js?v=hide-lot-13-marker-2026-09-03-24"></script>
+    <script src="./js/save-sync.js?v=world-base-selection-fix-2026-09-03-5"></script>
     <script src="./js/quests.js?v=mentor-dismiss-step-2026-08-10-5"></script>
     <script src="./js/ui-choice-wheel.js?v=choice-wheel-module-2026-08-09-1"></script>
     <script src="./js/shell-game.js?v=shell-game-random-final-2026-08-23-9"></script>
     <script src="./js/dungeon.js?v=dungeon-wave-balance-2026-08-23-14"></script>
     <script src="./js/underworld-exchange.js?v=underworld-exchange-2026-08-22-1"></script>
-    <script src="./js/harbor.js?v=market-authority-2026-08-23-4"></script>
-    <script src="./game.js?v=nexforge-harbor-link-2026-08-24-31"></script>
+    <script src="./js/harbor.js?v=garage-faster-meter-2026-09-01-5"></script>
+    <script src="./game.js?v=world-rival-balance-v2-2026-09-05-43"></script>
     <script src="./js/app-shell.js?v=cache-refresh-2026-08-01-1"></script>
   </body>
 </html>

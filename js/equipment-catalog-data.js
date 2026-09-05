@@ -3,7 +3,13 @@
   if (typeof module === "object" && module.exports) module.exports = catalog;
   if (root) root.MAFFIA_EQUIPMENT_CATALOG = catalog;
 }(typeof globalThis !== "undefined" ? globalThis : this, function buildMaffiaEquipmentCatalog() {
-  const item = (id, name, power, stat, rarity, image) => ({ id, name, power, stat, rarity, image });
+  const ITEM_CROP_FIX_VERSION = "item-crop-fix-2026-08-24-1";
+  const item = (id, name, power, stat, rarity, image) => {
+    const versionedImage = /\/adag2\/(?:accessories|pants|weapons)\//.test(image)
+      ? `${image}?v=${ITEM_CROP_FIX_VERSION}`
+      : image;
+    return { id, name, power, stat, rarity, image: versionedImage };
+  };
 
   return {
     hat: [

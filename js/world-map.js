@@ -1,10 +1,14 @@
 // Vilagterkep, rivalis varosok es vilagterkepi megjelenites.
-const WORLD_MAP_CONTINUOUS_SRC = "./assets/world/world-map-browser-optimized.webp";
-const WORLD_MAP_CONTINUOUS_SRCSET = "./assets/world/world-map-browser-optimized-960.webp 960w, ./assets/world/world-map-browser-optimized-1440.webp 1440w, ./assets/world/world-map-browser-optimized.webp 1920w";
+const WORLD_MAP_CONTINUOUS_SRC = "./assets/world/world-map-mafia-v2-9516.webp?v=world-map-mafia-v2-2026-08-27-5";
+const WORLD_MAP_CONTINUOUS_SRCSET = "./assets/world/world-map-mafia-v2-9516.webp?v=world-map-mafia-v2-2026-08-27-5 9516w";
 const WORLD_MAP_TILE_WIDTH = 1586;
 const WORLD_MAP_TILE_HEIGHT = 992;
 const WORLD_MAP_TILE_COLS = 6;
 const WORLD_MAP_TILE_ROWS = 5;
+// A 9516x4960-as forraskep teljes reszletesseggel toltodik be, de kisebb
+// CSS-meretben jelenik meg. Igy egyszerre nagyobb terulet latszik, mikozben
+// a terkep eles marad es a telekjelolok nem zsugorodnak ossze.
+const WORLD_MAP_DISPLAY_SCALE = 0.28;
 const WORLD_MAP_LOT_ROWS = [
   { y: 16, xs: [18, 31, 44, 57, 70, 83] },
   { y: 28, xs: [12, 25, 38, 51, 64, 77, 89] },
@@ -13,7 +17,57 @@ const WORLD_MAP_LOT_ROWS = [
   { y: 73, xs: [18, 31, 44, 57, 70, 83] },
   { y: 87, xs: [24, 40, 56, 72, 86] },
 ];
+// Normalizalt, kezzel ellenorzott zold teruletek a 9516x4960-as terkepen.
+// A telekjelolok es az elfoglalt telkek hazai csak ezeken a tisztasokon jelennek meg.
+const WORLD_MAP_BUILDABLE_ZONES = [
+  [0.13, 0.13, 0.095, 0.06],
+  [0.05, 0.23, 0.035, 0.05],
+  [0.32, 0.27, 0.055, 0.05],
+  [0.39, 0.25, 0.035, 0.04],
+  [0.52, 0.18, 0.06, 0.05],
+  [0.58, 0.17, 0.035, 0.04],
+  [0.69, 0.04, 0.055, 0.035],
+  [0.80, 0.22, 0.05, 0.05],
+  [0.94, 0.32, 0.045, 0.055],
+  [0.08, 0.43, 0.05, 0.05],
+  [0.15, 0.61, 0.045, 0.045],
+  [0.29, 0.43, 0.04, 0.05],
+  [0.34, 0.60, 0.04, 0.05],
+  [0.46, 0.59, 0.045, 0.05],
+  [0.51, 0.63, 0.03, 0.04],
+  [0.66, 0.55, 0.045, 0.05],
+  [0.75, 0.55, 0.045, 0.05],
+  [0.87, 0.58, 0.045, 0.045],
+  [0.97, 0.63, 0.025, 0.045],
+  [0.035, 0.70, 0.035, 0.045],
+  [0.16, 0.64, 0.035, 0.04],
+  [0.12, 0.91, 0.05, 0.05],
+  [0.27, 0.83, 0.045, 0.05],
+  [0.59, 0.84, 0.045, 0.05],
+  [0.76, 0.84, 0.045, 0.05],
+  [0.88, 0.83, 0.045, 0.05],
+];
+const WORLD_MAP_BUILDABLE_SITE_OFFSETS = [
+  [0, 0],
+  [-0.36, -0.30],
+  [0, -0.36],
+  [0.36, -0.30],
+  [-0.52, 0],
+  [-0.20, 0],
+  [0.20, 0],
+  [0.52, 0],
+  [-0.36, 0.30],
+  [0, 0.36],
+  [0.36, 0.30],
+];
+const WORLD_MAP_BUILDABLE_SPREAD = 2.35;
 const WORLD_MAP_CODE_COLUMNS_PER_TILE = Math.max(...WORLD_MAP_LOT_ROWS.map((row) => row.xs.length));
+
+// Ez a fajl a fo game.js elott toltodik be, ezert az inditaskor futó
+// telekgeneralas nem tamaszkodhat a game.js kesobb letrejovo clamp fuggvenyere.
+function clampWorldMapBootstrap(value, minimum, maximum) {
+  return Math.min(maximum, Math.max(minimum, Number(value) || 0));
+}
 const WORLD_BASE_HOUSE_VARIANTS = {
   1: [
     "./assets/world/world-base-house-l1-1.png",
@@ -130,11 +184,46 @@ function buildWorldMapLotDefs() {
   return defs;
 }
 
+function buildWorldMapBuildableSites(targetCount) {
+  const fullWidth = WORLD_MAP_TILE_WIDTH * WORLD_MAP_TILE_COLS;
+  const fullHeight = WORLD_MAP_TILE_HEIGHT * WORLD_MAP_TILE_ROWS;
+  const safeCount = Math.max(1, Math.round(Number(targetCount) || 1));
+  const aspectRatio = fullWidth / fullHeight;
+  const columns = Math.ceil(Math.sqrt(safeCount * aspectRatio));
+  const rows = Math.ceil(safeCount / columns);
+  const cells = [];
+  let seed = 0x6d2b79f5;
+  const nextRandom = () => {
+    seed = (Math.imul(seed ^ (seed >>> 15), 1 | seed) + 0x6d2b79f5) >>> 0;
+    return ((seed ^ (seed >>> 14)) >>> 0) / 4294967296;
+  };
+
+  for (let row = 0; row < rows; row += 1) {
+    for (let column = 0; column < columns; column += 1) {
+      const jitterX = (nextRandom() - 0.5) * 0.34;
+      const jitterY = (nextRandom() - 0.5) * 0.34;
+      cells.push({
+        x: ((column + 0.5 + jitterX) / columns) * fullWidth,
+        y: ((row + 0.5 + jitterY) / rows) * fullHeight,
+      });
+    }
+  }
+  for (let index = cells.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(nextRandom() * (index + 1));
+    [cells[index], cells[swapIndex]] = [cells[swapIndex], cells[index]];
+  }
+  return cells.slice(0, safeCount);
+}
+
 function getWorldMapCanvasMetrics() {
   return {
-    width: WORLD_MAP_TILE_WIDTH * WORLD_MAP_TILE_COLS,
-    height: WORLD_MAP_TILE_HEIGHT * WORLD_MAP_TILE_ROWS,
+    width: Math.round(WORLD_MAP_TILE_WIDTH * WORLD_MAP_TILE_COLS * WORLD_MAP_DISPLAY_SCALE),
+    height: Math.round(WORLD_MAP_TILE_HEIGHT * WORLD_MAP_TILE_ROWS * WORLD_MAP_DISPLAY_SCALE),
   };
+}
+
+function getWorldMapDisplayCoordinate(value) {
+  return Math.round((Number(value) || 0) * WORLD_MAP_DISPLAY_SCALE * 100) / 100;
 }
 
 function getWorldLotHouseAsset(level = 1, seed = "") {
@@ -172,6 +261,9 @@ function buildWorldMapLotButton(lot, owner, selectionMode) {
   const level = getWorldLotHouseLevel(owner);
   const houseAsset = getWorldLotHouseAsset(level, `${owner?.profileName || lot.id}-${lot.id}`);
   const label = owner?.profileName || `${lot.code} / ${lot.coord}`;
+  const visualPosition = getWorldMapLotVisualPosition(lot);
+  const displayX = getWorldMapDisplayCoordinate(visualPosition.x);
+  const displayY = getWorldMapDisplayCoordinate(visualPosition.y);
   return `
     <button
       class="worldmap__lot${isOccupied ? " is-occupied" : " is-free"}${isOwn ? " is-own" : ""}"
@@ -180,9 +272,9 @@ function buildWorldMapLotButton(lot, owner, selectionMode) {
       data-world-code="${lot.code}"
       data-world-coord="${lot.coord}"
       data-world-label="${escapeHtml(label)}"
-      data-world-x="${lot.x}"
-      data-world-y="${lot.y}"
-      style="left:${lot.x}px; top:${lot.y}px"
+      data-world-x="${displayX}"
+      data-world-y="${displayY}"
+      style="left:${displayX}px; top:${displayY}px"
       ${selectionMode && isOccupied && !isOwn ? "disabled" : ""}
       title="${escapeHtml(label)}"
       aria-label="${escapeHtml(owner?.profileName || `${lot.code} ${lot.coord} - ures telek`)}">
@@ -210,6 +302,51 @@ function buildWorldMapSelectionBar(ownLot, selectionMode) {
 }
 
 const worldMapLotDefs = buildWorldMapLotDefs();
+const worldMapLotIndexById = new Map(worldMapLotDefs.map((lot, index) => [lot.id, index]));
+const worldMapBuildableSites = buildWorldMapBuildableSites(worldMapLotDefs.length);
+
+function getWorldMapLotVisualPosition(lot) {
+  const lotIndex = worldMapLotIndexById.get(lot?.id);
+  if (!Number.isInteger(lotIndex) || !worldMapBuildableSites.length) {
+    return { x: Number(lot?.x) || 0, y: Number(lot?.y) || 0 };
+  }
+  return worldMapBuildableSites[lotIndex] || { x: Number(lot?.x) || 0, y: Number(lot?.y) || 0 };
+}
+
+function getWorldMapVisualDistance(leftLot, rightLot) {
+  const left = getWorldMapLotVisualPosition(leftLot);
+  const right = getWorldMapLotVisualPosition(rightLot);
+  return Math.hypot(left.x - right.x, left.y - right.y);
+}
+
+function isWorldRivalLotFarEnough(lot, cities, minimumDistance = WORLD_MAP_TILE_WIDTH * 0.48) {
+  if (!lot) return false;
+  return !(Array.isArray(cities) ? cities : []).some((city) => {
+    const cityLot = getWorldMapLotById(city?.lotId);
+    return cityLot && getWorldMapVisualDistance(lot, cityLot) < minimumDistance;
+  });
+}
+
+function getVisibleWorldMapLotDefs(occupiedLots = {}, requiredLotIds = []) {
+  const requiredIds = new Set(
+    [
+      ...Object.keys(occupiedLots || {}),
+      ...(Array.isArray(requiredLotIds) ? requiredLotIds : []),
+    ].filter(Boolean),
+  );
+  const selectedIds = new Set();
+  for (let groupStart = 0; groupStart < worldMapLotDefs.length; groupStart += 4) {
+    const group = worldMapLotDefs.slice(groupStart, groupStart + 4);
+    const requiredLots = group.filter((lot) => requiredIds.has(lot.id));
+    if (requiredLots.length) {
+      requiredLots.forEach((lot) => selectedIds.add(lot.id));
+    } else if (group[0]) {
+      selectedIds.add(group[0].id);
+    }
+  }
+
+  return worldMapLotDefs.filter((lot) => selectedIds.has(lot.id));
+}
 
 function worldRivalSeedFromText(value = "") {
   let hash = 0;
@@ -308,7 +445,21 @@ function normalizeWorldRivalCity(entry, index = 0) {
   const level = clamp(Math.round(Number(entry?.level) || 1), 1, 3);
   const assetIndex = Math.abs(Math.round(Number(entry?.assetIndex) || index)) % WORLD_RIVAL_CITY_ASSETS.length;
   const theme = getWorldRivalCityTheme(assetIndex);
-  const power = Math.max(24, Math.round(Number(entry?.power) || (68 + level * 24)));
+  const storedPower = Math.max(24, Math.round(Number(entry?.power) || (68 + level * 24)));
+  const balanceVersion = Math.max(0, Math.round(Number(entry?.balanceVersion) || 0));
+  const playerMapPower = typeof getActionPower === "function"
+    ? Math.max(1, Math.round(Number(getActionPower("map")) || 0))
+    : 0;
+  const levelPowerRatio = level === 1 ? 0.72 : level === 2 ? 0.9 : 1.08;
+  const progressionFloor = 86 + level * 30 + Math.max(1, Number(state.cityLevel) || 1) * 8;
+  const matchedPower = playerMapPower > 0
+    ? Math.round(playerMapPower * levelPowerRatio + level * 10)
+    : 0;
+  // A regi mentesekben a rivalisok tul alacsony erovel maradtak meg.
+  // Csak egyszer emeljuk fel oket; utana a jatekos felszerelessel folejuk nohet.
+  const power = status === "hostile" && balanceVersion < 2
+    ? Math.max(storedPower, progressionFloor, matchedPower)
+    : storedPower;
   const rewardMoney = Math.max(80, Math.round(Number(entry?.rewardMoney) || (150 + level * 95)));
   const rewardXp = Math.max(12, Math.round(Number(entry?.rewardXp) || (20 + level * 11)));
   const rawTributeMoney = Number(entry?.tributeMoney);
@@ -345,6 +496,7 @@ function normalizeWorldRivalCity(entry, index = 0) {
     tributeMoney,
     tributeTargetMoney,
     weakened: Boolean(entry?.weakened),
+    balanceVersion: 2,
     assetIndex,
     themeId: String(entry?.themeId || theme.id),
     districtLabel: String(entry?.districtLabel || theme.label),
@@ -384,13 +536,23 @@ function createWorldRivalCityForLot(lot, usedCount = 0, now = Date.now()) {
   const level = clamp(1 + (baseSeed % 3), 1, 3);
   const assetIndex = baseSeed % WORLD_RIVAL_CITY_ASSETS.length;
   const theme = getWorldRivalCityTheme(assetIndex);
+  const playerMapPower = typeof getActionPower === "function"
+    ? Math.max(1, Math.round(Number(getActionPower("map")) || 0))
+    : 0;
+  const levelPowerRatio = level === 1 ? 0.72 : level === 2 ? 0.9 : 1.08;
+  const randomPowerOffset = (baseSeed % 25) - 12;
+  const progressionFloor = 86 + level * 30 + Math.max(1, Number(state.cityLevel) || 1) * 8;
+  const matchedPower = playerMapPower > 0
+    ? Math.round(playerMapPower * levelPowerRatio + level * 10 + randomPowerOffset)
+    : 0;
   return normalizeWorldRivalCity({
     id: `world-rival-${lot.id}-${baseSeed.toString(36).slice(0, 6)}`,
     lotId: lot.id,
     name: buildWorldRivalCityName(`${lot.id}-${baseSeed}`),
     status: "hostile",
     level,
-    power: 64 + level * 24 + Math.round((baseSeed % 31) * 1.7) + state.cityLevel * 6,
+    power: Math.max(progressionFloor, matchedPower),
+    balanceVersion: 2,
     rewardMoney: 140 + level * 110 + (baseSeed % 60),
     rewardXp: 18 + level * 14 + (baseSeed % 10),
     tributeMoney: 0,
@@ -435,6 +597,7 @@ function syncWorldRivalCities(occupiedLots = {}, now = Date.now()) {
     if (!lot) return;
     if (city.status !== "captured" && blockedLots.has(city.lotId)) return;
     if (usedLots.has(city.lotId)) return;
+    if (city.status !== "captured" && !isWorldRivalLotFarEnough(lot, output)) return;
     output.push(city);
     usedLots.add(city.lotId);
   });
@@ -454,15 +617,17 @@ function syncWorldRivalCities(occupiedLots = {}, now = Date.now()) {
       return cityLot && Math.hypot(cityLot.x - playerBase.x, cityLot.y - playerBase.y) <= coverageRadius;
     });
     if (alreadyCovered || hostileCount >= WORLD_RIVAL_CITY_MAX_COUNT || !availableLots.length) return;
-    let nearestIndex = 0;
+    let nearestIndex = -1;
     let nearestDistance = Infinity;
     availableLots.forEach((lot, index) => {
+      if (!isWorldRivalLotFarEnough(lot, output)) return;
       const distance = Math.hypot(lot.x - playerBase.x, lot.y - playerBase.y);
       if (distance < nearestDistance) {
         nearestDistance = distance;
         nearestIndex = index;
       }
     });
+    if (nearestIndex < 0) return;
     const [lot] = availableLots.splice(nearestIndex, 1);
     if (!lot) return;
     const city = createWorldRivalCityForLot(lot, output.length + playerIndex, now);
@@ -506,6 +671,7 @@ function syncWorldRivalCities(occupiedLots = {}, now = Date.now()) {
       const availableIndex = availableLots.findIndex((entry) => entry.id === lot.id);
       if (availableIndex >= 0) availableLots.splice(availableIndex, 1);
       if (!lot || usedLots.has(lot.id) || blockedLots.has(lot.id)) continue;
+      if (!isWorldRivalLotFarEnough(lot, output)) continue;
       const city = createWorldRivalCityForLot(lot, output.length, now);
       output.push(city);
       usedLots.add(lot.id);
@@ -514,9 +680,10 @@ function syncWorldRivalCities(occupiedLots = {}, now = Date.now()) {
     }
   }
   while (hostileCount < desiredHostiles && availableLots.length) {
-    let nextIndex = 0;
+    let nextIndex = -1;
     let bestCoverageDistance = -1;
     availableLots.forEach((candidate, index) => {
+      if (!isWorldRivalLotFarEnough(candidate, output)) return;
       const nearestCityDistance = output.reduce((nearest, city) => {
         if (city.status !== "hostile") return nearest;
         const cityLot = getWorldMapLotById(city.lotId);
@@ -528,6 +695,7 @@ function syncWorldRivalCities(occupiedLots = {}, now = Date.now()) {
         nextIndex = index;
       }
     });
+    if (nextIndex < 0) break;
     const [lot] = availableLots.splice(nextIndex, 1);
     if (!lot) break;
     const city = createWorldRivalCityForLot(lot, output.length, now);
@@ -694,9 +862,9 @@ function getWorldRivalAttackChance(city) {
 function getWorldRivalCaptureChance(city) {
   const mapPower = getActionPower("map");
   const structurePenalty = getWorldRivalRemainingStructures(city).length * 18;
-  const clearedBonus = areWorldRivalStructuresCleared(city) ? 34 : 0;
+  const clearedBonus = areWorldRivalStructuresCleared(city) ? 12 : 0;
   const targetPower = Math.max(1, city.power + city.level * 20 + structurePenalty - (city.weakened ? 28 : 0) - clearedBonus);
-  return clamp(0.16 + ((mapPower - targetPower) / 280), 0.08, 0.88);
+  return clamp(0.36 + ((mapPower - targetPower) / 320), 0.14, 0.84);
 }
 
 function buildWorldRivalCityButton(city) {
@@ -704,6 +872,9 @@ function buildWorldRivalCityButton(city) {
   if (!lot || !city) return "";
   const remaining = getWorldRivalRemainingStructures(city).length;
   const label = `${city.name} | ${city.status === "captured" ? "elfoglalt" : "rivalis"} falu | ${remaining} haz`;
+  const visualPosition = getWorldMapLotVisualPosition(lot);
+  const displayX = getWorldMapDisplayCoordinate(visualPosition.x);
+  const displayY = getWorldMapDisplayCoordinate(visualPosition.y);
   return `
     <button
       class="worldmap__rival-city worldmap__rival-city--${city.status}${city.weakened ? " is-weakened" : ""}"
@@ -711,9 +882,9 @@ function buildWorldRivalCityButton(city) {
       data-world-rival="${city.id}"
       data-world-rival-lot="${lot.id}"
       data-world-label="${escapeHtml(city.name)}"
-      data-world-x="${lot.x}"
-      data-world-y="${lot.y}"
-      style="left:${lot.x}px; top:${lot.y}px"
+      data-world-x="${displayX}"
+      data-world-y="${displayY}"
+      style="left:${displayX}px; top:${displayY}px"
       aria-label="${escapeHtml(label)}">
       <img class="worldmap__rival-city-art worldmap__rival-city-art--level-${city.level}" src="${getWorldRivalCityAsset(city.assetIndex)}" alt="" aria-hidden="true" loading="lazy" decoding="async">
       <span class="worldmap__rival-city-badge">${city.status === "captured" ? "S" : "R"}</span>

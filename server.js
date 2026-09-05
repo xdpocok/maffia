@@ -547,6 +547,11 @@ const deletePlayerNotificationsStmt = db.prepare(`
   WHERE profile_name = ?
 `);
 
+const deletePlayerNotificationStmt = db.prepare(`
+  DELETE FROM player_notifications
+  WHERE notification_id = ? AND profile_name = ?
+`);
+
 const insertPlayerNotificationStmt = db.prepare(`
   INSERT INTO player_notifications (
     notification_id,
@@ -1296,7 +1301,7 @@ const markMessageReadStmt = db.prepare(`
 
 const deleteReceivedMessageStmt = db.prepare(`
   DELETE FROM messages
-  WHERE id = ? AND recipient_profile_name = ? AND message_type = 'player'
+  WHERE id = ? AND recipient_profile_name = ?
 `);
 
 const deleteMessagesByProfileStmt = db.prepare(`
@@ -2161,9 +2166,9 @@ const defaultGameConfigEntries = {
   harbor_garage_missions: {
     group: "harbor",
     payload: [
-      { id: "alley-run", title: "Sikatori atjatszas", vehicleId: "sedan", description: "Utcai sedan kell hozza. Kis csomag, kevesebb penz, de stabil kezdo fuvar.", requiredLevel: 1, rewardMoney: 140, rewardXp: 18, heatSuccess: 2, heatFail: 7, failurePenalty: 55, cargoReward: { papers: 1, counterfeitMoney: 1 }, rounds: 3, requiredHits: 2, baseSafeWidth: 0.3, baseSpeed: 0.02 },
-      { id: "night-convoy", title: "Ejjeli konvoj", vehicleId: "van", description: "Csempesz furgon kell hozza. Rakteres fuvar, ahol a csempesz aru a fo jutalom.", requiredLevel: 2, rewardMoney: 240, rewardXp: 31, heatSuccess: 3, heatFail: 10, failurePenalty: 95, cargoReward: { drugs: 2, papers: 1 }, rounds: 4, requiredHits: 3, baseSafeWidth: 0.26, baseSpeed: 0.023 },
-      { id: "vault-route", title: "Pancelkocsis kor", vehicleId: "armor", description: "Pancelkocsi kell hozza. Nagy penzes kor, nehezebb utvonallal es komolyabb kasszaval.", requiredLevel: 3, rewardMoney: 410, rewardXp: 46, heatSuccess: 4, heatFail: 14, failurePenalty: 155, cargoReward: { weapons: 2, counterfeitMoney: 2, papers: 1 }, rounds: 5, requiredHits: 4, baseSafeWidth: 0.23, baseSpeed: 0.026 },
+      { id: "alley-run", title: "Sikatori atjatszas", vehicleId: "sedan", description: "Utcai sedan kell hozza. Kis csomag, kevesebb penz, de stabil kezdo fuvar.", requiredLevel: 1, rewardMoney: 140, rewardXp: 18, heatSuccess: 2, heatFail: 7, failurePenalty: 55, cargoReward: { papers: 1, counterfeitMoney: 1 }, rounds: 3, requiredHits: 2, baseSafeWidth: 0.3, baseSpeed: 0.023 },
+      { id: "night-convoy", title: "Ejjeli konvoj", vehicleId: "van", description: "Csempesz furgon kell hozza. Rakteres fuvar, ahol a csempesz aru a fo jutalom.", requiredLevel: 2, rewardMoney: 240, rewardXp: 31, heatSuccess: 3, heatFail: 10, failurePenalty: 95, cargoReward: { drugs: 2, papers: 1 }, rounds: 4, requiredHits: 3, baseSafeWidth: 0.26, baseSpeed: 0.0265 },
+      { id: "vault-route", title: "Pancelkocsis kor", vehicleId: "armor", description: "Pancelkocsi kell hozza. Nagy penzes kor, nehezebb utvonallal es komolyabb kasszaval.", requiredLevel: 3, rewardMoney: 410, rewardXp: 46, heatSuccess: 4, heatFail: 14, failurePenalty: 155, cargoReward: { weapons: 2, counterfeitMoney: 2, papers: 1 }, rounds: 5, requiredHits: 4, baseSafeWidth: 0.23, baseSpeed: 0.03 },
     ],
   },
   harbor_missions: {
@@ -2579,6 +2584,9 @@ async function buildProfileState(profileName) {
     merged.worldBaseLotId = ownedLot.lot_id;
     merged.worldBaseLevel = ownedLot.base_level;
   }
+  // A world_lots tabla a bazistulajdon hiteles forrasa. Ha nincs itt telek,
+  // az uj vagy korabban hianyosan mentett jatekosnak is valasztania kell.
+  merged.needsWorldBaseSelection = !ownedLot;
 
   // Server commands usually create their mutable state with object spread.
   // Keeping this non-JSON baseline on the state lets persistence reuse the
@@ -5724,8 +5732,8 @@ function getServerPoliceCargoLossRate(heat, severe = false) {
   if (normalizedHeat <= SERVER_POLICE_CARGO_CONFISCATION_HEAT) return 0;
   const overheat = normalizedHeat - SERVER_POLICE_CARGO_CONFISCATION_HEAT;
   return severe
-    ? clampServer(0.22 + overheat * 0.006, 0.22, 0.32)
-    : clampServer(0.1 + overheat * 0.005, 0.1, 0.18);
+    ? clampServer(0.44 + overheat * 0.012, 0.44, 0.64)
+    : clampServer(0.2 + overheat * 0.01, 0.2, 0.36);
 }
 
 function applyServerPoliceCargoConfiscation(state, heat, severe = false) {
@@ -6837,7 +6845,7 @@ async function ensureDefaultGameConfigEntries() {
     );
     await upsertMetaStmt.run("harbor_fish_mission_config_version", harborFishMissionConfigVersion, now);
   }
-  const harborGarageConfigVersion = "harbor-garage-prices-v2-plus-45";
+  const harborGarageConfigVersion = "harbor-garage-faster-meter-v3";
   const harborGarageConfigMeta = await selectMetaStmt.get("harbor_garage_config_version");
   if (harborGarageConfigMeta?.meta_value !== harborGarageConfigVersion) {
     const garageVehicleEntry = defaultGameConfigEntries.harbor_garage_vehicles;
@@ -6846,6 +6854,13 @@ async function ensureDefaultGameConfigEntries() {
       JSON.stringify(garageVehicleEntry.payload),
       now,
       "harbor_garage_vehicles",
+    );
+    const garageMissionEntry = defaultGameConfigEntries.harbor_garage_missions;
+    await updateGameConfigEntryStmt.run(
+      garageMissionEntry.group,
+      JSON.stringify(garageMissionEntry.payload),
+      now,
+      "harbor_garage_missions",
     );
     await upsertMetaStmt.run("harbor_garage_config_version", harborGarageConfigVersion, now);
   }
@@ -7812,7 +7827,25 @@ async function handleApiRequest(request, response, pathname) {
   }
 
   if (pathname === "/api/world-lots" && request.method === "GET") {
-    const lots = (await listWorldLotsStmt.all()).map(mapWorldLotRow);
+    const storedLots = (await listWorldLotsStmt.all()).map(mapWorldLotRow);
+    const lotsByOwner = new Map(storedLots.map((lot) => [lot.ownerProfileName, lot]));
+    const playerRows = await listPlayersStmt.all();
+    playerRows.forEach((player) => {
+      const lotId = String(player.world_base_lot_id || "").trim();
+      const profileName = String(player.profile_name || "").trim();
+      if (!lotId || !profileName || lotsByOwner.has(profileName)) return;
+      lotsByOwner.set(profileName, {
+        lotId,
+        coord: lotId.replace(/^world-lot-/, "").toUpperCase(),
+        ownerProfileName: profileName,
+        baseLevel: Math.max(1, toSafeInt(player.world_base_level, 1, 1)),
+        district: "vilagterkep",
+        status: "occupied",
+        claimedAt: Number(player.registered_at) || Number(player.updated_at) || Date.now(),
+        updatedAt: Number(player.updated_at) || Date.now(),
+      });
+    });
+    const lots = [...lotsByOwner.values()];
     sendJson(response, 200, { lots });
     return true;
   }
@@ -8462,7 +8495,7 @@ async function handleApiRequest(request, response, pathname) {
     const systemMessages = inbox
       .filter((message) => message.messageType !== "player" && isImportantNotification(message))
       .map((message) => ({ ...message, source: "message" }));
-    const notificationInbox = systemMessages
+    const notificationInbox = [...systemMessages, ...notifications.filter(isImportantNotification)]
       .sort((left, right) => Number(right.createdAt || 0) - Number(left.createdAt || 0))
       .slice(0, limit);
     const messageUnreadCount = playerMessages.filter((message) => !message.readAt).length;
@@ -8608,6 +8641,23 @@ async function handleApiRequest(request, response, pathname) {
       return true;
     } catch (error) {
       sendJson(response, 400, { error: error.message || "Invalid delete request" });
+      return true;
+    }
+  }
+
+  if (pathname.startsWith("/api/notifications/") && request.method === "DELETE") {
+    try {
+      const profileName = getActiveProfileFromRequest(request);
+      const notificationId = decodeURIComponent(pathname.slice("/api/notifications/".length)).trim();
+      if (!profileName || !notificationId || notificationId.length > 128) {
+        sendJson(response, 400, { error: "Missing profile name or notification id" });
+        return true;
+      }
+      await deletePlayerNotificationStmt.run(notificationId, profileName);
+      sendJson(response, 200, { ok: true, notificationId });
+      return true;
+    } catch (error) {
+      sendJson(response, 400, { error: error.message || "Invalid notification delete request" });
       return true;
     }
   }

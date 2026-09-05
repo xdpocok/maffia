@@ -48,7 +48,7 @@ const clickableParkDefs = [
 const clickableLotDefs = [
   { id: "east-empty-lot", number: "14", name: "Keleti ures telek", kind: "lot", polygon: mapPolygon([[1162,554],[1250,488],[1340,540],[1315,616],[1232,641],[1175,603]]) },
   { id: "central-empty-lot", number: "22", name: "Kozponti ures telek", kind: "lot", polygon: mapPolygon([[477,675],[626,578],[776,659],[745,769],[607,812],[507,744]]) },
-  { id: "southeast-underpass", number: "27", name: "Aluljáró", kind: "underground", landmarkAsset: "./assets/map/underpass-mafia-green-lot27-hires-v11.webp", landmarkWidthScale: 1, landmarkHeightScale: 1, landmarkOffsetX: 0, landmarkOffsetY: -6, landmarkStretch: true, polygon: mapPolygon([[1276,708],[1384,788],[1232,898],[1125,810]]) },
+  { id: "southeast-underpass", number: "27", name: "Alvilág", kind: "underground", landmarkAsset: "./assets/map/underpass-mafia-green-lot27-hires-v11.webp", landmarkWidthScale: 1, landmarkHeightScale: 1, landmarkOffsetX: 0, landmarkOffsetY: -6, landmarkStretch: true, polygon: mapPolygon([[1276,708],[1384,788],[1232,898],[1125,810]]) },
   ...cityBuildingDefs
     .filter((building) => purchasableBuildingNumbers.has(building.number))
     .map((building) => ({
@@ -65,7 +65,7 @@ const clickableLotDefs = [
       cityPurchaseCost: 80,
       passiveIncome: 24,
       income: 80,
-      overlayNumberMarker: building.number === "13",
+      overlayNumberMarker: false,
     })),
 ];
 const passiveIncomeOnlyLotIds = new Set([

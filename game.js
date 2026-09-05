@@ -518,6 +518,8 @@ const lotInfoClose = document.getElementById("lotInfoClose");
 const underpassModal = document.getElementById("underpassModal");
 const underpassBackdrop = document.getElementById("underpassBackdrop");
 const underpassClose = document.getElementById("underpassClose");
+const underpassTitle = document.getElementById("underpassTitle");
+const underpassStatsToggle = document.getElementById("underpassStatsToggle");
 const robberyGame = document.getElementById("robberyGame");
 const robberyGameTitle = document.getElementById("robberyGameTitle");
 const robberyGameSubtitle = document.getElementById("robberyGameSubtitle");
@@ -1860,7 +1862,11 @@ function renderInboxCards(entries = [], notificationMode = false) {
       <div class="messages-list">
           ${entries.map((message, messageIndex) => {
             const typeClass = String(message.messageType || (notificationMode ? "event" : "player")).replace(/[^a-z0-9_-]/gi, "");
-            const deletableMessageId = Number(message.id) || 0;
+            const deletableMessageId = String(message.id || "").trim();
+            const deleteSource = message.source === "notification" ? "notification" : "message";
+            const canDeleteMessage = deleteSource === "notification"
+              ? Boolean(deletableMessageId)
+              : /^\d+$/.test(deletableMessageId) && Number(deletableMessageId) > 0;
             const isPvpAttackNotice = message.payload?.kind === "pvp_attack_received"
               || (message.messageType === "pvp" && message.senderProfileName);
             const pvpCounterattack = isPvpAttackNotice
@@ -1868,7 +1874,7 @@ function renderInboxCards(entries = [], notificationMode = false) {
               : null;
             return `
             <article class="message-card message-card--${typeClass}${message.payload?.kind === "clan_invitation" ? " message-card--clan-invitation" : ""}${message.readAt ? " is-read" : " is-unread"}" data-message-index="${messageIndex}" tabindex="0">
-              ${deletableMessageId > 0 ? `<button class="message-card__delete" type="button" data-message-delete="${deletableMessageId}" data-message-delete-kind="${notificationMode ? "notification" : "message"}" aria-label="${notificationMode ? "Értesítés" : "Üzenet"} törlése">×</button>` : ""}
+              ${canDeleteMessage ? `<button class="message-card__delete" type="button" data-message-delete="${escapeHtml(deletableMessageId)}" data-message-delete-source="${deleteSource}" data-message-delete-kind="${notificationMode ? "notification" : "message"}" aria-label="${notificationMode ? "Értesítés" : "Üzenet"} törlése">×</button>` : ""}
               <div class="message-card__stamp">${getMessageTypeLabel(message.messageType, message.payload)}</div>
               <div class="message-card__copy">
                 <div class="message-card__heading">
@@ -2009,14 +2015,23 @@ function bindMessagesPanelActions() {
     if (deleteButton) {
       event.preventDefault();
       event.stopPropagation();
-      const messageId = Number(deleteButton.dataset.messageDelete) || 0;
+      const messageId = String(deleteButton.dataset.messageDelete || "").trim();
+      const deleteSource = deleteButton.dataset.messageDeleteSource === "notification" ? "notification" : "message";
       if (!messageId) return;
       deleteButton.disabled = true;
       try {
-        const response = await fetch(`/api/messages/${messageId}`, { method: "DELETE" });
+        const deleteEndpoint = deleteSource === "notification"
+          ? `/api/notifications/${encodeURIComponent(messageId)}`
+          : `/api/messages/${encodeURIComponent(messageId)}`;
+        const response = await fetch(deleteEndpoint, { method: "DELETE" });
         if (!response.ok) throw new Error("delete_failed");
         const deleteKind = deleteButton.dataset.messageDeleteKind === "notification" ? "notifications" : "messages";
-        messagesPanelData[deleteKind] = messagesPanelData[deleteKind].filter((message) => Number(message.id) !== messageId);
+        messagesPanelData[deleteKind] = messagesPanelData[deleteKind].filter((message) => String(message.id) !== messageId);
+        if (deleteSource === "notification") {
+          state.localNotifications = normalizeLocalNotifications(state.localNotifications)
+            .filter((notification) => String(notification.id) !== messageId);
+          saveGame(true);
+        }
         const unreadCount = [...messagesPanelData.messages, ...messagesPanelData.notifications]
           .filter((message) => !message.readAt)
           .length;
@@ -2214,7 +2229,7 @@ function getWorldRivalStructureAttackChance(city, structure) {
     + city.level * 10
     + (city.weakened ? -20 : 0),
   );
-  return clamp(0.34 + ((mapPower - targetPower) / 300), 0.24, 0.92);
+  return clamp(0.34 + ((mapPower - targetPower) / 300), 0.22, 0.84);
 }
 
 function buildWorldRivalStructureTypeLabel(type = "") {
@@ -2414,18 +2429,24 @@ function runWorldRivalStructureAttack(cityId, structureId) {
   const successChance = getWorldRivalStructureAttackChance(city, structure);
   const success = Math.random() <= successChance;
   if (success) {
-    const damage = structure.hp;
-    const nextHp = 0;
-    const destroyed = true;
+    const damageRatio = clamp(0.38 + (successChance - 0.22) * 0.58, 0.38, 0.68);
+    const damage = Math.min(
+      structure.hp,
+      Math.max(18, Math.round(structure.maxHp * damageRatio)),
+    );
+    const nextHp = Math.max(0, structure.hp - damage);
+    const destroyed = nextHp <= 0;
     const moneyGain = 0;
-    const xpGain = Math.max(1, Math.round(structure.rewardXp * 0.45));
+    const xpGain = destroyed ? Math.max(1, Math.round(structure.rewardXp * 0.45)) : 1;
     const heatGain = applyHeat(6 + city.level);
-    const influenceGain = applyInfluenceGain(2);
+    const influenceGain = destroyed ? applyInfluenceGain(2) : 0;
     applyFame(xpGain);
     updateWorldRivalCity(cityId, (entry) => ({
       ...entry,
       weakened: true,
-      power: Math.max(16, entry.power - Math.round(14 + city.level * 6)),
+      power: destroyed
+        ? Math.max(24, entry.power - Math.round(8 + city.level * 3))
+        : entry.power,
       structures: (entry.structures || []).map((item) => item.id === structureId
         ? { ...item, hp: nextHp, destroyedAt: destroyed ? now : 0, lastHitAt: now }
         : item),
@@ -2434,20 +2455,26 @@ function runWorldRivalStructureAttack(cityId, structureId) {
     }));
     const updatedCity = getWorldRivalCityById(cityId);
     const cityCleared = areWorldRivalStructuresCleared(updatedCity);
-    queueRewardModal({
-      title: "Gyozelem",
-      text: `${structure.name} vedelmet attorted.`,
-      xp: xpGain,
-      fame: 0,
-    });
+    if (destroyed) {
+      queueRewardModal({
+        title: "Gyozelem",
+        text: `${structure.name} vedelmet attorted.`,
+        xp: xpGain,
+        fame: 0,
+      });
+    }
     addLocalNotification(
       "Vilagterkep",
-      `${city.name}: ${structure.name} vedelmet legyozted. +${xpGain} XP, +${influenceGain}% befolyas, +${heatGain}% korozes.`,
+      destroyed
+        ? `${city.name}: ${structure.name} vedelmet legyozted. +${xpGain} XP, +${influenceGain}% befolyas, +${heatGain}% korozes.`
+        : `${city.name}: ${structure.name} serult. -${damage} HP, meg ${nextHp} HP maradt. +${xpGain} XP, +${heatGain}% korozes.`,
       { messageType: "event" },
     );
     sceneRef?.setMessage(cityCleared
       ? `${city.name}: minden haz romokban. Most mar johet az elfoglalas.`
-      : `${structure.name} vedelmet legyozted.`);
+      : destroyed
+        ? `${structure.name} vedelmet legyozted.`
+        : `${structure.name} meg all: ${nextHp}/${structure.maxHp} HP.`);
   } else {
     const moneyLoss = Math.min(state.money, Math.max(24, Math.round(structure.rewardMoney * 0.34)));
     const healthLoss = clamp(7 + city.level * 5, 8, 26);
@@ -3752,6 +3779,10 @@ function renderWorldMapPanelWithSaves(saves = []) {
   const ownLot = getWorldMapLotById(state.worldBaseLotId);
   const selectionMode = Boolean(state.needsWorldBaseSelection);
   const metrics = getWorldMapCanvasMetrics();
+  const visibleWorldMapLots = getVisibleWorldMapLotDefs(occupiedLots, [
+    state.worldBaseLotId,
+    ...rivalCities.map((city) => city.lotId),
+  ]);
   const body = `
     <section class="worldmap">
       ${buildWorldMapSelectionBar(ownLot, selectionMode)}
@@ -3764,7 +3795,7 @@ function renderWorldMapPanelWithSaves(saves = []) {
             style="width:${metrics.width}px; height:${metrics.height}px;"
           >
             <img class="worldmap__canvas-art" src="${WORLD_MAP_CONTINUOUS_SRC}" srcset="${WORLD_MAP_CONTINUOUS_SRCSET}" sizes="100vw" alt="" aria-hidden="true" loading="lazy" decoding="async">
-            ${worldMapLotDefs.map((lot) => buildWorldMapLotButton(lot, occupiedLots[lot.id], selectionMode)).join("")}
+            ${visibleWorldMapLots.map((lot) => buildWorldMapLotButton(lot, occupiedLots[lot.id], selectionMode)).join("")}
             ${selectionMode ? "" : rivalCities.map((city) => buildWorldRivalCityButton(city)).join("")}
           </div>
         </div>
@@ -7959,8 +7990,8 @@ function ensureCityEngine() {
   window.MaffiaAssetRuntime?.loadImage?.(mapBackgroundLayer);
   const featureStyles = Promise.all([
     loadStylesheet("./styles/combat.css?v=mobile-robbery-selection-2026-08-11-15"),
-    loadStylesheet("./styles/features.css?v=market-soldout-cycle-2026-08-24-2"),
-  ]).then(() => loadStylesheet("./styles/hud-redesign.css?v=nexforge-harbor-link-2026-08-24-4"));
+    loadStylesheet("./styles/features.css?v=world-map-label-close-2026-09-05-4"),
+  ]).then(() => loadStylesheet("./styles/hud-redesign.css?v=world-chat-rows-2026-09-01-9"));
   const phaserEngine = loadClassicScript("https://cdn.jsdelivr.net/npm/phaser@3.90.0/dist/phaser.min.js");
   cityEnginePromise = Promise.all([featureStyles, phaserEngine])
     .then(() => loadClassicScript("./js/city-scene.js?v=fast-city-startup-2026-08-09-1"))
@@ -8912,13 +8943,7 @@ function renderWorldChat(messages = []) {
   const wasNearBottom = hudLog.scrollHeight - hudLog.scrollTop - hudLog.clientHeight < 36;
   const normalized = Array.isArray(messages) ? messages : [];
   hudLog.innerHTML = normalized.length
-    ? normalized.map((message) => `
-        <div class="hud-chat-line${message.senderProfileName === state.profileName ? " is-own" : ""}">
-          <span class="hud-chat-line__time">${escapeHtml(formatWorldChatTime(message.createdAt))}</span>
-          <strong>${escapeHtml(message.senderProfileName || "Ismeretlen")}</strong>
-          <span class="hud-chat-line__body">${escapeHtml(message.body || "")}</span>
-        </div>
-      `).join("")
+    ? normalized.map((message) => `<div class="hud-chat-line${message.senderProfileName === state.profileName ? " is-own" : ""}"><strong class="hud-chat-line__name">${escapeHtml(message.senderProfileName || "Ismeretlen")}:</strong><span class="hud-chat-line__body">${escapeHtml(message.body || "")}</span><span class="hud-chat-line__time">${escapeHtml(formatWorldChatTime(message.createdAt))}</span></div>`).join("")
     : `<div class="hud-chat-empty">Még nincs üzenet. Írj elsőként a világnak.</div>`;
   if (wasNearBottom || !hudLog.dataset.chatLoaded) hudLog.scrollTop = hudLog.scrollHeight;
   hudLog.dataset.chatLoaded = "true";
@@ -9633,6 +9658,25 @@ function bindHudActions() {
   lotInfoBackdrop?.addEventListener("click", hideLotInfoModal);
   underpassClose?.addEventListener("click", hideUnderpassModal);
   underpassBackdrop?.addEventListener("click", hideUnderpassModal);
+  if (underpassTitle && underpassStatsToggle) {
+    let statsOpen = false;
+    try {
+      statsOpen = localStorage.getItem("maffia-underpass-stats-open") === "1";
+    } catch {}
+    const setUnderpassStatsOpen = (open) => {
+      underpassTitle.classList.toggle("is-stats-open", open);
+      underpassStatsToggle.setAttribute("aria-expanded", String(open));
+      underpassStatsToggle.setAttribute("aria-label", open ? "Alvilági adatok elrejtése" : "Alvilági adatok megjelenítése");
+    };
+    setUnderpassStatsOpen(statsOpen);
+    underpassStatsToggle.addEventListener("click", () => {
+      statsOpen = !underpassTitle.classList.contains("is-stats-open");
+      setUnderpassStatsOpen(statsOpen);
+      try {
+        localStorage.setItem("maffia-underpass-stats-open", statsOpen ? "1" : "0");
+      } catch {}
+    });
+  }
 
   robberyTactics.forEach((button) => {
     button.addEventListener("click", () => {
@@ -9717,6 +9761,12 @@ function bindHudActions() {
     const text = String(hudChatInput?.value || "").trim();
     if (!text) return;
     await sendWorldChatMessage(text);
+  });
+  hudChatInput?.addEventListener("pointerdown", (event) => {
+    event.stopPropagation();
+  });
+  hudChatInput?.addEventListener("click", (event) => {
+    event.stopPropagation();
   });
   settingsBackdrop?.addEventListener("click", closeSettingsDialog);
   questOverviewClose?.addEventListener("click", closeQuestOverview);

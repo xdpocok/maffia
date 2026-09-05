@@ -80,7 +80,7 @@ const harborGarageMissionDefs = [
     rounds: 3,
     requiredHits: 2,
     baseSafeWidth: 0.3,
-    baseSpeed: 0.02,
+    baseSpeed: 0.023,
   },
   {
     id: "night-convoy",
@@ -97,7 +97,7 @@ const harborGarageMissionDefs = [
     rounds: 4,
     requiredHits: 3,
     baseSafeWidth: 0.26,
-    baseSpeed: 0.023,
+    baseSpeed: 0.0265,
   },
   {
     id: "vault-route",
@@ -114,7 +114,7 @@ const harborGarageMissionDefs = [
     rounds: 5,
     requiredHits: 4,
     baseSafeWidth: 0.23,
-    baseSpeed: 0.026,
+    baseSpeed: 0.03,
   },
 ];
 

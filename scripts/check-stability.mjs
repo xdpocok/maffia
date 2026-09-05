@@ -49,7 +49,13 @@ check("terkepmodul betoltese", page.text.includes("js/map-config.js") && mapConf
 check("mentes es betoltes", page.text.includes("js/save-sync.js") && ["flushQueuedSave", "loadGame", "requestSaveApi"].every((name) => saveSyncSource.includes(name)));
 check("kuldetesjelolok", page.text.includes("js/quests.js") && questSource.includes("MAX_OFFERED_QUESTS = 3") && questSource.includes("createQuestMarker") && questSource.includes("mergeStableOfferedQuestList"));
 check("kormenu logika", page.text.includes("js/ui-choice-wheel.js") && choiceWheelSource.includes("showChoiceWheel") && choiceWheelSource.includes("runChoiceAction"));
-check("ertesites torles", gameSource.includes('data-message-delete-kind="${notificationMode ? "notification" : "message"}') && gameSource.includes("messagesPanelData[deleteKind]"));
+check(
+  "ertesites torles",
+  gameSource.includes('data-message-delete-kind="${notificationMode ? "notification" : "message"}')
+    && gameSource.includes("messagesPanelData[deleteKind]")
+    && serverSource.includes("WHERE id = ? AND recipient_profile_name = ?")
+    && !serverSource.includes("WHERE id = ? AND recipient_profile_name = ? AND message_type = 'player'"),
+);
 check("27-es telek logika", mapConfigSource.includes('number: "27"') && gameSource.includes('area.kind === "underground"') && choiceWheelSource.includes("showUnderpassModal"));
 check("kikoto hubok", page.text.includes("js/harbor.js") && ["rail-hub", "customs-hub", "harbor-office-hub"].every((marker) => harborSource.includes(marker)));
 check("garazs minijatek kattintas", harborSource.includes('control.addEventListener("pointerdown", submitCheckpoint)') && harborSource.includes("gameState.lockedPointer = gameState.pointer") && harborSource.includes("stopGarageMiniGame(false)"));

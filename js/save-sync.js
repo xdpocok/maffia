@@ -212,7 +212,13 @@ function hydrateState(saved) {
     state.npcVillageVictories,
     state.worldRivalCities.filter((city) => city.status === "captured").length,
   );
-  state.needsWorldBaseSelection = Boolean(state.needsWorldBaseSelection);
+  // A bazis tulajdonjoga az iranyado. Regi vagy hianyos mentesben a jelzo
+  // lehetett tevesen false, amitől az uj jatekos telekvalasztas nelkul maradt.
+  // A bazis tulajdonjoga az iranyado. Regi vagy hianyos mentesben a jelzo
+  // lehetett tevesen false, amitol a jatekos telekvalasztas nelkul maradt.
+  // A bazis tulajdonjoga az iranyado. Regi vagy hianyos mentesben a jelzo
+  // lehetett tevesen false, amitol a jatekos telekvalasztas nelkul maradt.
+  state.needsWorldBaseSelection = !state.worldBaseLotId;
   if (state.mainBaseSpotId && !getSpotById(state.mainBaseSpotId)) {
     state.mainBaseSpotId = null;
   }

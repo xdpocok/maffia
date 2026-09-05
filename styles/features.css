@@ -2690,8 +2690,8 @@
 
 .worldmap__lot {
   position: absolute;
-  width: 20px;
-  height: 20px;
+  width: 10px;
+  height: 10px;
   transform: translate(-50%, -50%);
   border-radius: 999px;
   border: 1px solid rgba(129, 200, 122, 0.62);
@@ -2700,7 +2700,7 @@
   display: block;
   box-shadow:
     0 0 0 1px rgba(8, 14, 8, 0.45),
-    0 8px 16px rgba(0, 0, 0, 0.28);
+    0 4px 8px rgba(0, 0, 0, 0.28);
   cursor: pointer;
   transition:
     transform 160ms ease,
@@ -2711,12 +2711,19 @@
 
 .worldmap__lot i {
   position: absolute;
-  inset: 4px;
+  inset: 2px;
   display: block;
   z-index: 2;
   border-radius: 999px;
   background: linear-gradient(180deg, rgba(161, 230, 150, 0.95), rgba(72, 133, 68, 0.98));
-  box-shadow: 0 0 14px rgba(112, 194, 101, 0.42);
+  box-shadow: 0 0 7px rgba(112, 194, 101, 0.42);
+}
+
+.worldmap__lot:not(.is-occupied):not(.is-own)::before {
+  content: "";
+  position: absolute;
+  inset: -5px;
+  border-radius: 999px;
 }
 
 .worldmap__house {
@@ -2783,8 +2790,8 @@
 
 .worldmap__lot.is-selected {
   box-shadow:
-    0 0 0 2px rgba(239, 205, 140, 0.42),
-    0 12px 24px rgba(0, 0, 0, 0.36);
+    0 0 0 1px rgba(239, 205, 140, 0.42),
+    0 6px 12px rgba(0, 0, 0, 0.36);
 }
 
 .worldmap__lot.is-occupied.is-selected,
@@ -2862,7 +2869,7 @@
   content: attr(data-world-label);
   position: absolute;
   left: 50%;
-  bottom: calc(100% + 42px);
+  bottom: calc(100% - 28px);
   transform: translateX(-50%);
   padding: 6px 10px;
   border-radius: 10px;
